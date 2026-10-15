@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+    <uses-feature android:name="android.hardware.vulkan.level" android:version="0" android:required="false" />
+    <application android:label="Herdr GPUI Remote" android:theme="@style/AppTheme"
+        android:icon="@drawable/ic_herdr" android:allowBackup="false"
+        android:usesCleartextTraffic="false" android:hardwareAccelerated="true"
+        android:extractNativeLibs="true" android:supportsRtl="true">
+        <activity android:name="dev.herdr.android.RemoteHostsActivity" android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name="dev.herdr.android.MainActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name="dev.herdr.android.GpuiTerminalActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density|fontScale"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data android:name="android.app.lib_name" android:value="herdr_gpui_android" />
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,10 @@
+Repository: https://github.com/penso/herdr-gpui
+Companion baseline: https://github.com/penso/herdr-gpui/pull/248
+Baseline commit: 273a7bfea714374f10a03445a0a679359f21117c
+Local branch: android-port
+No remote publication was performed.
+
+The source ZIP includes the baseline repository plus the Android additions and
+companion changes. It excludes .git, build output, SDK/tool caches and signing
+keys. Android implementation notes and exact validation limits are in README.md
+and VALIDATION.md in this directory.

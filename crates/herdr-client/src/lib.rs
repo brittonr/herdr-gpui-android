@@ -1,0 +1,74 @@
+//! A local/SSH gen1 client. All transport I/O runs on a dedicated worker.
+//! No reconnect/replay: commands carry the boot ID of the snapshot they act on.
+//! Drain `Client::events` on a GUI background task, never block the UI thread.
+#![doc = include_str!("../README.md")]
+
+mod catalog;
+mod clipboard;
+mod connect;
+mod discovery;
+mod error;
+mod event;
+mod frame;
+mod handle;
+mod host_theme;
+mod limits;
+mod method;
+mod options;
+mod queue;
+mod script;
+pub mod scrollback;
+mod session;
+mod sessions;
+mod ssh;
+mod surface_images;
+mod transport;
+mod upload;
+
+#[cfg(all(test, unix))]
+mod test_executable;
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests;
+
+pub use crossbeam_channel::Receiver;
+pub use herdr_protocol as protocol;
+
+pub use catalog::{
+    SavedHost, load_saved_host_selection, load_saved_hosts, store_saved_host_selection,
+    valid_profile_id,
+};
+pub use clipboard::{ClipboardImageCancellation, ClipboardImageUpload};
+pub use connect::{
+    connect, connect_with_connector, connect_with_remote_connector, connect_with_surface_active,
+};
+pub use discovery::{ConnectTarget, session_socket};
+/// Error returned when queueing commands; also available as the crate's `Error`.
+pub use error::Error as SendError;
+pub use error::{Error, Result, StorageOperation};
+pub use event::ClientEvent;
+pub use handle::{Client, ClientHandle};
+pub use host_theme::HostTheme;
+pub use method::Method;
+pub use options::ConnectOptions;
+pub use script::{ScriptHost, ScriptLimits, run_script, shell_quote};
+pub use sessions::{
+    LocalSession, RemoteSession, SessionState, delete_local_session, delete_remote_session,
+    list_local_sessions, list_remote_sessions,
+};
+#[cfg(unix)]
+pub use sessions::{parse_remote_sessions, remote_session_list_command};
+#[cfg(unix)]
+pub use ssh::{
+    classify_remote_probe, negotiate_remote_bridge, read_remote_bridge_ready,
+    remote_bridge_command, remote_bridge_compatibility, remote_probe_command, script_command,
+};
+pub use ssh::{
+    Destination, HostProbe, probe_host, remote_config_value, remote_origin_url, resolve_destination,
+};
+pub use surface_images::{
+    MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGES, MAX_PLACEMENTS, SurfaceImage, SurfaceImages,
+    valid_asset,
+};
+pub use transport::Stream;
+pub use upload::{remove_uploaded_files, upload_files};

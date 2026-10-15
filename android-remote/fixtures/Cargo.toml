@@ -1,0 +1,31 @@
+[package]
+name = "herdr-synthetic-ssh-fixture"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+publish = false
+license = "Apache-2.0"
+
+[workspace]
+
+[dependencies]
+herdr-client = { path = "../../crates/herdr-client" }
+herdr-protocol = { path = "../../crates/herdr-protocol" }
+russh = { version = "=0.63.3", default-features = false, features = ["ring"] }
+rand = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+[dev-dependencies]
+herdr-remote-transport = { path = "../rust" }
+herdr-gpui-android = { path = "../../android-gpui/rust", features = ["remote"] }
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

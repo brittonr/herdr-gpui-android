@@ -1,0 +1,5102 @@
+{
+  "format_version": 1,
+  "snapshot": "0.5.0-gpui-remote-source-publication",
+  "upstream_baseline": "273a7bfea714374f10a03445a0a679359f21117c",
+  "original_source_archive_sha256": "15defe0992159d7a2ac5e70c90fb8c9d672641c5039b0c41e43451ee25d01fb0",
+  "files": [
+    {
+      "path": ".claude/skills/gpui-mockup/SKILL.md",
+      "bytes": 8281,
+      "mode": "0o644",
+      "sha256": "6fc09426f2e82548539f39acbf3b25d8060a7784960ec0d8d3ad110e33045474"
+    },
+    {
+      "path": ".claude/skills/gpui-mockup/scripts/wait.sh",
+      "bytes": 949,
+      "mode": "0o755",
+      "sha256": "22d79210f9174011bae68cf1dad0418fb2632dc40bc5e57511f22d8f37fe2787"
+    },
+    {
+      "path": ".claude/skills/release/SKILL.md",
+      "bytes": 7364,
+      "mode": "0o644",
+      "sha256": "a7e99ee8d1173805b3acec958d7311415926c52d83d50ceb014042fe21c2d38f"
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 176,
+      "mode": "0o644",
+      "sha256": "c33d711823c0d541520af5534112343eaa127219bc9be753e13c0575f78cb19d"
+    },
+    {
+      "path": ".githooks/commit-msg",
+      "bytes": 287,
+      "mode": "0o755",
+      "sha256": "8a89a284a9168187a5eae04d7ac3472723fb65ce78c4a283907a5455611f3219"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "bytes": 3174,
+      "mode": "0o644",
+      "sha256": "8779f320c71679147f7f6986fc87a8a17e1f5658f23c4e3d08faab2d1821efda"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "bytes": 518,
+      "mode": "0o644",
+      "sha256": "01273bc097c823ba33ad52a8ab0242244333342a698847600c36ef9c9a0115a3"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/documentation.yml",
+      "bytes": 973,
+      "mode": "0o644",
+      "sha256": "92fc74902af4775e672a250f5d3fa065d4a90ed6b42be5062271070d965f31f4"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "bytes": 1137,
+      "mode": "0o644",
+      "sha256": "1f0755ab96c1d6dbc4dfce5da65eb1ceacaf71a3c0800a67798c932e721dbee6"
+    },
+    {
+      "path": ".github/actions/sign-artifacts/action.yml",
+      "bytes": 1971,
+      "mode": "0o644",
+      "sha256": "67dc5604ca2b1bced4a695b6c8fbfb9d1c1019e375636f4262b91481ca445dcc"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "bytes": 1044,
+      "mode": "0o644",
+      "sha256": "d2bcc263ce1f468364badbb253fb2ca5ddf6bdad5586386183c80d584e60eb2e"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "bytes": 570,
+      "mode": "0o644",
+      "sha256": "6e27b931f3d6fb1ddfa012a42ab414eceff72e1b48008a4c7a47ad2d0466b14e"
+    },
+    {
+      "path": ".github/zizmor.yml",
+      "bytes": 151,
+      "mode": "0o644",
+      "sha256": "e3b3ab46209b86038b24f11a18ca0e04d889cc5c0ed3c2b466aef09eea99fb2f"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 394,
+      "mode": "0o644",
+      "sha256": "71419f1779eebfd92567abaa03733127fab4b457775ee183c32a776e2edcf9d7"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 16887,
+      "mode": "0o644",
+      "sha256": "82d8c8c2d04c93672cc0d0e55b7e5ded471fa112785d2df769c293b0808d9603"
+    },
+    {
+      "path": "CLAUDE.md",
+      "bytes": 16738,
+      "mode": "0o644",
+      "sha256": "5b465538375bc11f855101d551c1f5eb6e5a0a738e8d0968079e9213198586c4"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "bytes": 5235,
+      "mode": "0o644",
+      "sha256": "b2c0665a2d7b3718c6869099ade1b19d81b4b78d930bbffe056197c1e33c161b"
+    },
+    {
+      "path": "Cargo.lock",
+      "bytes": 236131,
+      "mode": "0o644",
+      "sha256": "cf8a24ab3c7aa211eddf9e4809cc4aeb253939ac58bc0617440ff5b918d1baac"
+    },
+    {
+      "path": "Cargo.toml",
+      "bytes": 4656,
+      "mode": "0o644",
+      "sha256": "5081cb1820c062a0c6e464d87631cd7824d06638dd0a289cebfd9b222ce33d80"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 11357,
+      "mode": "0o644",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "NOTICE",
+      "bytes": 4776,
+      "mode": "0o644",
+      "sha256": "d3b49a6746eff11b80afd36e724ef8f4205b93d74f0c4f8a1768948850858a82"
+    },
+    {
+      "path": "PROVENANCE.md",
+      "bytes": 1201,
+      "mode": "0o644",
+      "sha256": "a890cfcbba4e9469363cc6b2c1609b86878e8919c610ac8fd81d5195b142d79e"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5303,
+      "mode": "0o644",
+      "sha256": "deef9ec9f33cfb6612b63235341ff3b840e1fa025c80ffb183f19ad01b58e699"
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 8562,
+      "mode": "0o644",
+      "sha256": "1d53aa6c7d9820a0e0f85b8c389ee927aecfd79bf9cec8c07e9c462c1b109125"
+    },
+    {
+      "path": "android/.gitignore",
+      "bytes": 53,
+      "mode": "0o644",
+      "sha256": "76bbf877c87000883b47bd677e72fd554ef3077bd394c2051a61850a06a937de"
+    },
+    {
+      "path": "android/BASELINE.txt",
+      "bytes": 511,
+      "mode": "0o644",
+      "sha256": "432ef050d2936f643cbcc5abc97061cd521a5d149eb90852ef777f6aab517961"
+    },
+    {
+      "path": "android/README.md",
+      "bytes": 8121,
+      "mode": "0o644",
+      "sha256": "0255c233e68152a2170fcb09e9b89ddcc5eafe16cf10bbbd98e7944ac6923ba3"
+    },
+    {
+      "path": "android/VALIDATION.md",
+      "bytes": 5543,
+      "mode": "0o644",
+      "sha256": "f03edb74b908124d1b510e93340682405e9e534fd8c5c0d8c6235c7b5f2091b2"
+    },
+    {
+      "path": "android/app/build.gradle",
+      "bytes": 453,
+      "mode": "0o644",
+      "sha256": "de20ea9b93d3804316d24884e78b45e07e141d358f7e42841ed65c99878dfc1e"
+    },
+    {
+      "path": "android/app/src/main/AndroidManifest.xml",
+      "bytes": 771,
+      "mode": "0o644",
+      "sha256": "25dba5a8f44bd7d094d0da1b9c2b811997a4b94a417be073696455267130afa4"
+    },
+    {
+      "path": "android/app/src/main/assets/LICENSE.txt",
+      "bytes": 11357,
+      "mode": "0o644",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "android/app/src/main/assets/NOTICE.txt",
+      "bytes": 5048,
+      "mode": "0o644",
+      "sha256": "2060624349a37fc0d7e9e4fa94b6bfccb8162ac86fd8771c4928f06e12ce2885"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/HostStore.java",
+      "bytes": 8557,
+      "mode": "0o644",
+      "sha256": "8d18b27c9d1157317476ffd3f0848b2aa874cb21abc490482adc6efcdeca8896"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/MainActivity.java",
+      "bytes": 36770,
+      "mode": "0o644",
+      "sha256": "4bda2ca74370d8651c327eb8aa72c1e142056305cc8f14377e25247df3aacedd"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/SavedHost.java",
+      "bytes": 3660,
+      "mode": "0o644",
+      "sha256": "af6b5c6f239b4cb188fbeb945d61cb8600337b5f6eb23904468c3f74893978af"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/ClientException.java",
+      "bytes": 984,
+      "mode": "0o644",
+      "sha256": "ed286509a604b1a3b82d731e73e90286812871c3b747730e2a86da45b7ae6083"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/CompanionClient.java",
+      "bytes": 10945,
+      "mode": "0o644",
+      "sha256": "a35d9c2cdf0322ee086666940d5c920b1f25f3e17616370f48ac4b225e2c48ae"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/HostProfile.java",
+      "bytes": 4813,
+      "mode": "0o644",
+      "sha256": "8a4aa3decaaa5b66080678619aee7a829df7ff1ecde7fb2aeebcd9fefce3e47e"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/InputRouting.java",
+      "bytes": 562,
+      "mode": "0o644",
+      "sha256": "fdd4529898264d85548cc65bc2aab4c2861b7faa29b68fa8cb07d2f3d7e41c3e"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/JsonStrings.java",
+      "bytes": 2031,
+      "mode": "0o644",
+      "sha256": "b2b593e3cea9d2cc857bc119eac22df8c6279305952f8a6cc7344cb6b37ba0a5"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/KeyChord.java",
+      "bytes": 2909,
+      "mode": "0o644",
+      "sha256": "492fd361c8dfdb7521ca5aa94fa138f78f06c0b4dcde303fa227e40de1970061"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/OmpQuickCommands.java",
+      "bytes": 1745,
+      "mode": "0o644",
+      "sha256": "3011bc2788f396432df67d6919ad18f7112f4118ef3ef611af0ae6704badcaf7"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/QuickCommand.java",
+      "bytes": 2796,
+      "mode": "0o644",
+      "sha256": "1efa3e0f66d983b85ae692aad98c4d46032dbea74894db09663bbe998f0e0deb"
+    },
+    {
+      "path": "android/app/src/main/java/dev/herdr/android/core/Shortcut.java",
+      "bytes": 7315,
+      "mode": "0o644",
+      "sha256": "040a8c2350da20166966a0ccfba245e2e89af427639454766247b59cd66c8ecd"
+    },
+    {
+      "path": "android/app/src/main/res/drawable/ic_herdr.xml",
+      "bytes": 463,
+      "mode": "0o644",
+      "sha256": "df3162899049f43f8868b78eb67046b1314f18c3b0138014747d43a96edc5bb0"
+    },
+    {
+      "path": "android/app/src/main/res/values/styles.xml",
+      "bytes": 574,
+      "mode": "0o644",
+      "sha256": "c90f9ef1a00f339a2f8e3a4e758c2e8371341cf19d5b7b56c60f3670019ab24b"
+    },
+    {
+      "path": "android/build.gradle",
+      "bytes": 69,
+      "mode": "0o644",
+      "sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032"
+    },
+    {
+      "path": "android/gradle/wrapper/gradle-wrapper.jar",
+      "bytes": 43504,
+      "mode": "0o644",
+      "sha256": "498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17"
+    },
+    {
+      "path": "android/gradle/wrapper/gradle-wrapper.properties",
+      "bytes": 337,
+      "mode": "0o644",
+      "sha256": "30ab49760f7cea3476ead771720cd59ab1dd98f5525b9d682f7ede458c90a788"
+    },
+    {
+      "path": "android/gradle.properties",
+      "bytes": 84,
+      "mode": "0o644",
+      "sha256": "72bdd26b5d20ad736e4bb495ab03d630866ba60a1f8609405b28fdc632646519"
+    },
+    {
+      "path": "android/gradlew",
+      "bytes": 8784,
+      "mode": "0o755",
+      "sha256": "9cbbb4d68ff7fb5211c4d58f598ac9d8664c05fdcd1e5f59b7f2c3ac1ee00af0"
+    },
+    {
+      "path": "android/gradlew.bat",
+      "bytes": 2894,
+      "mode": "0o644",
+      "sha256": "0f3ed8f03b50934cb8c48b15a470d5c20a30a5385825e48b55bcc8ea3d8f8e18"
+    },
+    {
+      "path": "android/scripts/README.md",
+      "bytes": 2880,
+      "mode": "0o644",
+      "sha256": "a07246816fb9c7075cd2b1349187b210b6e15c740a5b3288fd5609f74b12fd6f"
+    },
+    {
+      "path": "android/scripts/SignDebugApk.java",
+      "bytes": 2421,
+      "mode": "0o644",
+      "sha256": "1590466434d826b4d10d23a680a8fe8be3863e63758f0010d2cf5b9522015661"
+    },
+    {
+      "path": "android/scripts/build-verification-apk.sh",
+      "bytes": 6712,
+      "mode": "0o755",
+      "sha256": "1d84af999752b6e5da9bba86b3302c777934ba0af2d8db3f6fe36c0b6a466897"
+    },
+    {
+      "path": "android/scripts/verify-apk-structure.py",
+      "bytes": 3713,
+      "mode": "0o755",
+      "sha256": "7b859539d40bbc1d618a2609ccca8df4e6608667a12a593d68652ae0fd2231a0"
+    },
+    {
+      "path": "android/settings.gradle",
+      "bytes": 273,
+      "mode": "0o644",
+      "sha256": "add38acd85fdb12b98446c19f9a735aa6d29381317f8949e542b1eb194a3badb"
+    },
+    {
+      "path": "android/storage-tests/README.md",
+      "bytes": 680,
+      "mode": "0o644",
+      "sha256": "2e0e93dba32f3322870e92db697f51651828500bd7af81a512ea243d96e8b653"
+    },
+    {
+      "path": "android/storage-tests/dev/herdr/android/HostStoreSelfTest.java",
+      "bytes": 9026,
+      "mode": "0o644",
+      "sha256": "e9ef3bd70522067d897ff3ed7d0aa42039858f6eb99ab60b12f6cb3e1febd34b"
+    },
+    {
+      "path": "android/storage-tests/run.sh",
+      "bytes": 915,
+      "mode": "0o644",
+      "sha256": "9bb70d32b799c929c74bd7b23bb384a421e18331c1c070d8c5db01424c34f64f"
+    },
+    {
+      "path": "android/tests/README.md",
+      "bytes": 4145,
+      "mode": "0o644",
+      "sha256": "6fd724741e57647551aa2e0e033f19e7771da389be4da4fce9c809ba132848db"
+    },
+    {
+      "path": "android/tests/dev/herdr/android/core/CoreSelfTest.java",
+      "bytes": 22752,
+      "mode": "0o644",
+      "sha256": "11bf571262cecd157ad902c61db0db17faa9b03ba543187ad6e3a0db34e1f8a4"
+    },
+    {
+      "path": "android/tests/run.sh",
+      "bytes": 674,
+      "mode": "0o644",
+      "sha256": "ba9119de78cf86ad7f126a7e775683cc1ed57c15ff72c3035ce0a58b9837cc9c"
+    },
+    {
+      "path": "android-gpui/.gitignore",
+      "bytes": 88,
+      "mode": "0o644",
+      "sha256": "18875e81c52ae4cd470fd5573c69c082d0a8d9cddd0bd6f5b0e3620a29294908"
+    },
+    {
+      "path": "android-gpui/COMPACT-VALIDATION.md",
+      "bytes": 8506,
+      "mode": "0o644",
+      "sha256": "9e3a9c379c591f7346866ee7eeaa67db2fddbfcb6bf2a17b0e0e8e8695d225da"
+    },
+    {
+      "path": "android-gpui/QUICK-COMMANDS-VALIDATION.md",
+      "bytes": 7484,
+      "mode": "0o644",
+      "sha256": "2a37c55bca8d5b888b5fb00bb4a4e020f1099b44d2a3f33374240ab852a4328d"
+    },
+    {
+      "path": "android-gpui/QUICK-COMMANDS.md",
+      "bytes": 4765,
+      "mode": "0o644",
+      "sha256": "21d9642afc26ca1cb6dde06801c58122912f337dd8cf7e50b10625517b69c10a"
+    },
+    {
+      "path": "android-gpui/README.md",
+      "bytes": 8093,
+      "mode": "0o644",
+      "sha256": "cbfbf8813c543780831e89056a644e93987e9b766a86d5bf74f4bdeb0dbe4f15"
+    },
+    {
+      "path": "android-gpui/REMOTE-VALIDATION.md",
+      "bytes": 13917,
+      "mode": "0o644",
+      "sha256": "c5020adb021c98f794bd3e67b6ee4e9a0748dd47dbcbd73759b39a99afc1cf7a"
+    },
+    {
+      "path": "android-gpui/REMOTE.md",
+      "bytes": 6187,
+      "mode": "0o644",
+      "sha256": "e34834b81f0743e26fa39e27cda24c1fef38bef2a6bed71b8dd599d6a2c258b2"
+    },
+    {
+      "path": "android-gpui/TITAN-2-ELITE.md",
+      "bytes": 5572,
+      "mode": "0o644",
+      "sha256": "3e365ff052a5779c18c01f1061e0c99ca31dca983d87b4f7a71583024183fd90"
+    },
+    {
+      "path": "android-gpui/VALIDATION.md",
+      "bytes": 7369,
+      "mode": "0o644",
+      "sha256": "e0206885f57579ae3112902220142057a56d12366e65ba31f0d41907cec13a6f"
+    },
+    {
+      "path": "android-gpui/VM-BUILD.md",
+      "bytes": 6256,
+      "mode": "0o644",
+      "sha256": "1c59ed7d07cec9e3421cc4da2b688c98452ab7d4dc0cfa3bc9251117e7f811f8"
+    },
+    {
+      "path": "android-gpui/VM-TESTS.md",
+      "bytes": 6339,
+      "mode": "0o644",
+      "sha256": "e081a35ecd99d3833d0f1bfd82afdf640060d02d85090f333b0f9e8fd7837827"
+    },
+    {
+      "path": "android-gpui/app/build.gradle",
+      "bytes": 1046,
+      "mode": "0o644",
+      "sha256": "26145495b6c2f5d55443613aa788834de6102b0c8b1cc3338fdcfffb6156fb32"
+    },
+    {
+      "path": "android-gpui/app/src/main/AndroidManifest.xml",
+      "bytes": 1640,
+      "mode": "0o644",
+      "sha256": "4f7a70d05a0568993369e22ce8bfc4cc16d95c96cd6e4b38b74cdc0322213996"
+    },
+    {
+      "path": "android-gpui/app/src/main/assets/GPUI-MOBILE-LICENSE.txt",
+      "bytes": 7252,
+      "mode": "0o644",
+      "sha256": "ab07d6742de2a566c3d54ab9a2944161ab2c1cbe7f3f8b684cb7e8b0302e2b2d"
+    },
+    {
+      "path": "android-gpui/app/src/main/assets/GPUI-MOBILE-NOTICE.txt",
+      "bytes": 840,
+      "mode": "0o644",
+      "sha256": "671ca8aeafc5825d11c105725c2a1581be903d7b665707d8f27802e33993f60e"
+    },
+    {
+      "path": "android-gpui/app/src/main/assets/NOTO-FONTS-LICENSE.txt",
+      "bytes": 5347,
+      "mode": "0o644",
+      "sha256": "20028af06a58195e37b02e9ec8bfea3b75b2f06009205db7cdf29174762f9d1c"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/gpui/mobile/GpuiInputActivity.java",
+      "bytes": 14354,
+      "mode": "0o644",
+      "sha256": "7f63ef88cc9b1c5dc3da240c75e4d1780955860fd001808ea5f5f326f7cfa331"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/GpuiDisplayOptions.java",
+      "bytes": 1303,
+      "mode": "0o644",
+      "sha256": "f65259b3f7b32c28441d09eddc7e83aa90742397c6003a960aeae3d58e2af3b2"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/GpuiLaunch.java",
+      "bytes": 4983,
+      "mode": "0o644",
+      "sha256": "03ee5289271da509b5df0d7c65b1a78b90bcd62b400c0bbd4ba23593b9c4e863"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/GpuiShortcutTouch.java",
+      "bytes": 960,
+      "mode": "0o644",
+      "sha256": "55efb335a9b7ee9546b06bb5b1b90e72c2d7e380c0131ab93147865709e79727"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/GpuiTerminalActivity.java",
+      "bytes": 46197,
+      "mode": "0o644",
+      "sha256": "8c8db5820c2854f6a0cf39a642f0255559d40185e031b1e39e9145901ac37bf7"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/GpuiTerminalProtocol.java",
+      "bytes": 8525,
+      "mode": "0o644",
+      "sha256": "05ef6cf7c0837408228d79315cec736bdff17318dc0d67ab505f0c5522046ab5"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/QuickCommandPalette.java",
+      "bytes": 12968,
+      "mode": "0o644",
+      "sha256": "f930248757cf418fe0cc78954dbd06b1f41e2ae0e0a58a337b061d5c384aa175"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/RemoteHostStore.java",
+      "bytes": 11950,
+      "mode": "0o644",
+      "sha256": "b59cbd00f16cab3c3f8a3bc2f2fcbbd18905372f98319ef445fd93d5022d4470"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/RemoteHostsActivity.java",
+      "bytes": 27836,
+      "mode": "0o644",
+      "sha256": "92ad1e9c59eab5a8a3c19d17f9e02021e9db316518a22ecfc2668d40c0c592a8"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/RemoteNative.java",
+      "bytes": 879,
+      "mode": "0o644",
+      "sha256": "0601186ce49e5e4fc01da84090892cb7a1ce27e5038ca999e556ab91c8da497f"
+    },
+    {
+      "path": "android-gpui/app/src/main/java/dev/herdr/android/SavedRemoteHost.java",
+      "bytes": 7679,
+      "mode": "0o644",
+      "sha256": "3f221720aa5c09809d00f9bedefeed9b7ab74ed7d0bc22f092f9fd5fe813cfa5"
+    },
+    {
+      "path": "android-gpui/build.gradle",
+      "bytes": 69,
+      "mode": "0o644",
+      "sha256": "8ebf0602839be8fd4c06f07a93e45da6b4a04444fa1b38df8b9def9c1b5c8032"
+    },
+    {
+      "path": "android-gpui/gradle/wrapper/gradle-wrapper.jar",
+      "bytes": 43504,
+      "mode": "0o644",
+      "sha256": "498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17"
+    },
+    {
+      "path": "android-gpui/gradle/wrapper/gradle-wrapper.properties",
+      "bytes": 337,
+      "mode": "0o644",
+      "sha256": "30ab49760f7cea3476ead771720cd59ab1dd98f5525b9d682f7ede458c90a788"
+    },
+    {
+      "path": "android-gpui/gradle.properties",
+      "bytes": 84,
+      "mode": "0o644",
+      "sha256": "72bdd26b5d20ad736e4bb495ab03d630866ba60a1f8609405b28fdc632646519"
+    },
+    {
+      "path": "android-gpui/gradlew",
+      "bytes": 8784,
+      "mode": "0o755",
+      "sha256": "9cbbb4d68ff7fb5211c4d58f598ac9d8664c05fdcd1e5f59b7f2c3ac1ee00af0"
+    },
+    {
+      "path": "android-gpui/gradlew.bat",
+      "bytes": 2894,
+      "mode": "0o644",
+      "sha256": "0f3ed8f03b50934cb8c48b15a470d5c20a30a5385825e48b55bcc8ea3d8f8e18"
+    },
+    {
+      "path": "android-gpui/rust/Cargo.lock",
+      "bytes": 194619,
+      "mode": "0o644",
+      "sha256": "c4d908bdd88d0ded73dec802c5509a3b33160ceed5cfbcb75ea7bb066d57e1d1"
+    },
+    {
+      "path": "android-gpui/rust/Cargo.toml",
+      "bytes": 2918,
+      "mode": "0o644",
+      "sha256": "880dbca9b432054cee8878c449cf72e658ba2cd65123821bdff41836910c1f42"
+    },
+    {
+      "path": "android-gpui/rust/README.md",
+      "bytes": 6123,
+      "mode": "0o644",
+      "sha256": "4f4244e31b141d05fc985b8f66927f3d74fb39449c58546786d4eddb9d11f9ec"
+    },
+    {
+      "path": "android-gpui/rust/assets/fonts/LICENSE.txt",
+      "bytes": 5347,
+      "mode": "0o644",
+      "sha256": "20028af06a58195e37b02e9ec8bfea3b75b2f06009205db7cdf29174762f9d1c"
+    },
+    {
+      "path": "android-gpui/rust/assets/fonts/NotoMono-Regular.ttf",
+      "bytes": 107848,
+      "mode": "0o644",
+      "sha256": "41fd7ccc82375e2a1e47f0cc2c941c14d7c99ba2f57cf69c9f738d07fb257686"
+    },
+    {
+      "path": "android-gpui/rust/assets/fonts/NotoSans-Bold.ttf",
+      "bytes": 515752,
+      "mode": "0o644",
+      "sha256": "e83493c945848ecd4a9ad0f6d19164541a0d3e23a9c952304a00a46e00272ac5"
+    },
+    {
+      "path": "android-gpui/rust/assets/fonts/NotoSans-Regular.ttf",
+      "bytes": 512672,
+      "mode": "0o644",
+      "sha256": "89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d"
+    },
+    {
+      "path": "android-gpui/rust/src/android.rs",
+      "bytes": 14843,
+      "mode": "0o644",
+      "sha256": "ed470f850ea962653add5f5f987f1e2511046968496b09f3c7dad0b56d619fb8"
+    },
+    {
+      "path": "android-gpui/rust/src/error.rs",
+      "bytes": 1306,
+      "mode": "0o644",
+      "sha256": "93b519744cb4b27f20bab6865c1bad0b662aacaea6e95a952f4df7d8f6157739"
+    },
+    {
+      "path": "android-gpui/rust/src/fonts.rs",
+      "bytes": 5555,
+      "mode": "0o644",
+      "sha256": "0466fed5a2fd3868791348e2ed93c36c5443ff7ffb1197115dd833fd9c1b0b8a"
+    },
+    {
+      "path": "android-gpui/rust/src/lib.rs",
+      "bytes": 581,
+      "mode": "0o644",
+      "sha256": "7ffe3b53d7a72e16a470fdee698621fddb4a580b86d4c1d1d176d0ef83a688af"
+    },
+    {
+      "path": "android-gpui/rust/src/model.rs",
+      "bytes": 40707,
+      "mode": "0o644",
+      "sha256": "f47ebeeba81fd67ccd3dd7a87701035506db6fb55a721321106eb5891d829d4b"
+    },
+    {
+      "path": "android-gpui/rust/src/remote.rs",
+      "bytes": 38750,
+      "mode": "0o644",
+      "sha256": "65e9813c8e4eba64b704cb12bfab4e707880650f76d1effb6df9a861ab4d773a"
+    },
+    {
+      "path": "android-gpui/rust/src/remote_jni.rs",
+      "bytes": 6017,
+      "mode": "0o644",
+      "sha256": "d395222f645d5b57a05558ea7be466c61c089ecb03914b1f16aeef376e022714"
+    },
+    {
+      "path": "android-gpui/rust/src/ui.rs",
+      "bytes": 17510,
+      "mode": "0o644",
+      "sha256": "e3ef19a6f10f8fed47d3c39cd60346ce15713ff9ab40fd370c00c07ecdb67531"
+    },
+    {
+      "path": "android-gpui/scripts/README.md",
+      "bytes": 5974,
+      "mode": "0o644",
+      "sha256": "74ae2f2f68c00760cafe329bd15f24b05349f2007612758972a13f53e1431519"
+    },
+    {
+      "path": "android-gpui/scripts/SignDebugApk.java",
+      "bytes": 2820,
+      "mode": "0o644",
+      "sha256": "2ff7d6582558cdbb14dd5dc7921eb33b2481413eb0a855b9b5fe304713f1f0c5"
+    },
+    {
+      "path": "android-gpui/scripts/build-native.sh",
+      "bytes": 3891,
+      "mode": "0o755",
+      "sha256": "e0e57700a149649e0f2f143a37a0f09fb039a106f917a354ae1c660aa6a521cc"
+    },
+    {
+      "path": "android-gpui/scripts/build-verification-apk.sh",
+      "bytes": 8499,
+      "mode": "0o755",
+      "sha256": "396b0207a410c2fa8662ae936e2a2032cbe6fa2906bb2bbfcb534b6a7d3b18cc"
+    },
+    {
+      "path": "android-gpui/scripts/native-build-record.py",
+      "bytes": 3653,
+      "mode": "0o644",
+      "sha256": "3019b9bc5bc06cbdff06aaad22c9186f27c364e999a0aff4c41df0468f6646ca"
+    },
+    {
+      "path": "android-gpui/scripts/test-apk-verifier.py",
+      "bytes": 2758,
+      "mode": "0o644",
+      "sha256": "36941a449d8d70030c940a0cfe5dfb8049516c609fa24e0cd1e362cdf26c0d92"
+    },
+    {
+      "path": "android-gpui/scripts/test-native-build-record.py",
+      "bytes": 5667,
+      "mode": "0o644",
+      "sha256": "91406ea05c2dba23211a37b1addf8ad2964a5d419f33a406f63197376632e339"
+    },
+    {
+      "path": "android-gpui/scripts/test-native-verifier.py",
+      "bytes": 6491,
+      "mode": "0o644",
+      "sha256": "3280729d172e355b19b67f5bb23a5896db221e41ea3a175e275410a8096d0385"
+    },
+    {
+      "path": "android-gpui/scripts/verify-apk-structure.py",
+      "bytes": 5426,
+      "mode": "0o755",
+      "sha256": "bf63a9d78eaac4bc964219d6a651f66e280f7de1c8e6df9832c19cdff3b9af15"
+    },
+    {
+      "path": "android-gpui/scripts/verify-native-library.py",
+      "bytes": 6638,
+      "mode": "0o755",
+      "sha256": "636d096944e2ac0a9e664cc4c84161f90baceb666db05451702b93d217e957dc"
+    },
+    {
+      "path": "android-gpui/settings.gradle",
+      "bytes": 277,
+      "mode": "0o644",
+      "sha256": "a090d265230d40b3f7ca7a95e51ad2ff484b97e608549f49b37606c1b1646817"
+    },
+    {
+      "path": "android-gpui/tests/dev/herdr/android/GpuiBridgeSelfTest.java",
+      "bytes": 11812,
+      "mode": "0o644",
+      "sha256": "35c4f2e2aa5fb10c7e6bfcb92722b8c06ee9d6ea020dfb145741a6859c1825f3"
+    },
+    {
+      "path": "android-gpui/tests/dev/herdr/android/GpuiDisplayOptionsSelfTest.java",
+      "bytes": 3854,
+      "mode": "0o644",
+      "sha256": "3fcf8f1ef9d8c9a839386b1a95a7b48758725fcd944d217ce6850aaa0120547f"
+    },
+    {
+      "path": "android-gpui/tests/dev/herdr/android/RemoteProfilesSelfTest.java",
+      "bytes": 5115,
+      "mode": "0o644",
+      "sha256": "11ff10b93ca582763fc71c83c8e125fe334a5ab0c47b83a8759fe875d44714bb"
+    },
+    {
+      "path": "android-gpui/vm-tests/AndroidManifest.xml",
+      "bytes": 901,
+      "mode": "0o644",
+      "sha256": "45dbaa8449bf2aaf438854a91e912283c24fe50a663aca10282d562aff2ac779"
+    },
+    {
+      "path": "android-gpui/vm-tests/README.md",
+      "bytes": 15781,
+      "mode": "0o644",
+      "sha256": "b7dceef26a43ee66c96cf025aa0bb077ced9de8ce406987a18e9383fd77fb291"
+    },
+    {
+      "path": "android-gpui/vm-tests/build.sh",
+      "bytes": 2429,
+      "mode": "0o755",
+      "sha256": "30bc5c4aea54bbb347588c4db51d1612f4ef3440697acf3f9a873618e496bbd7"
+    },
+    {
+      "path": "android-gpui/vm-tests/package-config.py",
+      "bytes": 1090,
+      "mode": "0o644",
+      "sha256": "160b150575f57d096d51720ec947820655f937db3ab6091d7f2bdf2ccb7cc0a0"
+    },
+    {
+      "path": "android-gpui/vm-tests/remote-fixture-config.py",
+      "bytes": 2018,
+      "mode": "0o755",
+      "sha256": "98d806e8d65b8f610d4970b9f58dd5b51f14e6d5d091605583b0be952077507f"
+    },
+    {
+      "path": "android-gpui/vm-tests/run-remote.sh",
+      "bytes": 642,
+      "mode": "0o755",
+      "sha256": "aea56f7c4b663541f0bf884dfc9283d2b752fd7fcca3f888eca0b7c3f2b7d2dd"
+    },
+    {
+      "path": "android-gpui/vm-tests/run.sh",
+      "bytes": 6927,
+      "mode": "0o755",
+      "sha256": "d1b7e7295155efd26ad331c67b22858c9149a124b4c9c38a444e2bfe79a74e73"
+    },
+    {
+      "path": "android-gpui/vm-tests/src/dev/herdr/android/vm/GpuiVmInstrumentation.java",
+      "bytes": 98158,
+      "mode": "0o644",
+      "sha256": "d989651c60bcf82d6b69edc4ddbe1c897e8c26673d76501d19b2912ecf209d70"
+    },
+    {
+      "path": "android-gpui/vm-tests/src/dev/herdr/android/vm/RemoteVmInstrumentation.java",
+      "bytes": 50821,
+      "mode": "0o644",
+      "sha256": "942ce7319017ab5cccda2aa108d06e9f606a9ee19738f8dff8bc0a648bae5721"
+    },
+    {
+      "path": "android-gpui/vm-tests/test-package-config.py",
+      "bytes": 2894,
+      "mode": "0o644",
+      "sha256": "654d7519fd3971e3bb32b592ba639670029b3d96009fa12d762149b483501aaf"
+    },
+    {
+      "path": "android-gpui/vm-tests/test-remote-fixture-config.py",
+      "bytes": 2766,
+      "mode": "0o755",
+      "sha256": "a91a686664f05f254745612ae07dfd18d98a84e23051ccc7d116204928f94e65"
+    },
+    {
+      "path": "android-remote/THIRD-PARTY-NOTICES.inventory.json",
+      "bytes": 355477,
+      "mode": "0o644",
+      "sha256": "86cb24500e53b280eecb1198c29e415fa7e24d9d04ef73b856936108d2a0db4d"
+    },
+    {
+      "path": "android-remote/THIRD-PARTY-NOTICES.txt",
+      "bytes": 5174668,
+      "mode": "0o644",
+      "sha256": "88fa9fc5232ee094cad2c3ca5c8a406ab6e9bcf9993443b26875e7d4d472c4a9"
+    },
+    {
+      "path": "android-remote/fixtures/.gitignore",
+      "bytes": 9,
+      "mode": "0o644",
+      "sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368"
+    },
+    {
+      "path": "android-remote/fixtures/Cargo.lock",
+      "bytes": 110981,
+      "mode": "0o644",
+      "sha256": "2e1ad41c733b71c35805cecb40724346c8bf71d52c8ec93fcf51726f4ff13154"
+    },
+    {
+      "path": "android-remote/fixtures/Cargo.toml",
+      "bytes": 863,
+      "mode": "0o644",
+      "sha256": "889a8d8770e543feff8656a54473a93f03123a1a812715cfcbbd51ec29e36cd9"
+    },
+    {
+      "path": "android-remote/fixtures/README.md",
+      "bytes": 3150,
+      "mode": "0o644",
+      "sha256": "38ad3a098039f7f7207be5ffcc71d881955db7c972713a0fcc71efb262276f60"
+    },
+    {
+      "path": "android-remote/fixtures/VERIFICATION.md",
+      "bytes": 2081,
+      "mode": "0o644",
+      "sha256": "2ecf79fa783540937bee6f67c151d919886d48cec496b75bdb7d71b0e039897e"
+    },
+    {
+      "path": "android-remote/fixtures/src/lib.rs",
+      "bytes": 29310,
+      "mode": "0o644",
+      "sha256": "813ff2228a5bc70165cdc4edba5b1543b5e64ea78e3b85facc7bcae8c39bb51d"
+    },
+    {
+      "path": "android-remote/fixtures/src/main.rs",
+      "bytes": 761,
+      "mode": "0o644",
+      "sha256": "f176e17bb146e52ab45b8c6d365e8166848ab11328c4ab4dd8c315c6da191c1b"
+    },
+    {
+      "path": "android-remote/fixtures/tests/adapter_flow.rs",
+      "bytes": 7907,
+      "mode": "0o644",
+      "sha256": "817249a4b6466b68e3975e2be8ce1e3746101cce25d26e206b10058c005fdab8"
+    },
+    {
+      "path": "android-remote/fixtures/tests/wire_bounds.rs",
+      "bytes": 5309,
+      "mode": "0o644",
+      "sha256": "25066e24921b5db2c3987fcb0e52b01882da2b2908fb9d44e3bf0843c771fbf9"
+    },
+    {
+      "path": "android-remote/rust/Cargo.lock",
+      "bytes": 107650,
+      "mode": "0o644",
+      "sha256": "71d3fb56086d2b7dde4dc96ff332f8bd0142c4b5fd17a5a40cc3722ed0d93db8"
+    },
+    {
+      "path": "android-remote/rust/Cargo.toml",
+      "bytes": 797,
+      "mode": "0o644",
+      "sha256": "5c00342bd322b0ea89ba313a7f649a205f4352e4aa98d30557b8f65741350737"
+    },
+    {
+      "path": "android-remote/rust/README.md",
+      "bytes": 3971,
+      "mode": "0o644",
+      "sha256": "986396f602ac916c4ee658309fe32b19f13df5419589489fa5a7c54a053a5c0f"
+    },
+    {
+      "path": "android-remote/rust/src/lib.rs",
+      "bytes": 19030,
+      "mode": "0o644",
+      "sha256": "e54fc3c477296e2bccf9b8bf87d49b8ce7a2c626ec6661fd67a1a6ed25c1048e"
+    },
+    {
+      "path": "android-remote/rust/src/tests/iroh_transport.rs",
+      "bytes": 14213,
+      "mode": "0o644",
+      "sha256": "8fe22f72856c3f7e760e46bf02aaa038f68f963ecbc6a7b3fcf7d0cb85fc954a"
+    },
+    {
+      "path": "android-remote/rust/src/tests.rs",
+      "bytes": 14462,
+      "mode": "0o644",
+      "sha256": "8234c64b84cdb9f8a1059b6f87a060ccb683ef0bef90d17bb4a61bfc04293429"
+    },
+    {
+      "path": "android-remote/scripts/collect-notices.py",
+      "bytes": 4061,
+      "mode": "0o644",
+      "sha256": "4a9620d6c2a6afe425f04c8e623b24d0b07c117a0de65442d661cdf37de9fd04"
+    },
+    {
+      "path": "android-remote/tests/README.md",
+      "bytes": 3298,
+      "mode": "0o644",
+      "sha256": "833beea4e93469565d48f0898c25a73cb4abe6d3e962545fc0acc07c43a0b568"
+    },
+    {
+      "path": "android-remote/tests/ssh_fixture.py",
+      "bytes": 19150,
+      "mode": "0o644",
+      "sha256": "a32163ac4664535fc36f930a703eb79a38227fcae45c78b609ee10ec19daa877"
+    },
+    {
+      "path": "android-remote/tests/test_ssh_fixture.py",
+      "bytes": 5352,
+      "mode": "0o644",
+      "sha256": "418d13a02707fcdcd63e0402592abd4db64b4e3f5d8071993fbd68823f655c09"
+    },
+    {
+      "path": "assets/README.md",
+      "bytes": 1784,
+      "mode": "0o644",
+      "sha256": "30232bafe0dedb4c401cf54743cfa452224fae7b9af521fb954fc3b19e5d7c7c"
+    },
+    {
+      "path": "assets/icons/Herdr-worktree.car",
+      "bytes": 1167128,
+      "mode": "0o644",
+      "sha256": "a01c0393d6bdafc7b1ba79b86bce06c7301a1ca8635d94f0d57eb6775854bf4b"
+    },
+    {
+      "path": "assets/icons/Herdr-worktree.icns",
+      "bytes": 158169,
+      "mode": "0o644",
+      "sha256": "c23733493c44d847c04fc687045a747f388441093c04312b20e56a66faaf2a4c"
+    },
+    {
+      "path": "assets/icons/Herdr.car",
+      "bytes": 1085000,
+      "mode": "0o644",
+      "sha256": "da482773dfe3a2e239c677c734e3f4a77522f91a917d8bb6ecafe8c8e57c8227"
+    },
+    {
+      "path": "assets/icons/Herdr.icns",
+      "bytes": 170574,
+      "mode": "0o644",
+      "sha256": "d742b6776d86cb8673a04414929f07cdb2599d18102f4e9a2e72227656d485f5"
+    },
+    {
+      "path": "assets/icons/LICENSE-octicons",
+      "bytes": 1255,
+      "mode": "0o644",
+      "sha256": "9de72369ad1e31f6db8f4e3a43a1f9e95b762e12d86279f1feaa363c95108c45"
+    },
+    {
+      "path": "assets/icons/README.md",
+      "bytes": 6982,
+      "mode": "0o644",
+      "sha256": "73a8d1b6ecbbcc9f4487ee6effbb37ab96b6d226cdc483c57775b75840299226"
+    },
+    {
+      "path": "assets/icons/agent-agy.svg",
+      "bytes": 349,
+      "mode": "0o644",
+      "sha256": "cfe2a61dadc03623e7b9839c461cd52068bfdab3e1e1506791b08b9570f33ca8"
+    },
+    {
+      "path": "assets/icons/agent-amp.svg",
+      "bytes": 446,
+      "mode": "0o644",
+      "sha256": "0bfcf337692e5841b2898a46e2177ee6de023a2b9ec9ec85c36ff75be8bd0ac3"
+    },
+    {
+      "path": "assets/icons/agent-claude.svg",
+      "bytes": 1641,
+      "mode": "0o644",
+      "sha256": "394bc4474f06ac9de2e68b153d2e0b5bf628008aee695d9a8e5e779e8a547d48"
+    },
+    {
+      "path": "assets/icons/agent-cline.svg",
+      "bytes": 685,
+      "mode": "0o644",
+      "sha256": "9f9eb2d0b521928f77dd93312484e6e0113fe91b7eb73ceca4a20a0f2409642e"
+    },
+    {
+      "path": "assets/icons/agent-codex.svg",
+      "bytes": 1629,
+      "mode": "0o644",
+      "sha256": "0950dd7a2890ac5b00a14ce7da3ced1adf8d9318971e42de34e917a38ceab26c"
+    },
+    {
+      "path": "assets/icons/agent-copilot.svg",
+      "bytes": 1952,
+      "mode": "0o644",
+      "sha256": "534519ab8ded0a9f4ceaaa381c511c31d297e5660c909dd1b7605be54972aa05"
+    },
+    {
+      "path": "assets/icons/agent-cursor.svg",
+      "bytes": 487,
+      "mode": "0o644",
+      "sha256": "36586cdd76db40358372528e74b91f89674ecff6378296e924d589460446362a"
+    },
+    {
+      "path": "assets/icons/agent-devin.svg",
+      "bytes": 3231,
+      "mode": "0o644",
+      "sha256": "c28e8a91d39b02765b3bd42e6d4fe34fa1a457011fcc2c8e1ff9618c63f05ca8"
+    },
+    {
+      "path": "assets/icons/agent-droid.svg",
+      "bytes": 278,
+      "mode": "0o644",
+      "sha256": "518a5b0b3395a810c8f9da5e0c4d03999bd0fdff43acd56b70adef946cac7802"
+    },
+    {
+      "path": "assets/icons/agent-gemini.svg",
+      "bytes": 591,
+      "mode": "0o644",
+      "sha256": "942de73a6ba922e9595ebabe0021ef9e4c62663cb87243ec952fb174ee6ce7b0"
+    },
+    {
+      "path": "assets/icons/agent-generic.svg",
+      "bytes": 267,
+      "mode": "0o644",
+      "sha256": "3215f2695ed5f5c5665472da712578e061e9014a4ad5fd6ff97cd5f1eab6fde1"
+    },
+    {
+      "path": "assets/icons/agent-grok.svg",
+      "bytes": 698,
+      "mode": "0o644",
+      "sha256": "65d7efcb2d35575debba4dd2f7d2ce1cc8a7621fe98e61a1308bf73534f26ac3"
+    },
+    {
+      "path": "assets/icons/agent-hermes.svg",
+      "bytes": 19708,
+      "mode": "0o644",
+      "sha256": "4191a51ef4004e4785daa507d470232fb3738a84ec4a119832d088a542564750"
+    },
+    {
+      "path": "assets/icons/agent-kilo.svg",
+      "bytes": 589,
+      "mode": "0o644",
+      "sha256": "3b1be1a88e64234b126887ef2f3b6b87ae0580f4e8dbd691691961793d32063f"
+    },
+    {
+      "path": "assets/icons/agent-kimi.svg",
+      "bytes": 722,
+      "mode": "0o644",
+      "sha256": "8c377efd0cb6f7a2435ba7ad477b544d906c6fc172b8261161f04a7501c48e74"
+    },
+    {
+      "path": "assets/icons/agent-kiro.svg",
+      "bytes": 770,
+      "mode": "0o644",
+      "sha256": "4579ef235f01918377c5a47bd6ff87da15e5eee32cb4ed5c239f8258edb04e28"
+    },
+    {
+      "path": "assets/icons/agent-letta.svg",
+      "bytes": 260,
+      "mode": "0o644",
+      "sha256": "3a3e08b7166db040caabee6664b79f6703bc3838e9fbe3ae7a4a95edfa658ef2"
+    },
+    {
+      "path": "assets/icons/agent-maki.svg",
+      "bytes": 266,
+      "mode": "0o644",
+      "sha256": "725cb4ecb42bbccd935125fa1964f35e902b6650f6cb51dc478b85cfa33b75fc"
+    },
+    {
+      "path": "assets/icons/agent-mastracode.svg",
+      "bytes": 2105,
+      "mode": "0o644",
+      "sha256": "0f5338325722e545c1c57f22f3d1f245432f838bf5f565f7168d9f319560a940"
+    },
+    {
+      "path": "assets/icons/agent-muse.svg",
+      "bytes": 263,
+      "mode": "0o644",
+      "sha256": "6c06dc5889ff709e3f02611e5ebad768604f388042a670a17514639240fc7985"
+    },
+    {
+      "path": "assets/icons/agent-omp.svg",
+      "bytes": 277,
+      "mode": "0o644",
+      "sha256": "b82ae5d1801d11c94b2d25eb1c37909bc47934a46b7bb9e78b02ab5ea7199022"
+    },
+    {
+      "path": "assets/icons/agent-opencode.svg",
+      "bytes": 173,
+      "mode": "0o644",
+      "sha256": "454510f02a19a998ac72bc11170c2dad203bff4c1d9d616c22ad31290b1f8a29"
+    },
+    {
+      "path": "assets/icons/agent-pi.svg",
+      "bytes": 251,
+      "mode": "0o644",
+      "sha256": "7e99aa1750f0355a22b369480372984ebdb678b5830ef8d6017c139ec31b9ce1"
+    },
+    {
+      "path": "assets/icons/agent-qodercli.svg",
+      "bytes": 6149,
+      "mode": "0o644",
+      "sha256": "5233214b7f0220b6cfd6e6deb524de9d21f64ce2e280f867d9c8050370a99635"
+    },
+    {
+      "path": "assets/icons/agent-qwen.svg",
+      "bytes": 1732,
+      "mode": "0o644",
+      "sha256": "5a0b23fdd919944f8f65f6721f4eb4ad343f4cad37d6c5d0a031579f471fa7d6"
+    },
+    {
+      "path": "assets/icons/arrow-left.svg",
+      "bytes": 203,
+      "mode": "0o644",
+      "sha256": "14b2bbaaa02c952a60b02c09f4c85e77981f7ee720d67b46da671ee68a828b23"
+    },
+    {
+      "path": "assets/icons/arrow-right.svg",
+      "bytes": 202,
+      "mode": "0o644",
+      "sha256": "5b3f102856b497e556ab4fc924401ac63a608e25f8556421207ff7f1122ebe15"
+    },
+    {
+      "path": "assets/icons/bell.svg",
+      "bytes": 264,
+      "mode": "0o644",
+      "sha256": "e7bcd20f3a9e2a4b97b98aea3c49c1d1de5f4614339fe13db8da51ab5ac32697"
+    },
+    {
+      "path": "assets/icons/chart.svg",
+      "bytes": 321,
+      "mode": "0o644",
+      "sha256": "07d5866519459c3053f7aaf9cc21bbdf5e308880b4ee0981d3fd05292ba67ad7"
+    },
+    {
+      "path": "assets/icons/chevron-down.svg",
+      "bytes": 193,
+      "mode": "0o644",
+      "sha256": "7899e7ebd3a7fb4347c14b9665d1cec7b3482c7860d145a386f97c74b6a7d488"
+    },
+    {
+      "path": "assets/icons/chevron-up.svg",
+      "bytes": 194,
+      "mode": "0o644",
+      "sha256": "aed3bd29670c3f8d97b586a5056d56bba4358434832a56158679d2d5ec33f0e0"
+    },
+    {
+      "path": "assets/icons/close.svg",
+      "bytes": 177,
+      "mode": "0o644",
+      "sha256": "af9c71dd497c6f2725b3a6dd790b36b13cfd0b91f3328295d87b6686d0c1ae5f"
+    },
+    {
+      "path": "assets/icons/coffee-full.svg",
+      "bytes": 456,
+      "mode": "0o644",
+      "sha256": "3613f241cf2d73e320f9e7a97898cd8dece3a196a93c03ef4aa50cd7c2f57f54"
+    },
+    {
+      "path": "assets/icons/coffee.svg",
+      "bytes": 310,
+      "mode": "0o644",
+      "sha256": "3657f38437ef6b7488ca859d4e2dc8d60d4747195060a0198697c1341a7a7a29"
+    },
+    {
+      "path": "assets/icons/devices.svg",
+      "bytes": 262,
+      "mode": "0o644",
+      "sha256": "4edbc3a693384d3f2e3ba80b809376360f94bdac051b54dfaad6b2eb35bbf3ba"
+    },
+    {
+      "path": "assets/icons/external.svg",
+      "bytes": 256,
+      "mode": "0o644",
+      "sha256": "cc42a21a02f18e016bb34b64279beae1b19f6ceb440d7cedc8b605fce9527d93"
+    },
+    {
+      "path": "assets/icons/git-branch.svg",
+      "bytes": 437,
+      "mode": "0o644",
+      "sha256": "bd1b271ec85fa68fb7b8c57c237622e4653af2993d3b5af2605e34d899368d90"
+    },
+    {
+      "path": "assets/icons/github.svg",
+      "bytes": 838,
+      "mode": "0o644",
+      "sha256": "f4b4b28168cc34e7ddcbe0eb2aadf34d8afff47ae290898d95c2d5fe87bcd5ca"
+    },
+    {
+      "path": "assets/icons/globe.svg",
+      "bytes": 330,
+      "mode": "0o644",
+      "sha256": "9438819374a172ca53f94425de8441be23e94c74227a10cf294efecb727e6bcf"
+    },
+    {
+      "path": "assets/icons/herdr-icon-square-clean.png",
+      "bytes": 38323,
+      "mode": "0o644",
+      "sha256": "5763195c4a9948c4b40024ae71316dce711b4fb4abca31db471e44a4a27ef036"
+    },
+    {
+      "path": "assets/icons/herdr-icon-square-clean.svg",
+      "bytes": 2561,
+      "mode": "0o644",
+      "sha256": "10a8d7eebe19b9c88ae88d0b5a1a64ccbe3b4eef85e84bd57d5dbb69d5e480ad"
+    },
+    {
+      "path": "assets/icons/herdr-square-worktree-1024.png",
+      "bytes": 49687,
+      "mode": "0o644",
+      "sha256": "73286cb0dc7dd8b5e59876258bb604b34ad5c1ede3f3ef10d322b510211292a5"
+    },
+    {
+      "path": "assets/icons/herdr-ui-icon-badge.png",
+      "bytes": 66248,
+      "mode": "0o644",
+      "sha256": "c459298403dea4aae45198f7d37d2f5d8ccae0669cebb86465f35626829ff09f"
+    },
+    {
+      "path": "assets/icons/herdr-ui-icon-badge.svg",
+      "bytes": 3818,
+      "mode": "0o644",
+      "sha256": "9c4d4764abdffbe70adab4198f9122583c1d673039da900a4d301e5cf6fc9a8f"
+    },
+    {
+      "path": "assets/icons/herdr-ui-icon-clean.png",
+      "bytes": 57119,
+      "mode": "0o644",
+      "sha256": "66be46ebed8e540bb023dbf71db04c758b2de14b64b643d7cafbcc31268fbd4c"
+    },
+    {
+      "path": "assets/icons/herdr-ui-icon-clean.svg",
+      "bytes": 2937,
+      "mode": "0o644",
+      "sha256": "8408cbea998f7f4260052f7605869aaa9de2997824ae67773d2069a26aa672f7"
+    },
+    {
+      "path": "assets/icons/herdr-worktree-1024.png",
+      "bytes": 69622,
+      "mode": "0o644",
+      "sha256": "a2581b2354b3bd4fc8ad640800dc90402ebbcfb15167c84fd74971b6d4f16f2d"
+    },
+    {
+      "path": "assets/icons/keyboard.svg",
+      "bytes": 355,
+      "mode": "0o644",
+      "sha256": "3bc8ff8092f79745f67f5b42dd8f941d446bc1cf1e82b0c0b6b01e41fec4eeec"
+    },
+    {
+      "path": "assets/icons/more.svg",
+      "bytes": 235,
+      "mode": "0o644",
+      "sha256": "777488f3d0d14200efe74582bb57554f9ed591e79c8440262c524a76395a8023"
+    },
+    {
+      "path": "assets/icons/pencil.svg",
+      "bytes": 229,
+      "mode": "0o644",
+      "sha256": "391497c8d5e1614417829df3f58134e60b8cc4b5d72b07757b20f11db5105ce8"
+    },
+    {
+      "path": "assets/icons/plus.svg",
+      "bytes": 173,
+      "mode": "0o644",
+      "sha256": "d39a6e674529f34bb2a7c48679f05fd7d361bff0fa932120997caccea24dc590"
+    },
+    {
+      "path": "assets/icons/providers/README.md",
+      "bytes": 1357,
+      "mode": "0o644",
+      "sha256": "56b1665e94332236f9913b7868dfb065c6cc3722d1809ca4f9fe20e5e7443fc3"
+    },
+    {
+      "path": "assets/icons/providers/abacus.svg",
+      "bytes": 970,
+      "mode": "0o644",
+      "sha256": "dd11b1c6007507310d9c20577c0a97e1fb5a236d7d3fb88bd2c7e873312e89af"
+    },
+    {
+      "path": "assets/icons/providers/aiand.svg",
+      "bytes": 345,
+      "mode": "0o644",
+      "sha256": "491834756ea31b74222bb82a9e51a1a3b6e7ac6d6927a83696f46dfb47ce8c93"
+    },
+    {
+      "path": "assets/icons/providers/aixy.svg",
+      "bytes": 409,
+      "mode": "0o644",
+      "sha256": "ac516ea6969f95b68f047890f3fcee0ef37581bc93de83585b3e3d60dfd1d796"
+    },
+    {
+      "path": "assets/icons/providers/alibaba.svg",
+      "bytes": 900,
+      "mode": "0o644",
+      "sha256": "e52a73b0ba75225967c559f8be1315ede1bd6ef6a80287525f7f6a365735cd79"
+    },
+    {
+      "path": "assets/icons/providers/amp.svg",
+      "bytes": 624,
+      "mode": "0o644",
+      "sha256": "50b187ec706d84c6cfadba067d696f3a831bba3728d873a1de102578fab705d3"
+    },
+    {
+      "path": "assets/icons/providers/antigravity.svg",
+      "bytes": 438,
+      "mode": "0o644",
+      "sha256": "eafc2d1d432b369c34c98e1bb0cd36f0bc58872a64ef4ef814860f3dccef5f71"
+    },
+    {
+      "path": "assets/icons/providers/atlascloud.svg",
+      "bytes": 371,
+      "mode": "0o644",
+      "sha256": "2a7ab55352c2d8960d62c3a30a3d164be8726392f9a9e7082681d02e72eb3c44"
+    },
+    {
+      "path": "assets/icons/providers/augment.svg",
+      "bytes": 2062,
+      "mode": "0o644",
+      "sha256": "576e7ea830e67bfb54cbb23a7d10aefbfaebb718fc992dc6a8ba784e38c2e820"
+    },
+    {
+      "path": "assets/icons/providers/bedrock.svg",
+      "bytes": 3925,
+      "mode": "0o644",
+      "sha256": "92ab48942b617ce78c7540cbd9244d17526ea5c8edaa99b28b21022d90c6c7a4"
+    },
+    {
+      "path": "assets/icons/providers/bifrost.svg",
+      "bytes": 356,
+      "mode": "0o644",
+      "sha256": "bef49ced861a9de39e77cda2c14fa271ee401d55a47153b8ae6fb306440ae6d0"
+    },
+    {
+      "path": "assets/icons/providers/chutes.svg",
+      "bytes": 277,
+      "mode": "0o644",
+      "sha256": "5f1dd1c39ab3164996f9492eaab5198f10e9c37c3268ea32f6905f0a625e1950"
+    },
+    {
+      "path": "assets/icons/providers/claude.svg",
+      "bytes": 2573,
+      "mode": "0o644",
+      "sha256": "497a88a780831512317b6dd061285e2ec2608abf09a94a5f24ee9019a4d3ef8b"
+    },
+    {
+      "path": "assets/icons/providers/clawrouter.svg",
+      "bytes": 430,
+      "mode": "0o644",
+      "sha256": "1a54a636075166f84b0f4c5c9cfd332976b6e3c2330ba69f34ad5efac5709c32"
+    },
+    {
+      "path": "assets/icons/providers/clinepass.svg",
+      "bytes": 860,
+      "mode": "0o644",
+      "sha256": "158e0fc90ec414c3e13681cca3e307f34bb28982a13da7e2326a8598d410ebfd"
+    },
+    {
+      "path": "assets/icons/providers/codebuff.svg",
+      "bytes": 334,
+      "mode": "0o644",
+      "sha256": "49971b7f731a6144e35d6481fb7986432dcd21905dae403e5c29be9d43e31d80"
+    },
+    {
+      "path": "assets/icons/providers/coderabbit.svg",
+      "bytes": 815,
+      "mode": "0o644",
+      "sha256": "b9e5ca3d02e0886d6a586cf60046b01476b52abb1826017bb0cd18652d76542c"
+    },
+    {
+      "path": "assets/icons/providers/codex.svg",
+      "bytes": 3607,
+      "mode": "0o644",
+      "sha256": "5c999792f6d26c9d14a197aa6e6c20f5af3def433473f7b66bd0d8c8a41cd8cf"
+    },
+    {
+      "path": "assets/icons/providers/commandcode.svg",
+      "bytes": 537,
+      "mode": "0o644",
+      "sha256": "905d0a09d27cd46f94ed4a8de30bc19a3aacb3d1b2fa2367921541035eea9875"
+    },
+    {
+      "path": "assets/icons/providers/copilot.svg",
+      "bytes": 3624,
+      "mode": "0o644",
+      "sha256": "945934ed46f6fb1f8b3fdef5465264051068664c477004195a56a89d03c1d994"
+    },
+    {
+      "path": "assets/icons/providers/cursor.svg",
+      "bytes": 779,
+      "mode": "0o644",
+      "sha256": "01bac27782652bb9f607f35fac6359e639d6ade0f1a1a0b34d530a367e23ecd3"
+    },
+    {
+      "path": "assets/icons/providers/deepgram.svg",
+      "bytes": 207,
+      "mode": "0o644",
+      "sha256": "863500028bccf80a88aa0f56cc6237fc754702f5e31e499a84896ee9da8451fa"
+    },
+    {
+      "path": "assets/icons/providers/deepinfra.svg",
+      "bytes": 3480,
+      "mode": "0o644",
+      "sha256": "71b41b8fe5905eb8450f70e6d9c39c0a2f93b4b6e14fc4bc6b7e80fc68b42a85"
+    },
+    {
+      "path": "assets/icons/providers/deepseek.svg",
+      "bytes": 3552,
+      "mode": "0o644",
+      "sha256": "016ef430c7d4e75ccff351d155641b3a5b06e665c1752c2c3fe1a3d8daf737a3"
+    },
+    {
+      "path": "assets/icons/providers/devin.svg",
+      "bytes": 773,
+      "mode": "0o644",
+      "sha256": "cec72ca6ea0d1502abf9e9fd77e2be816b35a90893fc26f3b764dcb930383a29"
+    },
+    {
+      "path": "assets/icons/providers/devpass.svg",
+      "bytes": 168,
+      "mode": "0o644",
+      "sha256": "1d76b19bae764eb11a28f85b31503f797d7d2e62a016184736d64ece47875ad7"
+    },
+    {
+      "path": "assets/icons/providers/doubao.svg",
+      "bytes": 794,
+      "mode": "0o644",
+      "sha256": "3fe2e6bffe1a18a573ea6f191de346a3196e2102df6363cf0d5efc37ab90a567"
+    },
+    {
+      "path": "assets/icons/providers/elevenlabs.svg",
+      "bytes": 196,
+      "mode": "0o644",
+      "sha256": "2c56c8c39ec39388b1d43f37ca72c2193ade94c75f8907d4876a99f01d4be7cf"
+    },
+    {
+      "path": "assets/icons/providers/factory.svg",
+      "bytes": 5780,
+      "mode": "0o644",
+      "sha256": "f2a16395f166104832b7fbf43b021c93cf5d0f14740ae9453c41df807d12e8cb"
+    },
+    {
+      "path": "assets/icons/providers/fireworks.svg",
+      "bytes": 582,
+      "mode": "0o644",
+      "sha256": "0ea62712f1a76a79d85b73521dda4aa0e4815c2f942ea168eaabfd1113fbe2f5"
+    },
+    {
+      "path": "assets/icons/providers/gemini.svg",
+      "bytes": 844,
+      "mode": "0o644",
+      "sha256": "c67e54c663041fdebf0ce2f3ff9a8e76e1928cabaee74f7936450a01c1a40aa5"
+    },
+    {
+      "path": "assets/icons/providers/gitkraken.svg",
+      "bytes": 2140,
+      "mode": "0o644",
+      "sha256": "20b52166e290620e572aca954b633ba5db8892f48fef65b01502fa4e6f47f9d7"
+    },
+    {
+      "path": "assets/icons/providers/grok.svg",
+      "bytes": 752,
+      "mode": "0o644",
+      "sha256": "41edb24e0b3a31268c6374bad1984e830ead62856e7859b83aa47059a221562f"
+    },
+    {
+      "path": "assets/icons/providers/groq.svg",
+      "bytes": 544,
+      "mode": "0o644",
+      "sha256": "fb343ece916bfc5ccbfebcabd4d1505928241dd7cefe575ee92f749d49fdaf13"
+    },
+    {
+      "path": "assets/icons/providers/helmcode.svg",
+      "bytes": 715,
+      "mode": "0o644",
+      "sha256": "815993dc14457df021454bb59972c0cb9ff8651271f74b0cb8a5bf0f9fa191c3"
+    },
+    {
+      "path": "assets/icons/providers/huggingface.svg",
+      "bytes": 406,
+      "mode": "0o644",
+      "sha256": "d905e69c090666cdb1e02d9f1c9517ee970a75a7b034e187f33265d200f4cd87"
+    },
+    {
+      "path": "assets/icons/providers/hyper.svg",
+      "bytes": 151,
+      "mode": "0o644",
+      "sha256": "ff3e79537cad7f1ef964d6981ef12ba0a449d2e5f0d66f3cee81c1174e743341"
+    },
+    {
+      "path": "assets/icons/providers/ibmbob.svg",
+      "bytes": 1619,
+      "mode": "0o644",
+      "sha256": "fdf8b7b09391dc5eb5a188402973760a6563dbe244647c467a572df2b58df236"
+    },
+    {
+      "path": "assets/icons/providers/jetbrains.svg",
+      "bytes": 995,
+      "mode": "0o644",
+      "sha256": "b04cc9f6cb674a1a76f80974484b6554752bdfd0dd7d7e892a80baa4b126156d"
+    },
+    {
+      "path": "assets/icons/providers/kilo.svg",
+      "bytes": 922,
+      "mode": "0o644",
+      "sha256": "52578058aa5da6f2783981162f36a3bd8bbd9b128e2778332ea63e1aac2284f2"
+    },
+    {
+      "path": "assets/icons/providers/kimi.svg",
+      "bytes": 1150,
+      "mode": "0o644",
+      "sha256": "c32cf080c66d3bf22b0ffdff225ee3c7a6b0f0e6a8921d900192ec833b6000ad"
+    },
+    {
+      "path": "assets/icons/providers/kiro.svg",
+      "bytes": 911,
+      "mode": "0o644",
+      "sha256": "573b22d098743f669364c82180432a82714588b6d25a6686869f2db99fd6e2e5"
+    },
+    {
+      "path": "assets/icons/providers/litellm.svg",
+      "bytes": 1290,
+      "mode": "0o644",
+      "sha256": "c96713a6b76bf004c38d1a8a08d407d48af72290adccd73f8a0269ab157cf94e"
+    },
+    {
+      "path": "assets/icons/providers/llmman.svg",
+      "bytes": 3942,
+      "mode": "0o644",
+      "sha256": "e6c802d15b085b9fc4a1550852b1a5860179f2004c6e0a730954d881403d185d"
+    },
+    {
+      "path": "assets/icons/providers/llmproxy.svg",
+      "bytes": 551,
+      "mode": "0o644",
+      "sha256": "a6325d79506a71b115bf9f47028e3e71704d3da51c905011d455a2bbeb2797c0"
+    },
+    {
+      "path": "assets/icons/providers/longcat.svg",
+      "bytes": 791,
+      "mode": "0o644",
+      "sha256": "1853205fd60d8c162be0ee1e08aba7835344fdf2c9ffa4b5facc4bbabcbae836"
+    },
+    {
+      "path": "assets/icons/providers/manus.svg",
+      "bytes": 5594,
+      "mode": "0o644",
+      "sha256": "db3a1852c7be2b3e5773e8828f846c8938fbcfafcc9f9ec0df1734120f77a9b4"
+    },
+    {
+      "path": "assets/icons/providers/mimo.svg",
+      "bytes": 309,
+      "mode": "0o644",
+      "sha256": "c1fc2d692803a2c4b2b7b2a5f11f6983870e3d03338dab92f0b8bb7f5d6c1160"
+    },
+    {
+      "path": "assets/icons/providers/minimax.svg",
+      "bytes": 1333,
+      "mode": "0o644",
+      "sha256": "1f6486636df07f104243e9038f9bb3a0ea58415c14470b07b474ed0e5e41813c"
+    },
+    {
+      "path": "assets/icons/providers/mistral.svg",
+      "bytes": 419,
+      "mode": "0o644",
+      "sha256": "690fa49df402cca5aa90949abff9d07899781ae29e33b3fed2ae5dca450aceb5"
+    },
+    {
+      "path": "assets/icons/providers/muse.svg",
+      "bytes": 1322,
+      "mode": "0o644",
+      "sha256": "266df039b3bf8b565f02d001e9c9b2b3fc7416f40822e62b8f840848c6ac98b4"
+    },
+    {
+      "path": "assets/icons/providers/neuralwatt.svg",
+      "bytes": 131,
+      "mode": "0o644",
+      "sha256": "1f724e174fe57ec02fddd2f4fa53b6c279908ebe2343527571ca2e68b9e942d0"
+    },
+    {
+      "path": "assets/icons/providers/notion.svg",
+      "bytes": 1139,
+      "mode": "0o644",
+      "sha256": "1ffa05c609d3ace7b3f1de7595413b0f8a2bfb02c50473a5c2fadf192a101a4f"
+    },
+    {
+      "path": "assets/icons/providers/nous.svg",
+      "bytes": 214,
+      "mode": "0o644",
+      "sha256": "92793857fe33725fb643cfff11775155bee8d9026aa76255642a34303614cc9c"
+    },
+    {
+      "path": "assets/icons/providers/ollama.svg",
+      "bytes": 3778,
+      "mode": "0o644",
+      "sha256": "aed9685d6dec79f85b83dbaaf0a62034bb3bc0e85b875bd35b167a010738dc5b"
+    },
+    {
+      "path": "assets/icons/providers/opencode.svg",
+      "bytes": 215,
+      "mode": "0o644",
+      "sha256": "6c1688e66e63a0415f43f150b6f329074095f76e875cd708878447220606532a"
+    },
+    {
+      "path": "assets/icons/providers/opencodego.svg",
+      "bytes": 215,
+      "mode": "0o644",
+      "sha256": "6c1688e66e63a0415f43f150b6f329074095f76e875cd708878447220606532a"
+    },
+    {
+      "path": "assets/icons/providers/openrouter.svg",
+      "bytes": 663,
+      "mode": "0o644",
+      "sha256": "8b65de7e42abd33acbaa4b5016ea7f2383cb5f7cdbbbc059f993a838c18a25e1"
+    },
+    {
+      "path": "assets/icons/providers/perplexity.svg",
+      "bytes": 755,
+      "mode": "0o644",
+      "sha256": "aea255880293a8fe290dd650dbd86a85cd1b3099a1d79ba310043c6293b5de17"
+    },
+    {
+      "path": "assets/icons/providers/pi.svg",
+      "bytes": 397,
+      "mode": "0o644",
+      "sha256": "0f9b04299fbd26c2c726d3e91e845dfb71a5d347830ae08286f524d195c683ce"
+    },
+    {
+      "path": "assets/icons/providers/poe.svg",
+      "bytes": 1602,
+      "mode": "0o644",
+      "sha256": "c31a4cdff3665f5d54d08a1f9624a8f31b84e2e28789954110e4a3004aa08a1c"
+    },
+    {
+      "path": "assets/icons/providers/qoder.svg",
+      "bytes": 368,
+      "mode": "0o644",
+      "sha256": "2abb1cc4f7a02acf785df9acf0e8f6a8eaf575603cabebce5883866dbe936da5"
+    },
+    {
+      "path": "assets/icons/providers/qwencloud.svg",
+      "bytes": 446,
+      "mode": "0o644",
+      "sha256": "e431112eb201ee28a645bc1d6967c1ea43791ae7155e50b12e2a9258b719014c"
+    },
+    {
+      "path": "assets/icons/providers/raycast.svg",
+      "bytes": 523,
+      "mode": "0o644",
+      "sha256": "1d37e9ef7ad1be8aa1ff2fc86f41fcf2af6dc0fd77d1832bef770df4ca6a9f10"
+    },
+    {
+      "path": "assets/icons/providers/replicate.svg",
+      "bytes": 954,
+      "mode": "0o644",
+      "sha256": "0473f40efdf4ed60fd4d247c5c7b530e2b1cf8d77ed01d0afd2f5a36a6e28f8c"
+    },
+    {
+      "path": "assets/icons/providers/sakana.svg",
+      "bytes": 671,
+      "mode": "0o644",
+      "sha256": "1b896efa0cee8b108b2bb94db78e798ca7b18e3dcf9c07306eb630ddba6734df"
+    },
+    {
+      "path": "assets/icons/providers/stepfun.svg",
+      "bytes": 1980,
+      "mode": "0o644",
+      "sha256": "48cb61b4e8e3f9bc00139a26bc70a6a3c1c76f626050c16ef47ce346d82596ee"
+    },
+    {
+      "path": "assets/icons/providers/sub2api.svg",
+      "bytes": 295,
+      "mode": "0o644",
+      "sha256": "f9f05fa2bf802a9ea3e4f4e1273b7892477f1c0e9ac8263be604de5e1b5773e8"
+    },
+    {
+      "path": "assets/icons/providers/synthetic.svg",
+      "bytes": 7689,
+      "mode": "0o644",
+      "sha256": "011e43b0cb6880f002ba05f964cfa498cac7176cecef8b9d88b609ca17358c2f"
+    },
+    {
+      "path": "assets/icons/providers/t3chat.svg",
+      "bytes": 954,
+      "mode": "0o644",
+      "sha256": "5c1de0325365c61d747124a74b101f5ad06689bb6cbee5479a5433532f1fee79"
+    },
+    {
+      "path": "assets/icons/providers/typesafe.svg",
+      "bytes": 948,
+      "mode": "0o644",
+      "sha256": "0cd91586a731086d23be7e99d8664a24011f2448ed3e8c04c8cd00f8d70b89f3"
+    },
+    {
+      "path": "assets/icons/providers/v0.svg",
+      "bytes": 698,
+      "mode": "0o644",
+      "sha256": "88555a2f0ea4f137efeccecf61233241a0ab42c1b05f4f37c8780bbe53c84631"
+    },
+    {
+      "path": "assets/icons/providers/venice.svg",
+      "bytes": 218,
+      "mode": "0o644",
+      "sha256": "7600271ad804c9f32acf13b247d726bc5196d41287fccc708d8dd43ff334e942"
+    },
+    {
+      "path": "assets/icons/providers/vercel.svg",
+      "bytes": 109,
+      "mode": "0o644",
+      "sha256": "8055b9c3701a1b634558a0fc7ac13e265cb37b7b0d2471204e5a7324f8f8d82b"
+    },
+    {
+      "path": "assets/icons/providers/vertexai.svg",
+      "bytes": 370,
+      "mode": "0o644",
+      "sha256": "009ffbfa8403bc7a38191b10d331ac14b95d1f44fe64f2229ee4a1f1a6d73c28"
+    },
+    {
+      "path": "assets/icons/providers/warp.svg",
+      "bytes": 455,
+      "mode": "0o644",
+      "sha256": "fd62dfca5b87dc61cf5c3168096f7becea935730b31c26ed7c37864e077bd0a1"
+    },
+    {
+      "path": "assets/icons/providers/wayfinder.svg",
+      "bytes": 259,
+      "mode": "0o644",
+      "sha256": "f4bfe41390802030234a2f3f4b264a7fe0586d399703136f578ecf42c17b7be9"
+    },
+    {
+      "path": "assets/icons/providers/windsurf.svg",
+      "bytes": 1208,
+      "mode": "0o644",
+      "sha256": "e2e68e7ead2c5a926c56a1be92301c367899962c01c406559ee250d1ee32b0f3"
+    },
+    {
+      "path": "assets/icons/providers/xai.svg",
+      "bytes": 248,
+      "mode": "0o644",
+      "sha256": "c17830582241ba7b7a44803ae124aff983833266db2318e6396a0237670b2b88"
+    },
+    {
+      "path": "assets/icons/providers/xkiro.svg",
+      "bytes": 155,
+      "mode": "0o644",
+      "sha256": "1130dc3d5bed0f66def56e209f008f4cd685056593b512981d4e0ecd6e7e8671"
+    },
+    {
+      "path": "assets/icons/providers/zai.svg",
+      "bytes": 496,
+      "mode": "0o644",
+      "sha256": "586f658fe329a52e5f25e5f9b63e506721b96c2ed64cc5deb0b5087f27780598"
+    },
+    {
+      "path": "assets/icons/providers/zed.svg",
+      "bytes": 612,
+      "mode": "0o644",
+      "sha256": "b8f831d07c8c1999669358e349ed6d6098b5911ccff89898831e86f37a44a583"
+    },
+    {
+      "path": "assets/icons/providers/zenmux.svg",
+      "bytes": 2354,
+      "mode": "0o644",
+      "sha256": "b6645db5ea791c970af7c814898c44d6261ab41125e91e8704d62354402765b2"
+    },
+    {
+      "path": "assets/icons/providers/zoommate.svg",
+      "bytes": 8812,
+      "mode": "0o644",
+      "sha256": "d6e7cf16485c115778cad59fea0910e60907e93f277221a0b0125fbadbd43ab5"
+    },
+    {
+      "path": "assets/icons/pulse.svg",
+      "bytes": 207,
+      "mode": "0o644",
+      "sha256": "12b6e45146a8bcff1cadb09ef7572b14103be7ae07c44e17692af7a46812c338"
+    },
+    {
+      "path": "assets/icons/refresh.svg",
+      "bytes": 316,
+      "mode": "0o644",
+      "sha256": "ba720a64a1fd1d1309b063d2e4a7f6a659d410340445664318b810f765d0f210"
+    },
+    {
+      "path": "assets/icons/sessions.svg",
+      "bytes": 287,
+      "mode": "0o644",
+      "sha256": "02018a8d3e7ef155ff7bead86c0b5333a96e8c447883f24c13570ee07475bb9c"
+    },
+    {
+      "path": "assets/icons/settings.svg",
+      "bytes": 377,
+      "mode": "0o644",
+      "sha256": "f1329d0d72087b0521c35f7feeec5c6eb19cb6d9e2de0b820208b8d00b1c6f10"
+    },
+    {
+      "path": "assets/icons/split.svg",
+      "bytes": 245,
+      "mode": "0o644",
+      "sha256": "5a5924227ab945a6cfb6e615ee0f643a0ca03b2c7fb5b1d7cd3460b1c3af5a66"
+    },
+    {
+      "path": "assets/icons/teleport-back.svg",
+      "bytes": 255,
+      "mode": "0o644",
+      "sha256": "27471f4dbf9432ff5bc2cd2db33a4e00da46a3a92e59df6da916b8502dd61528"
+    },
+    {
+      "path": "assets/icons/teleport.svg",
+      "bytes": 256,
+      "mode": "0o644",
+      "sha256": "cc42a21a02f18e016bb34b64279beae1b19f6ceb440d7cedc8b605fce9527d93"
+    },
+    {
+      "path": "assets/icons/theme.svg",
+      "bytes": 217,
+      "mode": "0o644",
+      "sha256": "881b3bd7c79c87e096d34c8382d3dc4975a1f52eed06af98c0b8287ea2f6147d"
+    },
+    {
+      "path": "assets/icons/trash.svg",
+      "bytes": 228,
+      "mode": "0o644",
+      "sha256": "ae25d8b504a32d2216cb892a60fac80b7c38c5012d3df49625a2aa930fabd6c5"
+    },
+    {
+      "path": "assets/icons/user.svg",
+      "bytes": 182,
+      "mode": "0o644",
+      "sha256": "3c4dbf6817b4148a5dda9771311c22e9c9788500c18be60511ac76826c236808"
+    },
+    {
+      "path": "assets/icons/x.svg",
+      "bytes": 244,
+      "mode": "0o644",
+      "sha256": "9e30fb08eb50f9f3616c5c8277db1bc15615eccb19bf56f0625caed5f5860a4b"
+    },
+    {
+      "path": "assets/icons/zoom.svg",
+      "bytes": 219,
+      "mode": "0o644",
+      "sha256": "0122586cebb219b838fbb930589b406b05b053e8dd3a9d6536b4f99fd7e0273d"
+    },
+    {
+      "path": "assets/macos/Info.plist",
+      "bytes": 747,
+      "mode": "0o644",
+      "sha256": "74aa289a7346e020677dece780f645fba53de0ea5439034e8cc02e0c5ce5a35b"
+    },
+    {
+      "path": "assets/social-preview-dark.png",
+      "bytes": 136091,
+      "mode": "0o644",
+      "sha256": "d7f648ace409a88501be1f2c7e5956e4836debbbb747d2bd310b6c64c73c0cc1"
+    },
+    {
+      "path": "assets/social-preview-dark.svg",
+      "bytes": 8521,
+      "mode": "0o644",
+      "sha256": "627ecbba721ecdd3fe950acf39594758fe743c4ea0808793162cb2f3d99584a6"
+    },
+    {
+      "path": "assets/social-preview-light-ui.png",
+      "bytes": 99885,
+      "mode": "0o644",
+      "sha256": "24b922489413fdc8d61b8e4129abb09813a7a1da0e529f3c191027944f9cb0eb"
+    },
+    {
+      "path": "assets/social-preview-light-ui.svg",
+      "bytes": 8339,
+      "mode": "0o644",
+      "sha256": "052892f25e483d68a66a8f8c4183ef419202de6d205725eb83dd792a2cb9b999"
+    },
+    {
+      "path": "assets/social-preview-light.png",
+      "bytes": 65526,
+      "mode": "0o644",
+      "sha256": "2bab31a5c858691ff23fc634a973722c87a84aa428c315fe0750a7c8ff3e649e"
+    },
+    {
+      "path": "assets/social-preview-light.svg",
+      "bytes": 3674,
+      "mode": "0o644",
+      "sha256": "00f8cba38a3cd77f847b346c94f68037c1b136194a50383ae2508954d534f6f8"
+    },
+    {
+      "path": "assets/sounds/README.md",
+      "bytes": 151,
+      "mode": "0o644",
+      "sha256": "428de04895ff119d3d8e6571e44b0fb6e97e9632aa20e8b83f12797af414ac43"
+    },
+    {
+      "path": "assets/sounds/done.mp3",
+      "bytes": 34560,
+      "mode": "0o644",
+      "sha256": "cb9c93492c808e33946edac2ab5915758267e65914bc4b794a5ca6dc6e655741"
+    },
+    {
+      "path": "assets/sounds/request.mp3",
+      "bytes": 46811,
+      "mode": "0o644",
+      "sha256": "44c077ce28a0a48cec29da204beb627fd17140e5bde1f92dbaecf3d478bdda6f"
+    },
+    {
+      "path": "cliff.toml",
+      "bytes": 2954,
+      "mode": "0o644",
+      "sha256": "158fe0769f2dda738b0d81a6afbf5145efdbe4b4a92ffd4629c50ee1abddefdd"
+    },
+    {
+      "path": "crates/herdr-client/Cargo.toml",
+      "bytes": 904,
+      "mode": "0o644",
+      "sha256": "59a9ea55fc320358203306b400b42c629eca894b0d04f78c587e83db0dfc7aaa"
+    },
+    {
+      "path": "crates/herdr-client/README.md",
+      "bytes": 34130,
+      "mode": "0o644",
+      "sha256": "079c965ba7ee2702e14bc7982ec9307c436a1f53814ccf1107cf5256b6e791ac"
+    },
+    {
+      "path": "crates/herdr-client/src/catalog.rs",
+      "bytes": 24546,
+      "mode": "0o644",
+      "sha256": "38f4cd5e85ac0befc116cdd71e00db88f7545b62aa373491d6edeb99818c4615"
+    },
+    {
+      "path": "crates/herdr-client/src/clipboard.rs",
+      "bytes": 5437,
+      "mode": "0o644",
+      "sha256": "59c5d961540eab92101274a36d8845c0a224d633b4d3b6e57663c0360a425df5"
+    },
+    {
+      "path": "crates/herdr-client/src/clipboard_tests.rs",
+      "bytes": 38904,
+      "mode": "0o644",
+      "sha256": "fb6134d171f046e6f68a9a343f9ff1c1bc7896c43ee7687ad9b74583f1fd06ad"
+    },
+    {
+      "path": "crates/herdr-client/src/connect.rs",
+      "bytes": 6105,
+      "mode": "0o644",
+      "sha256": "f6578e57eacac5eb026a6375f26721cb9ebacba2f017858f136f5863e8ef7a4f"
+    },
+    {
+      "path": "crates/herdr-client/src/discovery.rs",
+      "bytes": 10743,
+      "mode": "0o644",
+      "sha256": "36cf3d095d2efc6aa01e37560782f9c12f7b96ced49baaff36e5f43bebe8a978"
+    },
+    {
+      "path": "crates/herdr-client/src/error.rs",
+      "bytes": 11426,
+      "mode": "0o644",
+      "sha256": "28e929b7c4a1bd754e6d4d4e1a915a070c5810604c121de264ac91ee0b1942b6"
+    },
+    {
+      "path": "crates/herdr-client/src/event.rs",
+      "bytes": 2105,
+      "mode": "0o644",
+      "sha256": "658d08fae4a1e1a94df4f0f3d28c60a8bc2784ddd6d571fcc9d8a80d73374a67"
+    },
+    {
+      "path": "crates/herdr-client/src/frame.rs",
+      "bytes": 4549,
+      "mode": "0o644",
+      "sha256": "7d523990b4fa7cef4b36526c0a394249f3e87ac7495d54cf48742efae79142b3"
+    },
+    {
+      "path": "crates/herdr-client/src/handle.rs",
+      "bytes": 9344,
+      "mode": "0o644",
+      "sha256": "6fffa898d13acbeffe45fc6a4aa0d2c1be376629d4bb2ee42f59ce95e5921e03"
+    },
+    {
+      "path": "crates/herdr-client/src/host_theme.rs",
+      "bytes": 4802,
+      "mode": "0o644",
+      "sha256": "d29a9bd4796a4a5b3b8ed5a6ea9d060754bef8e6c174d2df7c9f8e9058d4e581"
+    },
+    {
+      "path": "crates/herdr-client/src/lib.rs",
+      "bytes": 2309,
+      "mode": "0o644",
+      "sha256": "3359e0132d816ef7f3e340b1cca6da13b05ce38a342c3b423712738bee841e14"
+    },
+    {
+      "path": "crates/herdr-client/src/limits.rs",
+      "bytes": 680,
+      "mode": "0o644",
+      "sha256": "dd94b227cd490d78cada9e98cc87b2f696e4a77acde110d74eb43433c78e4dd4"
+    },
+    {
+      "path": "crates/herdr-client/src/method.rs",
+      "bytes": 12469,
+      "mode": "0o644",
+      "sha256": "6033642a4c288daa08cf904a4d6d811457d0d1b225f7c7cf479c754214ad8bcc"
+    },
+    {
+      "path": "crates/herdr-client/src/options.rs",
+      "bytes": 1048,
+      "mode": "0o644",
+      "sha256": "58caa1bb4d6addb5110d7d448dd815171b4053e593a207242a367b2c33a42815"
+    },
+    {
+      "path": "crates/herdr-client/src/queue.rs",
+      "bytes": 8151,
+      "mode": "0o644",
+      "sha256": "004fa49713ff324d39802ddf5ee33942a3b9308a94bb70d52bcf2fae69815860"
+    },
+    {
+      "path": "crates/herdr-client/src/script.rs",
+      "bytes": 9533,
+      "mode": "0o644",
+      "sha256": "d1f9c303162f61c875b9b023b3fdf031c4a00728d8685306d0801278cb2fdf38"
+    },
+    {
+      "path": "crates/herdr-client/src/script_tests.rs",
+      "bytes": 4101,
+      "mode": "0o644",
+      "sha256": "2d86e28a6c6f507e35f84f7b86ccb48dd1da468a6c07d647e67dd638fe76a6c1"
+    },
+    {
+      "path": "crates/herdr-client/src/scrollback.rs",
+      "bytes": 17377,
+      "mode": "0o644",
+      "sha256": "5a14fc4f3d8f03925aa59caf52bb36688ec6c1b37a755e08492c1c26f550dfb6"
+    },
+    {
+      "path": "crates/herdr-client/src/session.rs",
+      "bytes": 21907,
+      "mode": "0o644",
+      "sha256": "072528960d6b1789d0f2e5d529a586208b3d477aa8fdf75567445523662c14ca"
+    },
+    {
+      "path": "crates/herdr-client/src/sessions.rs",
+      "bytes": 34599,
+      "mode": "0o644",
+      "sha256": "488b00c14beadb2eb0e2eed529ceb704bc6dae3817500b61fdf9718266970d3a"
+    },
+    {
+      "path": "crates/herdr-client/src/ssh.rs",
+      "bytes": 36291,
+      "mode": "0o644",
+      "sha256": "ce1b9d8aa03c2d84665e1b333e3fd02eb3d59582287b513c1465f4dc7223e8ce"
+    },
+    {
+      "path": "crates/herdr-client/src/surface_encoding_tests.rs",
+      "bytes": 11783,
+      "mode": "0o644",
+      "sha256": "44ec55007b76ce9fa43443bb8732536bc15ec0fda48d9f6f66520a6c4149747a"
+    },
+    {
+      "path": "crates/herdr-client/src/surface_images.rs",
+      "bytes": 15444,
+      "mode": "0o644",
+      "sha256": "bdc20e7cca545d14845abb2faa336f301a0018251c52b7738e7da1dc99452456"
+    },
+    {
+      "path": "crates/herdr-client/src/test_executable.rs",
+      "bytes": 1208,
+      "mode": "0o644",
+      "sha256": "532e87a0c8fdc365ef6cdf6d83546161d5ef313e094f296eab77167eaf488920"
+    },
+    {
+      "path": "crates/herdr-client/src/tests.rs",
+      "bytes": 51990,
+      "mode": "0o644",
+      "sha256": "d6eb64504d3a9dc575fb30b25745776e09bdc378a77bf82ff76e7f2f420b64e9"
+    },
+    {
+      "path": "crates/herdr-client/src/transport.rs",
+      "bytes": 7471,
+      "mode": "0o644",
+      "sha256": "8948ea81a6c70e5aefd718b9e6164c80ec363ddabecac3f581589bab1cf9b69e"
+    },
+    {
+      "path": "crates/herdr-client/src/upload.rs",
+      "bytes": 21502,
+      "mode": "0o644",
+      "sha256": "8fb794c75693b2081c0a88951e69bf66a258c2a0a958db4cf08c81ff57143e68"
+    },
+    {
+      "path": "crates/herdr-client/src/upload_tests.rs",
+      "bytes": 25312,
+      "mode": "0o644",
+      "sha256": "17a3934e756e1aa2407ce84e288e38fc3f3d5e581d8760a353e96fcd0625d881"
+    },
+    {
+      "path": "crates/herdr-client/tests/live.rs",
+      "bytes": 16343,
+      "mode": "0o644",
+      "sha256": "d05d65d07f5b1f36f2a2177265271b065f4c847f1302eb0e9bcda917a8d2c90e"
+    },
+    {
+      "path": "crates/herdr-companion/Cargo.toml",
+      "bytes": 707,
+      "mode": "0o644",
+      "sha256": "2ddef5ffbedc91ae1c757347797253568102fc6083d62c8ac9822b33b920a408"
+    },
+    {
+      "path": "crates/herdr-companion/README.md",
+      "bytes": 11841,
+      "mode": "0o644",
+      "sha256": "a7b365b7a5f840f29be89eac07f96571b467627ab6d98cd75b134f4ec1331718"
+    },
+    {
+      "path": "crates/herdr-companion/src/broker.rs",
+      "bytes": 19707,
+      "mode": "0o644",
+      "sha256": "33dba68e905ec7eb1ad2b9f9fcc1c2f71b18969ac0edd81800fcd358454df566"
+    },
+    {
+      "path": "crates/herdr-companion/src/cli.rs",
+      "bytes": 13068,
+      "mode": "0o644",
+      "sha256": "4a2dc4c189948e371dfb350d5133cbfc1e1465abdb5b3d1a66c0d6889be69212"
+    },
+    {
+      "path": "crates/herdr-companion/src/error.rs",
+      "bytes": 2603,
+      "mode": "0o644",
+      "sha256": "66e7b7245a8a51edbc62b3eea3d0b808f88187f67246d5ce9336f0bb3ef09b97"
+    },
+    {
+      "path": "crates/herdr-companion/src/herdr_api.rs",
+      "bytes": 18149,
+      "mode": "0o644",
+      "sha256": "adfa8ee7813522eb27ee6b99008dc4a7ddccd195f1b9ff47d7cb2089aef02755"
+    },
+    {
+      "path": "crates/herdr-companion/src/hook.rs",
+      "bytes": 13127,
+      "mode": "0o644",
+      "sha256": "c9f05f53a3f6141239a57a5e1321f3db1e7ba4eaa18ccddf2b3420ecd345bae7"
+    },
+    {
+      "path": "crates/herdr-companion/src/http.rs",
+      "bytes": 10799,
+      "mode": "0o644",
+      "sha256": "bf36cddc1dea42c4ea7269248db5f8939d4f4dbacfb3e9199b74e54d8a23b29d"
+    },
+    {
+      "path": "crates/herdr-companion/src/lib.rs",
+      "bytes": 1176,
+      "mode": "0o644",
+      "sha256": "b0860096ba52907bc7da05f329019899ad7e390cff2ebbb0340e245ef9f8f0e6"
+    },
+    {
+      "path": "crates/herdr-companion/src/main.rs",
+      "bytes": 4300,
+      "mode": "0o644",
+      "sha256": "eb62f47c04f99af84b69e3a34325c047fb7d9d80c9e26bbc8bc82661d4c4a21b"
+    },
+    {
+      "path": "crates/herdr-companion/src/notify.rs",
+      "bytes": 6662,
+      "mode": "0o644",
+      "sha256": "33058c56f8d057fbeb5259c104aee7800e5cb7d02aa6ee9a2edc070114548b99"
+    },
+    {
+      "path": "crates/herdr-companion/src/pairing.rs",
+      "bytes": 7747,
+      "mode": "0o644",
+      "sha256": "a2b7c077bbabe3f1a8eaea0b8c3c14737bed21af756ed32615e34810f2fe0c32"
+    },
+    {
+      "path": "crates/herdr-companion/src/server.rs",
+      "bytes": 46596,
+      "mode": "0o644",
+      "sha256": "2c49066511f7d46220654e62102fea546a94b2b9d6b0d670fa8fff0a02df0261"
+    },
+    {
+      "path": "crates/herdr-companion/src/transcript.rs",
+      "bytes": 10885,
+      "mode": "0o644",
+      "sha256": "6fed68c41c4e377b2d6ada8a2c5228f9ebf67c15318e7806e6bfbe526dec6441"
+    },
+    {
+      "path": "crates/herdr-companion/src/web.rs",
+      "bytes": 2353,
+      "mode": "0o644",
+      "sha256": "98b977ef93036d82fd55ddb2a63e4938b67f09938d9ff60325a8d6de7f0bab0e"
+    },
+    {
+      "path": "crates/herdr-companion/web/app.css",
+      "bytes": 9308,
+      "mode": "0o644",
+      "sha256": "684ed9d63ae7e06e32856064bba637535f751f0135447c042de5c56b31a1cc40"
+    },
+    {
+      "path": "crates/herdr-companion/web/app.js",
+      "bytes": 29903,
+      "mode": "0o644",
+      "sha256": "1f39e1015a58596807dcc3dddbd06e61e007a77b4803bb3197f15d683cc7b56b"
+    },
+    {
+      "path": "crates/herdr-companion/web/icon-192.png",
+      "bytes": 603,
+      "mode": "0o644",
+      "sha256": "af06c656e06ea453b150ed10945904bb74bc55dee644e55cc9bb6408d078d07e"
+    },
+    {
+      "path": "crates/herdr-companion/web/icon-512.png",
+      "bytes": 2178,
+      "mode": "0o644",
+      "sha256": "2c108db93a7ba21daa850cd2c84a8d88d293a0f0abbbdd932d414ecf69c0ae84"
+    },
+    {
+      "path": "crates/herdr-companion/web/icon.svg",
+      "bytes": 376,
+      "mode": "0o644",
+      "sha256": "6cd84262b5f3561fe18017c450377d1a3421275d5ac8d0a641c6e6ad3e9e1c74"
+    },
+    {
+      "path": "crates/herdr-companion/web/index.html",
+      "bytes": 3313,
+      "mode": "0o644",
+      "sha256": "6a1c10387ad316a4fc0baaa3ad209a32902a8413b043aca03378e88f03d2d2ed"
+    },
+    {
+      "path": "crates/herdr-companion/web/manifest.webmanifest",
+      "bytes": 522,
+      "mode": "0o644",
+      "sha256": "36e16197c7f89cbc962e8a28e6f673e0ec3ac65fe78f6469dfdc9eeac9cce9e6"
+    },
+    {
+      "path": "crates/herdr-companion/web/sw.js",
+      "bytes": 1244,
+      "mode": "0o644",
+      "sha256": "e50724654895940697917dc3bfc2a3b1b599e5469c2ea07c7a36358f583509b8"
+    },
+    {
+      "path": "crates/herdr-gpui/Cargo.toml",
+      "bytes": 3648,
+      "mode": "0o644",
+      "sha256": "90a9cdc85c1470ae0b79a7407f55bcf7ee27cd886b48382f0bb9bb9016685512"
+    },
+    {
+      "path": "crates/herdr-gpui/GITHUB-NOTICE.md",
+      "bytes": 1497,
+      "mode": "0o644",
+      "sha256": "870753b90b25ad49c0902b75d3388cb108045cd3435f98e3ea35c52566f24083"
+    },
+    {
+      "path": "crates/herdr-gpui/PERFORMANCE.md",
+      "bytes": 9850,
+      "mode": "0o644",
+      "sha256": "ebb500a694225b58c90ac7776a22bc9bf645994b2fe7a0ff4f16c3d8cfbde74c"
+    },
+    {
+      "path": "crates/herdr-gpui/README.md",
+      "bytes": 131395,
+      "mode": "0o644",
+      "sha256": "8045e14faca06aa9b089ab1a1de8c31b20a8fe6592cd306f9f47ffae82484a62"
+    },
+    {
+      "path": "crates/herdr-gpui/SOUND-NOTICE.md",
+      "bytes": 1558,
+      "mode": "0o644",
+      "sha256": "88e05bc7bb03b170068b3681cf7fd02d0fadee7b68ae2c1ad150647a8991e038"
+    },
+    {
+      "path": "crates/herdr-gpui/WORKTREE-DELETION.md",
+      "bytes": 5789,
+      "mode": "0o644",
+      "sha256": "a70674c49e032db2247f2c6f99e96d388343e9fc2d19eb25f7542a5cad94a04b"
+    },
+    {
+      "path": "crates/herdr-gpui/build.rs",
+      "bytes": 4080,
+      "mode": "0o644",
+      "sha256": "a4880f187b1864919063c676b946d1e4bd000b0356b9146d812daf4ae64bfb47"
+    },
+    {
+      "path": "crates/herdr-gpui/build_identity.rs",
+      "bytes": 5427,
+      "mode": "0o644",
+      "sha256": "b62234e895591a4e42f9b78fb8bee54404bfa17a7590d7f18e7082c388bbf199"
+    },
+    {
+      "path": "crates/herdr-gpui/config-gpui.example.toml",
+      "bytes": 50653,
+      "mode": "0o644",
+      "sha256": "171a397f5478a5592af8d345e867ccdef17cd5a140ac7fe165bbe57de8680f40"
+    },
+    {
+      "path": "crates/herdr-gpui/src/about.rs",
+      "bytes": 12087,
+      "mode": "0o644",
+      "sha256": "d57bbe9ae056a5f9ae90218596a8681f9534f9d1af12933bde448e206cd0b761"
+    },
+    {
+      "path": "crates/herdr-gpui/src/actions.rs",
+      "bytes": 4596,
+      "mode": "0o644",
+      "sha256": "a9cce407df0e3626f4dc7b6dfb476923f99659c7b28b3d4f4039396f60a5f913"
+    },
+    {
+      "path": "crates/herdr-gpui/src/agent_skill.rs",
+      "bytes": 11667,
+      "mode": "0o644",
+      "sha256": "5ac60e4632593d567975ece9cfd665ff9fb085785418c4c71eceadd585636e9e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/app.rs",
+      "bytes": 15729,
+      "mode": "0o644",
+      "sha256": "3ecdb6a4af59ba2f0405e880c6d440ac0c9a114c3542c70cadd399bcdf4c09f1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/app_badge.rs",
+      "bytes": 17509,
+      "mode": "0o644",
+      "sha256": "3ebc6bb1111d0a2572605dc50f8a8e39c3e7b69777e5f34f335da72b3ededd58"
+    },
+    {
+      "path": "crates/herdr-gpui/src/app_icon.rs",
+      "bytes": 5121,
+      "mode": "0o644",
+      "sha256": "f1e5b5cc167b68dc8e9408d753dc45f52d4880a9a97e2a2c786cddddd122c643"
+    },
+    {
+      "path": "crates/herdr-gpui/src/avatars/cache.rs",
+      "bytes": 13738,
+      "mode": "0o644",
+      "sha256": "adb9c6b5a0825a070ef9a26e5432d2da23366eb10cee175368764d902a62fb70"
+    },
+    {
+      "path": "crates/herdr-gpui/src/avatars.rs",
+      "bytes": 16533,
+      "mode": "0o644",
+      "sha256": "7013c9349e526776c80fdb377c400592cca050bd847eeddec6b747f44c471ffc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/bell.rs",
+      "bytes": 3881,
+      "mode": "0o644",
+      "sha256": "0be18e374ced1074ce21b07f785c5f8606d293271802f80cbb61d52ee0713e39"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/annotate.js",
+      "bytes": 14017,
+      "mode": "0o644",
+      "sha256": "d311641e5af170eda30e5cab357b58d4542cdba192141b35e6c96edebdfe8be1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/annotate.rs",
+      "bytes": 23907,
+      "mode": "0o644",
+      "sha256": "766233b45cc3b85d95932790e38ac906868e00e4f09458ad33c3c7e685694a0b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/annotate_view.rs",
+      "bytes": 39030,
+      "mode": "0o644",
+      "sha256": "b2b6318cb25507284921dcb1f26b1f07baa42c319f29695d531be13bfb7734ef"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/feedback.rs",
+      "bytes": 3632,
+      "mode": "0o644",
+      "sha256": "7c407b6c300ae4c8c561e60e32ce3db95d53db137989930040b26102aedbf8bb"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/group_motion.rs",
+      "bytes": 8399,
+      "mode": "0o644",
+      "sha256": "cc467682df39f1bc6303d630525af0e3869415ba2379c45f3597eedf127d8272"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/groups.rs",
+      "bytes": 27762,
+      "mode": "0o644",
+      "sha256": "0cc8ec75eb8bbc55dbeb17cc2d4d11e1f704ac4cf2abc87aff5e0e876eb62a5d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/groups_view.rs",
+      "bytes": 25865,
+      "mode": "0o644",
+      "sha256": "241d24d521a2a0a3edc32eab06d3849c25ea4e1b74dbae7aaddbd39057d30f03"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/layouts.rs",
+      "bytes": 8284,
+      "mode": "0o644",
+      "sha256": "8dfe65401d2c05afbeac2b2130ef228a38098f5e30f46aa1a82511533ff05679"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/location.rs",
+      "bytes": 10680,
+      "mode": "0o644",
+      "sha256": "d066aafeb3e79ffc3123d598bea848995a9e4c931ba08438003d53230826ce70"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/native.rs",
+      "bytes": 11926,
+      "mode": "0o644",
+      "sha256": "e102ad7b9c2eaf7ea853c20573d7d4d69fd89b184c90ab5f08c87d8566c0cdbc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/preview.rs",
+      "bytes": 7842,
+      "mode": "0o644",
+      "sha256": "a38f505f56a26c31053576a143673482d3480a100f23bc57e01541fc1d32ae0f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/snapshot.rs",
+      "bytes": 5573,
+      "mode": "0o644",
+      "sha256": "ec8a8a4cb93a898d734dccfcfa66daf2dbbaadb828d6f7279719a087a393443c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/store.rs",
+      "bytes": 17881,
+      "mode": "0o644",
+      "sha256": "cc799a908a414df05425df435b430d3776f29109a2a52bd12e5eaa5b718771d8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/tab_appear.rs",
+      "bytes": 7607,
+      "mode": "0o644",
+      "sha256": "c3f10dc0585e8cd05802225afe70f9c9971c33b5874b2f447a82a9ed4c7eff35"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/tab_scroll.rs",
+      "bytes": 7466,
+      "mode": "0o644",
+      "sha256": "6025b3c2dffbfffadc841fcf943aee55788b0a4c84f8c1a8d070219c782ebd5f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/view.rs",
+      "bytes": 40780,
+      "mode": "0o644",
+      "sha256": "d421ebdb420a255edc58b5446a1239cb0d9537382327cf4c28ea938ada7badf6"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser/view_tests.rs",
+      "bytes": 33639,
+      "mode": "0o644",
+      "sha256": "ea8c6d7b27a9f6bdf5a65bd7dd4ed2a2247067ea48019997603efa3e84605a69"
+    },
+    {
+      "path": "crates/herdr-gpui/src/browser.rs",
+      "bytes": 6171,
+      "mode": "0o644",
+      "sha256": "d6c2a117c681b257e5def2ae5fe02d95a3c8f55c6abb30fa89e3f502d39ce812"
+    },
+    {
+      "path": "crates/herdr-gpui/src/caffeine.rs",
+      "bytes": 4589,
+      "mode": "0o644",
+      "sha256": "a89a6c49006aefa0585199bf7faeb7495418165bf1faadea5345ab0a379ed3a3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/cli.rs",
+      "bytes": 24833,
+      "mode": "0o644",
+      "sha256": "02aa338d3f98a706fba2ac14c80a7ac17234f70fb22c210634d175a8fb3748cb"
+    },
+    {
+      "path": "crates/herdr-gpui/src/close_modal.rs",
+      "bytes": 23660,
+      "mode": "0o644",
+      "sha256": "d0d16069fde8e3da556f543df5aea3aaf2b4396cadc3fac05dc77111c30739a4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/config/preferences.rs",
+      "bytes": 9704,
+      "mode": "0o644",
+      "sha256": "42df2aad568369068fbf8ea6622a49e9a27da96cbab1f5b585157696374f8e36"
+    },
+    {
+      "path": "crates/herdr-gpui/src/config/sidebar.rs",
+      "bytes": 18561,
+      "mode": "0o644",
+      "sha256": "9215f8e14eb7209a76de1dbf6c8d642876414fcfac6b947c79c81282bb1276e3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/config/watch.rs",
+      "bytes": 3884,
+      "mode": "0o644",
+      "sha256": "e6ac3c4df011a6c8bc28f0b8a45f3f83d79bc94ce6ab6580f4c8b23b5ee53f9f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/config.rs",
+      "bytes": 165690,
+      "mode": "0o644",
+      "sha256": "88736d92dd61d7a7766b7a332d85af3a47019b9fba175341c5048bbff75938e4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/config_diagnostic.rs",
+      "bytes": 5128,
+      "mode": "0o644",
+      "sha256": "ea18f7266a7b2594155d369744ed68fde8015686652c4f47d2ebc24dae3328ad"
+    },
+    {
+      "path": "crates/herdr-gpui/src/connection.rs",
+      "bytes": 31886,
+      "mode": "0o644",
+      "sha256": "fe560debadc442608a48b7a47fc273cf52f864e84f41676892de67cf8aa0d387"
+    },
+    {
+      "path": "crates/herdr-gpui/src/constants.rs",
+      "bytes": 1366,
+      "mode": "0o644",
+      "sha256": "d2cc9f85890a2c4b571c497eef0309f229e6dd7430da796018e17e9ce679ed79"
+    },
+    {
+      "path": "crates/herdr-gpui/src/contrast.rs",
+      "bytes": 9809,
+      "mode": "0o644",
+      "sha256": "29e6e021ec4ebafd0ab2db93d8b801496863f987313ac412e573bdaf95838f6e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/control/protocol.rs",
+      "bytes": 7102,
+      "mode": "0o644",
+      "sha256": "4d79ece23c3d38c5502dd5743feaa8f6f30e6169ac713cd8f66001844e656fda"
+    },
+    {
+      "path": "crates/herdr-gpui/src/control/socket.rs",
+      "bytes": 13429,
+      "mode": "0o644",
+      "sha256": "682db39d8ad888117b81520898038e994d80d81abd1c41edeaf4ff4b550ae57d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/control.rs",
+      "bytes": 18374,
+      "mode": "0o644",
+      "sha256": "5b452a8da86bff5e39ffb2429204819385f62b5fdb12ea7810f8638dc6d6fc95"
+    },
+    {
+      "path": "crates/herdr-gpui/src/controls.rs",
+      "bytes": 41759,
+      "mode": "0o644",
+      "sha256": "23a52d030bf0df850aeeea59389005fe9e8829bef40c2a7a85f4a8ac7957489c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/copy_mode.rs",
+      "bytes": 25682,
+      "mode": "0o644",
+      "sha256": "f1198874faa9f12aa5b42153853876324ce2659bad4755ebb483a2f5bef88141"
+    },
+    {
+      "path": "crates/herdr-gpui/src/daemon.rs",
+      "bytes": 15335,
+      "mode": "0o644",
+      "sha256": "62a8982f4c2931bf9ed95bfa787afb623061805787536f726260f75bc03e7180"
+    },
+    {
+      "path": "crates/herdr-gpui/src/diagnostics.rs",
+      "bytes": 33726,
+      "mode": "0o644",
+      "sha256": "779581651ee623e400ffc22e29fabd52e3807e1735f1e4cfa6977e24bbb8f23f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/dialog_input.rs",
+      "bytes": 14326,
+      "mode": "0o644",
+      "sha256": "be6cb087d0bc50e1db5f104197e0c5aada2842e981bd3ecb7e164aeddd4312d5"
+    },
+    {
+      "path": "crates/herdr-gpui/src/endpoint/lifecycle_tests.rs",
+      "bytes": 175659,
+      "mode": "0o644",
+      "sha256": "df18518729333347f08c9dfed4bbbaa02656e7dd5497b52b73a4dcf259a1051f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/endpoint.rs",
+      "bytes": 64123,
+      "mode": "0o644",
+      "sha256": "25c9294c831cbd145bb842f837765dfe3cb1dd6640bafb035fb1cde4f183f7d5"
+    },
+    {
+      "path": "crates/herdr-gpui/src/error.rs",
+      "bytes": 29664,
+      "mode": "0o644",
+      "sha256": "8ed1105a30d454cf7c064e472fcd1e527b9913857d558838787cb26d6d65c0cf"
+    },
+    {
+      "path": "crates/herdr-gpui/src/find.rs",
+      "bytes": 23580,
+      "mode": "0o644",
+      "sha256": "8e1d554cca7d832bca683c89470cb24a624f8d14fdec45eda6e0ace9a7ba1f85"
+    },
+    {
+      "path": "crates/herdr-gpui/src/font_picker.rs",
+      "bytes": 14077,
+      "mode": "0o644",
+      "sha256": "aabccd1d37dbfd1cee042c8139de2a5ef088d36e97dfc9bd181e82d8d2946ec0"
+    },
+    {
+      "path": "crates/herdr-gpui/src/font_sizes.rs",
+      "bytes": 12921,
+      "mode": "0o644",
+      "sha256": "c8accbc4922ab1ba720b4dfda4be74d009a216b74dadf3ed538901efe13ac8f0"
+    },
+    {
+      "path": "crates/herdr-gpui/src/fonts.rs",
+      "bytes": 1935,
+      "mode": "0o644",
+      "sha256": "bd7e90926d79b20cc5374109ebcfde21b06900018c504217a16094197e6503e3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/git.rs",
+      "bytes": 37559,
+      "mode": "0o644",
+      "sha256": "393154b3f2c297949c4b54b0b769fee26ae12542500861e3344f738c891b3151"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/auth.rs",
+      "bytes": 23312,
+      "mode": "0o644",
+      "sha256": "849f5f78bfb432698d8a329d458e55808a4899c30e4121ac138faa87f300860a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/credentials.rs",
+      "bytes": 12956,
+      "mode": "0o644",
+      "sha256": "c4354014eaf36e19c7242adb96a8f720f047a36127d4643c09731c0a976ef79d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/device.rs",
+      "bytes": 6686,
+      "mode": "0o644",
+      "sha256": "a216673017dcb9ba11053ee0761e3bca9543530a3f010c5ed801c116e2c7c42f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/http.rs",
+      "bytes": 6152,
+      "mode": "0o644",
+      "sha256": "7d287b3912ea53f1d2ffdfc13eb2d100ca104925d37ec05d1a76f89ebf00edf4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/log.rs",
+      "bytes": 7263,
+      "mode": "0o644",
+      "sha256": "9485ca90ce39913c4f798c81bd3beb3c8aa7453c1fced450fdb762b5c0929317"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/secret_service.rs",
+      "bytes": 8486,
+      "mode": "0o644",
+      "sha256": "2dad68e1e1d2deba486bf6537790393d9e20e36ff6e20208df355aba394086c5"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/store.rs",
+      "bytes": 19281,
+      "mode": "0o644",
+      "sha256": "bc4cd52e2cd72679cdf8383c193eab16b978f6a1bba442ff6c082f46339e10fc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/tests.rs",
+      "bytes": 36148,
+      "mode": "0o644",
+      "sha256": "9dcd699c1a9aaedea2a5f55bcef21f9867b821e59397b8058bf87353da759016"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github/token.rs",
+      "bytes": 16222,
+      "mode": "0o644",
+      "sha256": "8481d8e63fabdc2b64b30520efe4c20dbddcb197620aa33e05d2eaef55783095"
+    },
+    {
+      "path": "crates/herdr-gpui/src/github.rs",
+      "bytes": 772,
+      "mode": "0o644",
+      "sha256": "f576bc68a45eeae595d30e27e0a31e93f8ddd21522797fc2fc5627388b03f8cc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/group_menu.rs",
+      "bytes": 16003,
+      "mode": "0o644",
+      "sha256": "2c28e300a170d0c9bb46eb75673bee24f1c7dd378c91d12a9783fdd30d755660"
+    },
+    {
+      "path": "crates/herdr-gpui/src/group_terminals.rs",
+      "bytes": 42071,
+      "mode": "0o644",
+      "sha256": "4b011d4ae0791e2b9fececad2ae0c5c77b19e876864c3d84ab7ad968a9ad7d20"
+    },
+    {
+      "path": "crates/herdr-gpui/src/herdr_settings/palette.rs",
+      "bytes": 12117,
+      "mode": "0o644",
+      "sha256": "a24c8097785631c67f74bd357eb341626e0adb502b11de7f826725702257691f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/herdr_settings/persistence.rs",
+      "bytes": 11815,
+      "mode": "0o644",
+      "sha256": "c87497d76800e09d8270101f1b5be56958e629405fbefba6098e5d497dacc97b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/herdr_settings/persistence_windows.rs",
+      "bytes": 1341,
+      "mode": "0o644",
+      "sha256": "d24a0d8736395a1ddfe6baf540db40f38ad44f438dee7b9f1a91e2e895fd54c1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/herdr_settings/tests.rs",
+      "bytes": 30760,
+      "mode": "0o644",
+      "sha256": "b0d5b2da2d6d21abd0f753deac3ea075e86fecba2390499ea7b702dd3f0fbd22"
+    },
+    {
+      "path": "crates/herdr-gpui/src/herdr_settings.rs",
+      "bytes": 20440,
+      "mode": "0o644",
+      "sha256": "e05f4862d5a043f7496880041cf7e3f095d18b61f0d2e8a00bfe40e9ffcca7a9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/icons.rs",
+      "bytes": 11344,
+      "mode": "0o644",
+      "sha256": "d6db03a720315c9b87955d714e26d92b00ad2ff5c2b6176e0aaa74f4718f7ed4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/input.rs",
+      "bytes": 7523,
+      "mode": "0o644",
+      "sha256": "35c0dd86b59eae704341bc596672e06b13f8d54828a7f8b6b8b623a4f8161864"
+    },
+    {
+      "path": "crates/herdr-gpui/src/integrations.rs",
+      "bytes": 20484,
+      "mode": "0o644",
+      "sha256": "a337726d63b4aec7348ecc5e4d970d47f0187917223c3f0032cf3bdc90d01ad7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/keymap/daemon.rs",
+      "bytes": 31104,
+      "mode": "0o644",
+      "sha256": "f52b58607a3ad34e331c42dd1683c176f668113e8ad14a9489eac3abc9618252"
+    },
+    {
+      "path": "crates/herdr-gpui/src/keymap.rs",
+      "bytes": 33348,
+      "mode": "0o644",
+      "sha256": "abe7dd0a2ca4240cf627cae3b498d72a6d4c6a8f35adf5254e11da91bb4dd764"
+    },
+    {
+      "path": "crates/herdr-gpui/src/lenient.rs",
+      "bytes": 3494,
+      "mode": "0o644",
+      "sha256": "19f42c3c83f0313a55723702f3a3d926db75f1cc20300ca19538284ebe2629f9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/links.rs",
+      "bytes": 22228,
+      "mode": "0o644",
+      "sha256": "c11fc76db06dd7eb8c01eee4c6ae397556501df1ad3e9450b5ce3ea1cafdf4ec"
+    },
+    {
+      "path": "crates/herdr-gpui/src/local_path.rs",
+      "bytes": 907,
+      "mode": "0o644",
+      "sha256": "6fc4e0bb26424d35a2aad82c1999ee994ea4ee303791061510f089fae9291c7c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/log_window.rs",
+      "bytes": 53620,
+      "mode": "0o644",
+      "sha256": "7b17d2fade5d765a2c263d024929ced2a6bb6c150963ba694c157eb3b4e4d693"
+    },
+    {
+      "path": "crates/herdr-gpui/src/login_env.rs",
+      "bytes": 13139,
+      "mode": "0o644",
+      "sha256": "a90a3955940098e814bd470548fa0aa9aa156348e7fe0879791216a6d03e2401"
+    },
+    {
+      "path": "crates/herdr-gpui/src/main.rs",
+      "bytes": 2868,
+      "mode": "0o644",
+      "sha256": "4ede462a92859ad4418a09ea8ca94e34694d3ad5077fa7d1fbf2349842d8f30e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/announcement_tests.rs",
+      "bytes": 7680,
+      "mode": "0o644",
+      "sha256": "754e0cc7478a39aa86e63d8282f3d3a07208fee4c14b98b1ee99ed0605d13f7a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/chrome.rs",
+      "bytes": 47319,
+      "mode": "0o644",
+      "sha256": "87cfb020804d68112e6ff089c33d686b2f74f605179b69fbb1e9442e25c354eb"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/colors.rs",
+      "bytes": 4175,
+      "mode": "0o644",
+      "sha256": "a9325e6c4e33f8d7ebd8cdcf9d0517c40b8f736b10b59964d8fa344a0dcf32c7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/devices/host_menu.rs",
+      "bytes": 35824,
+      "mode": "0o644",
+      "sha256": "eb987bdd34866f5e65abd1b6f9fe68e84b703f8aead8638d8bd482f9bc2f0f1b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/devices/setup.rs",
+      "bytes": 29564,
+      "mode": "0o644",
+      "sha256": "2b30a4dd6fdf405239218371e03c10379d478d6cc732a31b4e06929e481efe6c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/devices.rs",
+      "bytes": 53354,
+      "mode": "0o644",
+      "sha256": "b6787cb07b726ce5a8a67bda13611d1f4fd1cf5e2597467589ee9a9a69e8b7bf"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/font_size_tests.rs",
+      "bytes": 9466,
+      "mode": "0o644",
+      "sha256": "c74ad45f8570e5b87ba988cfddabd203a3c24041c5cb942235b539bedfd82199"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/git.rs",
+      "bytes": 40541,
+      "mode": "0o644",
+      "sha256": "3d115c049e9254d23ca7d56b56023fa19e495b3a435b7f0a309404af83f273f6"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/github.rs",
+      "bytes": 30396,
+      "mode": "0o644",
+      "sha256": "de36bcf7f13d5ece67c21adf2276371ea093973b1488b8f15f1a67c561a7cd73"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/page.rs",
+      "bytes": 3212,
+      "mode": "0o644",
+      "sha256": "cfc88e367e2422237b3ae9cd513a606fcc8f3213e45fe892f2becf796a48c700"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/pr.rs",
+      "bytes": 31328,
+      "mode": "0o644",
+      "sha256": "e085cd7891e02224fa8df0b5abf38bda966085945790cdff7f116fa52c129079"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/sessions/management.rs",
+      "bytes": 31439,
+      "mode": "0o644",
+      "sha256": "d9133f631aec7d9f22f2c8bc16e13a8c65903d32d6e48fd467fdccba95cd28d9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/sessions.rs",
+      "bytes": 26413,
+      "mode": "0o644",
+      "sha256": "96396203bf8d0da5a014ba9f017a93a6db37b74d541d1e8fcffc16c69f33e577"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/sessions_tests.rs",
+      "bytes": 27035,
+      "mode": "0o644",
+      "sha256": "79a8130b1383653816edca7bd3dc0f5d68df5edf3fd8e12b5c27b340682a5ecf"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/settings.rs",
+      "bytes": 43258,
+      "mode": "0o644",
+      "sha256": "94ae0c0dfdf1907bee1f016f30c9496da01b40d6ba922f2237aaf36477582748"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/state.rs",
+      "bytes": 12873,
+      "mode": "0o644",
+      "sha256": "0de184e24cbc6ebf04f812bd01b4e0e045aaadc1c9cb4b31e9d015ae747470fe"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/teleport.rs",
+      "bytes": 24421,
+      "mode": "0o644",
+      "sha256": "9922b5504d2762d8998eefefce6f8003b4d56ac4e5bf7c76c8e18d0d5cce84dd"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/whats_new.rs",
+      "bytes": 5558,
+      "mode": "0o644",
+      "sha256": "2740de76519313f05742a08fb464b11af63dc67d7dff4c89fe07d600f919918e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/workspace.rs",
+      "bytes": 58605,
+      "mode": "0o644",
+      "sha256": "57484e32079adf92a7106a3fe92bce728caa28ac42941944c873ba66ccf4af5f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/workspace_close.rs",
+      "bytes": 6779,
+      "mode": "0o644",
+      "sha256": "97b42c6e06b36a95f9646636f9bea10a6b29bc8818619cba80a012afc54d80ca"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/workspace_tests.rs",
+      "bytes": 56168,
+      "mode": "0o644",
+      "sha256": "1fbbc625494451fd108dcf6d3d650890b691358d89b4aedbf4cd0ddb0041bce1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/worktree_open.rs",
+      "bytes": 14570,
+      "mode": "0o644",
+      "sha256": "1e6040c3f764c6f2e7e21cad9dfb1d07bd202b3ac36b560d5bd578b37f37e5de"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/worktree_open_tests.rs",
+      "bytes": 40450,
+      "mode": "0o644",
+      "sha256": "c8560ff383d387ed33834f89dc9862aaccd9ecfbd84b79980aca32ebb7b8e6c9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/worktree_render.rs",
+      "bytes": 15698,
+      "mode": "0o644",
+      "sha256": "e842d8e1fc3cf22178a5cf37b724a84c409c8724824afe55ed6ce80d39e4c49a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/worktree_source.rs",
+      "bytes": 30912,
+      "mode": "0o644",
+      "sha256": "743038895d0b3d4cb3031e94ff36647bb91ef0e6907d6c0f693c6bdd7b262bb9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu/worktree_tests.rs",
+      "bytes": 39193,
+      "mode": "0o644",
+      "sha256": "a90012f682eb5c00318de3b8aee6212a20c81c1b0e2030d58cf7edb9a7cc2540"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menu.rs",
+      "bytes": 2540,
+      "mode": "0o644",
+      "sha256": "c9ecfc0dbce52a862ae64c77b67b17063d16726f58ce0e37e7f65894e59895b5"
+    },
+    {
+      "path": "crates/herdr-gpui/src/menus.rs",
+      "bytes": 27528,
+      "mode": "0o644",
+      "sha256": "9457d76a24c13d2c24fcd4a2ee2d7015bf853aea5be1cafcea07655157baccea"
+    },
+    {
+      "path": "crates/herdr-gpui/src/mockup/demo.rs",
+      "bytes": 6287,
+      "mode": "0o644",
+      "sha256": "8b454375be469832358a368f0e2809304566f4c29366a120ef6f8efacabc0a04"
+    },
+    {
+      "path": "crates/herdr-gpui/src/mockup/feedback.rs",
+      "bytes": 5738,
+      "mode": "0o644",
+      "sha256": "ba9e93a038dd6ca5e4ab641919082dea223868d610dc4292607612f62050073c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/mockup/window.rs",
+      "bytes": 26899,
+      "mode": "0o644",
+      "sha256": "f208f211169cab3090959e446bf8fa29c03faafb8a55689679dd6b586a3bed03"
+    },
+    {
+      "path": "crates/herdr-gpui/src/mockup.rs",
+      "bytes": 9298,
+      "mode": "0o644",
+      "sha256": "186557c9712d1bdfa52285201608bd07bc71936e805523d23da72c45979c5fae"
+    },
+    {
+      "path": "crates/herdr-gpui/src/motion.rs",
+      "bytes": 4300,
+      "mode": "0o644",
+      "sha256": "8c40559ed2f9b694ce8c780fd4b94521b022e3cff6a486065981e0987ad5c7b4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/navigation.rs",
+      "bytes": 1407,
+      "mode": "0o644",
+      "sha256": "7694af4c12eb1e3813792473abcee3c58f10ad0e0a2aaa9c0d315739b4de780c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/notifications/policy_tests.rs",
+      "bytes": 19166,
+      "mode": "0o644",
+      "sha256": "ef3673d51627bc54eeaab6e9de6f9d032f8502e9e25482cf1aa5dc9fac65258e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/notifications.rs",
+      "bytes": 22130,
+      "mode": "0o644",
+      "sha256": "ae3070c105892bef291ec41ce870f76d8c524a788d734bfcb3b30d18af3ee8da"
+    },
+    {
+      "path": "crates/herdr-gpui/src/osc52.rs",
+      "bytes": 4680,
+      "mode": "0o644",
+      "sha256": "72eddcbadc553fbab15397486f867f363a5222f57e03e2c46f49583cf5ce074d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/palette/interaction_tests.rs",
+      "bytes": 9241,
+      "mode": "0o644",
+      "sha256": "c82b752d1ab30626a3de26c15ebedb212e26ddcbf194c19f82b292e15e30f73d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/palette/project_open/tests.rs",
+      "bytes": 10961,
+      "mode": "0o644",
+      "sha256": "fde5e280f5f40d5f8a2b2861be7b53fdbb2bf6227f5ba9c10fa0835661934257"
+    },
+    {
+      "path": "crates/herdr-gpui/src/palette/project_open.rs",
+      "bytes": 9716,
+      "mode": "0o644",
+      "sha256": "b9e4ebe6f7712fb7cb1fa49ab33aadbc6615860fba909c65620ce13f9be3ba00"
+    },
+    {
+      "path": "crates/herdr-gpui/src/palette/projects.rs",
+      "bytes": 11333,
+      "mode": "0o644",
+      "sha256": "a705eb9808e29032f92ed64443d429b76173521aa2bc85f90a7b15a9fb3741e4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/palette/render.rs",
+      "bytes": 8779,
+      "mode": "0o644",
+      "sha256": "6b2ebb94ec4fdfe52b99d8d32d053dd21ed0a9dda0c30a6ac580f970d49f1b98"
+    },
+    {
+      "path": "crates/herdr-gpui/src/palette/search.rs",
+      "bytes": 2428,
+      "mode": "0o644",
+      "sha256": "f4bf0432e3764394ebd5a01fc8a54ab531a7efd540ff62d59a60c10023e927a8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/palette.rs",
+      "bytes": 51636,
+      "mode": "0o644",
+      "sha256": "2ffe75e547b08cd1b5a432885172294a585c66fc7c36710145fb0997847461d3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pane_menu.rs",
+      "bytes": 46117,
+      "mode": "0o644",
+      "sha256": "a3708b9fd7bddab1fdeee872e64461ff254ed53d441155f9adced469b7a7619d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/performance.rs",
+      "bytes": 16776,
+      "mode": "0o644",
+      "sha256": "3d17c0aa8bfe71070d686bf58dc4bfa51b1d3e712c306543875721bdebb35511"
+    },
+    {
+      "path": "crates/herdr-gpui/src/performance_native.rs",
+      "bytes": 3841,
+      "mode": "0o644",
+      "sha256": "5196630515323f60559368ff4c3150dec09c6e56fa53a74440cdf3a5f4fe1454"
+    },
+    {
+      "path": "crates/herdr-gpui/src/preferences.rs",
+      "bytes": 45984,
+      "mode": "0o644",
+      "sha256": "6b40d93ca69f068889f2de0b3cf4324f043f911ea7c694c90142e96a2e24ee08"
+    },
+    {
+      "path": "crates/herdr-gpui/src/presentation.rs",
+      "bytes": 7416,
+      "mode": "0o644",
+      "sha256": "c63b075cc885f0451dd1c1dc9324231b05ada556462f9bd6a47b70b46af2c24f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/progress.rs",
+      "bytes": 2029,
+      "mode": "0o644",
+      "sha256": "6bd0c1fe1840f1b176cfd05c9df68e71ec870a7e86eaaea6974f9047e370d74c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pull_request/cache.rs",
+      "bytes": 9340,
+      "mode": "0o644",
+      "sha256": "5663b61103608bfbe33329d4c80162d2018f3eec9376b1f2ac475e596d1ad743"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pull_request/fetch.rs",
+      "bytes": 19690,
+      "mode": "0o644",
+      "sha256": "03b25934933c9659e9a602f8771bc0420d1e3282389270d046214abb418fd251"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pull_request/lookup.rs",
+      "bytes": 5543,
+      "mode": "0o644",
+      "sha256": "958734932ccabd0653380375438442039d86a84f1743b6c61af73bb0817bbcd4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pull_request/model.rs",
+      "bytes": 12403,
+      "mode": "0o644",
+      "sha256": "0a9833b8945df8e7ef9df114ab07a1660b4fc8d12e474f7f419224d1a2a8493e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pull_request/parse.rs",
+      "bytes": 3347,
+      "mode": "0o644",
+      "sha256": "f3ed7814bcf36d9c647e72aee1d850182380237974cd766f3c2484750aebd975"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pull_request/tests.rs",
+      "bytes": 31236,
+      "mode": "0o644",
+      "sha256": "fe97c119a064011a66771929b8bb86986579a7ae0ef6cbc6f9b89f446fab1593"
+    },
+    {
+      "path": "crates/herdr-gpui/src/pull_request.rs",
+      "bytes": 671,
+      "mode": "0o644",
+      "sha256": "48e171459f71c7439d1ae3dac0ccd25a0d1b8ea9d2d261c34edce271471a7eaf"
+    },
+    {
+      "path": "crates/herdr-gpui/src/release_notes.rs",
+      "bytes": 14808,
+      "mode": "0o644",
+      "sha256": "2edd66cd09368c5c11208caa5930decc78a978b07c9d94619209ca4050362f49"
+    },
+    {
+      "path": "crates/herdr-gpui/src/reorder.rs",
+      "bytes": 6781,
+      "mode": "0o644",
+      "sha256": "1382883087a7a5e723ac349c10fcc92f76fbd81f3a6c1f7e6fe18f99e011873f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/repo_items/branches.rs",
+      "bytes": 5222,
+      "mode": "0o644",
+      "sha256": "2c2642c3dd152894dbc8f5772222c032a481e09bab65b95f3427552a4b2f99d4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/repo_items/context.rs",
+      "bytes": 4150,
+      "mode": "0o644",
+      "sha256": "af6247c133016519f34a79266728fa487f9a4ccb4b6b16ba854879dad1d440f8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/repo_items/fetch.rs",
+      "bytes": 2970,
+      "mode": "0o644",
+      "sha256": "6bd15ab1258ee6d5f68513815bdc81813249c88f897b7d0f07ecd2963d6a580e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/repo_items/lookup.rs",
+      "bytes": 6382,
+      "mode": "0o644",
+      "sha256": "0f58f3790f6f6b005329396a004be0aaf68a0e58f4b58c4e747dab9adb73c5ef"
+    },
+    {
+      "path": "crates/herdr-gpui/src/repo_items/model.rs",
+      "bytes": 6150,
+      "mode": "0o644",
+      "sha256": "ebf5525c322011c3aa8b92e2b1c909188e160cc1fe1a62b354774480a8d257a1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/repo_items/tests.rs",
+      "bytes": 9855,
+      "mode": "0o644",
+      "sha256": "e6d5f6392a1185ffadc0a042ea2bb0d76f1ceb6a9496331d1b86db2755695947"
+    },
+    {
+      "path": "crates/herdr-gpui/src/repo_items.rs",
+      "bytes": 886,
+      "mode": "0o644",
+      "sha256": "e0591a4bd7f9082ec4899b9025c7966b9c110921972b32a82c5c51585048c69c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/scrollback.rs",
+      "bytes": 9292,
+      "mode": "0o644",
+      "sha256": "f600c888980751a17fb6d9d1a4956cc849214ca9d746c6f25d6089902c8df0ef"
+    },
+    {
+      "path": "crates/herdr-gpui/src/search_input.rs",
+      "bytes": 23193,
+      "mode": "0o644",
+      "sha256": "ca92498c93670455645dab35c5614a628117bb33550cb54b0938e85133e897b8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sessions.rs",
+      "bytes": 32203,
+      "mode": "0o644",
+      "sha256": "f9d4dbcd77b1895d2c6b319dbe11f7bce63b6d1a5d8ede5c6967079615c4fbdc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_panel.rs",
+      "bytes": 42269,
+      "mode": "0o644",
+      "sha256": "47acfaec5c0488a98e5eab1cfccce0944433d80e5c084487648b60e79b0a55d6"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/controls/fonts.rs",
+      "bytes": 37996,
+      "mode": "0o644",
+      "sha256": "4166cfef67e7f40b38689f3340bb2f0a16fdca68bf6837e0fa4fc5c67987d924"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/controls/preferences.rs",
+      "bytes": 12724,
+      "mode": "0o644",
+      "sha256": "f224d02584b3be5878bc35007cf23fff90b5c8996c63a5c12c948c95876b5e8c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/controls.rs",
+      "bytes": 58268,
+      "mode": "0o644",
+      "sha256": "f8452d4e1ebe30508635044cd20fdbb0bdf9a8cbabfafd7b8f62e9f13b9c082a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/layouts.rs",
+      "bytes": 3449,
+      "mode": "0o644",
+      "sha256": "843be4054cb7ffd4b9b3047c2e378549ddb2a1a20660d9c7bbdba2620f41979c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/native.rs",
+      "bytes": 41406,
+      "mode": "0o644",
+      "sha256": "a1f5b5402e7b66c1b26bcb718c6c254322e4d321c420f5bf5b397c693471aa40"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/tests.rs",
+      "bytes": 67490,
+      "mode": "0o644",
+      "sha256": "9e74cd8798455a06bfd6d6ae95f8a95808faaa7c0b0c1f10a756ada89a533c60"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/themes/grid.rs",
+      "bytes": 13205,
+      "mode": "0o644",
+      "sha256": "5e70e9a6d403e02d8675b978000c30a1f630a7f33ed5c7555dc9a79a9b930bbb"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window/themes.rs",
+      "bytes": 69123,
+      "mode": "0o644",
+      "sha256": "2cc49843a1d25747a934409b7644de2b7957398bf4f0513cca3e2d146e43d524"
+    },
+    {
+      "path": "crates/herdr-gpui/src/settings_window.rs",
+      "bytes": 40107,
+      "mode": "0o644",
+      "sha256": "f342adc711055f4208b866ab987a24999e11bfb9ba86d59a93e1a09fadd24fa9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/agents.rs",
+      "bytes": 17412,
+      "mode": "0o644",
+      "sha256": "b44f11162771c2eaa02d2cee88675f1069ee754a5dcc7b0971f1eb7b566cd163"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/cell.rs",
+      "bytes": 7183,
+      "mode": "0o644",
+      "sha256": "ed096a3dab6b4553366442c84f9f3e7bae38eaeebda32cdf3b161e943034a4a7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/hover.rs",
+      "bytes": 6080,
+      "mode": "0o644",
+      "sha256": "c7b0c918512b22dc887ff5871600851c48a0d4330e5f5508917020b55cfe7530"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layout.rs",
+      "bytes": 12283,
+      "mode": "0o644",
+      "sha256": "0ddc50cc195e9adcdd8361c9739284efc77e035637fa9a7ea737eff5022e1346"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layout_tests.rs",
+      "bytes": 205521,
+      "mode": "0o644",
+      "sha256": "a0c14cbcb5bc08c54f30e04e3ae9949a58875d5841ad6bee44556879b1989519"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layouts/herdr.rs",
+      "bytes": 2505,
+      "mode": "0o644",
+      "sha256": "5445c3319c38a1b845c21152ad2960142745915234f822957af7fd57b03e1206"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layouts/minimal.rs",
+      "bytes": 6805,
+      "mode": "0o644",
+      "sha256": "f80ea72f0e09e91b03169118275b050c8d831c39bd30d80985d5afd6b68e1759"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layouts/orca.rs",
+      "bytes": 12214,
+      "mode": "0o644",
+      "sha256": "db527963640c1b49d0979508c483e876766206771b0a56487bf0396e358cf0be"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layouts/parts.rs",
+      "bytes": 13963,
+      "mode": "0o644",
+      "sha256": "62a19e3614b17686d83c47b8a30eb3921265cc658c7cccfd27c936d25a7f4a45"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layouts/superset.rs",
+      "bytes": 13250,
+      "mode": "0o644",
+      "sha256": "b75dffa3150f9540b5315322ce0bf4471e219cfd838306b7ecf534cf1309996e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/layouts.rs",
+      "bytes": 1265,
+      "mode": "0o644",
+      "sha256": "c508955a303a9b03f6c5e83352292790f42d776bf0e344cb12d0ee1bdf043392"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/metrics.rs",
+      "bytes": 2987,
+      "mode": "0o644",
+      "sha256": "f7c0b5ffaa81270444bc1e44acfa1bb2be9601e6ecc53393463fc6d02972d5bc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/native_tests.rs",
+      "bytes": 8120,
+      "mode": "0o644",
+      "sha256": "3b752b35441e6c2fedb91337dcf70686a0389c0b2d1114e85a37a5fee7d1232f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/order.rs",
+      "bytes": 5430,
+      "mode": "0o644",
+      "sha256": "87105ed5d543136f867e27f91282d8a768bf36e4bac79af4e0b38c02b6bcec01"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/preview.rs",
+      "bytes": 14370,
+      "mode": "0o644",
+      "sha256": "9613e7475c7283c835dd356d83142f79ab33e34a8e9214eb6917e4f44374b7ec"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/rail.rs",
+      "bytes": 31834,
+      "mode": "0o644",
+      "sha256": "9653fc7f9d696bc0c0f996895ea450a3ba7e83affe9497f1567c5826783354df"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/render.rs",
+      "bytes": 44744,
+      "mode": "0o644",
+      "sha256": "7feb997fd027a284b050f19af36481b1552f6837ee8975ed729974ceb15d6ae3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/reorder.rs",
+      "bytes": 20079,
+      "mode": "0o644",
+      "sha256": "fd63fc5f7344994577a03675da38e0f6e0f027215f6a1e92ffd97658828d446b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/row.rs",
+      "bytes": 45445,
+      "mode": "0o644",
+      "sha256": "16e05b599dd2b4930a2a7b15b97b4366d334e0f95889cd182a89abb0cf411cf2"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/tests.rs",
+      "bytes": 23271,
+      "mode": "0o644",
+      "sha256": "acc2aca192ab57b1abc403470774dff569159444205ca7dc21a62fb2714cf757"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/tokens.rs",
+      "bytes": 16323,
+      "mode": "0o644",
+      "sha256": "d6618ef7bfa141353b4004444b33279fad38eafab45bd83def058e2fef087d63"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/view.rs",
+      "bytes": 5042,
+      "mode": "0o644",
+      "sha256": "ccc70c6879dc063fec45accebe8917b387d36f34a3e6584fde8ce02d9c842be1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar/workspaces.rs",
+      "bytes": 6102,
+      "mode": "0o644",
+      "sha256": "cdb532f6cae92fda22f393ee303aa868583316b5f912c2ab66075e88645a33da"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sidebar.rs",
+      "bytes": 1335,
+      "mode": "0o644",
+      "sha256": "b1eb05d7322f253b5ed41014e766b60378ef22e035dbe686cc27715a4b11d4f3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/smoke.rs",
+      "bytes": 101644,
+      "mode": "0o644",
+      "sha256": "aab4f3a4ea300e5af22dff1078dafdaad2f56ed46c55c259b6a4eb6f235a24cc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/smoke_clipboard.rs",
+      "bytes": 6251,
+      "mode": "0o644",
+      "sha256": "bb7522643186bec46b7305d5e80d1ca9136d9fff95533a16d6c0b3485df141ed"
+    },
+    {
+      "path": "crates/herdr-gpui/src/smoke_selection.rs",
+      "bytes": 9018,
+      "mode": "0o644",
+      "sha256": "680a13e8185761b248ad2281a3cfd8d9f21e8333aaf9b39f61be711f9f6124e4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sound/config.rs",
+      "bytes": 14979,
+      "mode": "0o644",
+      "sha256": "d4e168832fcd3299e4a269b1929b7d09604abce244e6a8f0976147b0b40170ce"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sound/playback.rs",
+      "bytes": 11330,
+      "mode": "0o644",
+      "sha256": "bf0ac16a6c23c1d48eb799677cb782515fd28ca0c1e02a45d93692f7e9fd66a6"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sound/tests.rs",
+      "bytes": 15988,
+      "mode": "0o644",
+      "sha256": "846ef4daf7453d0b734814af0894c46cf24e795397498d4fa64f48bfc0d1fe83"
+    },
+    {
+      "path": "crates/herdr-gpui/src/sound.rs",
+      "bytes": 11654,
+      "mode": "0o644",
+      "sha256": "120124baed3d96635ffa9a8d077d5223baf42947ef14306c112f5c7d6c86f87e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/state.rs",
+      "bytes": 70633,
+      "mode": "0o644",
+      "sha256": "ea8eda4ad16e4ccf69fee506b319021b2a9d73ee8c8a042ff103841de76ef00f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/state_file.rs",
+      "bytes": 4305,
+      "mode": "0o644",
+      "sha256": "b4c4dc9b5959a6dc87a152e9012ca6a66449d6244330ce04099d5ec3f6f3bc7e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/system_load/render.rs",
+      "bytes": 8790,
+      "mode": "0o644",
+      "sha256": "2d4125a32cd2c00e7832aabea96f2e7132d5f25c522eb6c1a424f0a6192069a7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/system_load/sample.rs",
+      "bytes": 7720,
+      "mode": "0o644",
+      "sha256": "9f980b85a68affe827f6c76913f78e463c4fd5d8640ffec8a85035b5d81a3acc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/system_load/tests.rs",
+      "bytes": 7700,
+      "mode": "0o644",
+      "sha256": "e15197a1a6d8f528bd3c11adb5b9b4cb95c8c70ef702a47b047c58b2b5ed23fb"
+    },
+    {
+      "path": "crates/herdr-gpui/src/system_load.rs",
+      "bytes": 9832,
+      "mode": "0o644",
+      "sha256": "c3a063375c7291141ee1d9aec1969631232e1622f1212ea6e7dee5777ab1a5e1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/tab_menu.rs",
+      "bytes": 29431,
+      "mode": "0o644",
+      "sha256": "dcc764432ef45622db81631ee878be1a61eab249babda0ef88a37ce975c7e43d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/credentials.rs",
+      "bytes": 10428,
+      "mode": "0o644",
+      "sha256": "d9eb454ed0cd9e03a8d495739c102ad661bbf16fc1a0a0626079b265368880ef"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/error.rs",
+      "bytes": 5073,
+      "mode": "0o644",
+      "sha256": "5c8e507db27e568b64df67072044a49c9fa5efdca152f02423f19ab726ae3c71"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/git.rs",
+      "bytes": 14646,
+      "mode": "0o644",
+      "sha256": "338af1a959f6278cea83feb0f199e2db7cb8402308f4745703584a35db7adb83"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/git_tests.rs",
+      "bytes": 13116,
+      "mode": "0o644",
+      "sha256": "c2675eb83e4fd3b454ecee0ea2718f6cdc8f9fdec0cd528376170c6bb759a36f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/host.rs",
+      "bytes": 8164,
+      "mode": "0o644",
+      "sha256": "890e3cdc0fbe3719953a19ef880aeafcf1e11b7282bc42363490a3dded739d5b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/job.rs",
+      "bytes": 37127,
+      "mode": "0o644",
+      "sha256": "e7866610812b3f8af5a9f7044581fbcca5bf29f87158ca044c2a0926ab0387cf"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/launch.rs",
+      "bytes": 36018,
+      "mode": "0o644",
+      "sha256": "8f38ba6a7baf24fe4751b44415fad418f7b86b9c552892505a63b5153bfb053a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/layout.rs",
+      "bytes": 9389,
+      "mode": "0o644",
+      "sha256": "3bdba4ba543eafaafa2429f77902dea1023df79fa45b7a8ebabf229b4e18be67"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/live_tests.rs",
+      "bytes": 18333,
+      "mode": "0o644",
+      "sha256": "807c51f34caee787083ebb57c02414a1a6a4f66162ed682ff7ffbc3098004cec"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/marks.rs",
+      "bytes": 11314,
+      "mode": "0o644",
+      "sha256": "8569420f272ebdcd1a659d9ccc4dc4169661888efc1068f2c6703ba399844f40"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/provision.rs",
+      "bytes": 15390,
+      "mode": "0o644",
+      "sha256": "0a4fe10716aa7768a41b4a1d8908ae55233e16ba0799be7439c23eb5502ca930"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/remote.rs",
+      "bytes": 7639,
+      "mode": "0o644",
+      "sha256": "21185ca06309fd0a1b81fffde41c99a612ed1e76f1b86fbcd1f4eecdeaa27d1e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/sessions.rs",
+      "bytes": 12629,
+      "mode": "0o644",
+      "sha256": "04e185b1930e558b3955087c3aced189bb7b2bcce624ca6be8b5e91c815e378b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/sessions_tests.rs",
+      "bytes": 10433,
+      "mode": "0o644",
+      "sha256": "0de5e0a45f45513a5ba4fa6dc7918ae0fd090b5161cfe7488210761b829ecb7b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/snapshot.rs",
+      "bytes": 9051,
+      "mode": "0o644",
+      "sha256": "7be801828408177f41952981781b265b45188c973eb3acb566f428fcec2173f1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport/ui.rs",
+      "bytes": 28672,
+      "mode": "0o644",
+      "sha256": "355acde91049e432212f8c62bbc4912401cd66693176fc4dc99eea06526d6f06"
+    },
+    {
+      "path": "crates/herdr-gpui/src/teleport.rs",
+      "bytes": 1215,
+      "mode": "0o644",
+      "sha256": "e363c6dbabcda3d225e42d1699ac3ad485e01adde675458210a472c5cf7b3932"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal/accessibility.rs",
+      "bytes": 18437,
+      "mode": "0o644",
+      "sha256": "be9a52d20c4b234298c37034676a12f15285a5554497a151edf685e358846dab"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal/links.rs",
+      "bytes": 16384,
+      "mode": "0o644",
+      "sha256": "4deed56b6db3fe5476a565160f7d319cd6e6eb14f51d3dbbe56297a4e562c0d8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal/selection.rs",
+      "bytes": 41538,
+      "mode": "0o644",
+      "sha256": "b1ea60d2c58e4382aa50010f6aba85b965d3f1de5bf1e562ada6fe74b87e98ce"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal/splits.rs",
+      "bytes": 9134,
+      "mode": "0o644",
+      "sha256": "e68d0a2cfc94652794ff5ee4fbbdc1cc6b41a697ee566e8d4900ede839717ec9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal.rs",
+      "bytes": 41721,
+      "mode": "0o644",
+      "sha256": "98a630e3220cb253e38d4e160217b8a7ad73c576c5aad6fec60bb559a2bf0b01"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal_painter/glyphs.rs",
+      "bytes": 3659,
+      "mode": "0o644",
+      "sha256": "c9eff1cc95f1ae6ec5f72edbf226a398b9bc3d0431daed3b75bfca7f2740b940"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal_painter/graphics/tests.rs",
+      "bytes": 6702,
+      "mode": "0o644",
+      "sha256": "b7b0094d5b5c9e726d27be05aaca7fa68a1077cbe79b6f4954383158d186ac0d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal_painter/graphics.rs",
+      "bytes": 8248,
+      "mode": "0o644",
+      "sha256": "fc8e01bae806dbbb51843342d59fa77e2588a00d60ff6b03d5e60ebbceb4d805"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal_painter/images.rs",
+      "bytes": 23327,
+      "mode": "0o644",
+      "sha256": "5bb22b947f78d497f3eb5b84cbd51cf56ae75b4aab3693c84273a6aeb31b5e51"
+    },
+    {
+      "path": "crates/herdr-gpui/src/terminal_painter.rs",
+      "bytes": 64187,
+      "mode": "0o644",
+      "sha256": "ae5b5632bb31ec50106932095959cd118793e7e64304d2ca72df56a7adb52722"
+    },
+    {
+      "path": "crates/herdr-gpui/src/test_executable.rs",
+      "bytes": 1208,
+      "mode": "0o644",
+      "sha256": "532e87a0c8fdc365ef6cdf6d83546161d5ef313e094f296eab77167eaf488920"
+    },
+    {
+      "path": "crates/herdr-gpui/src/theme_picker.rs",
+      "bytes": 42996,
+      "mode": "0o644",
+      "sha256": "0ff8ed9fa41aa7f38da1dea23234deded70b0660396218ec2695971602a95bd8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/titlebar/status.rs",
+      "bytes": 8864,
+      "mode": "0o644",
+      "sha256": "bbccab9db961392462a11a657fd3cb61db4d49b655f68d74cd2fb457da6f9379"
+    },
+    {
+      "path": "crates/herdr-gpui/src/titlebar.rs",
+      "bytes": 37437,
+      "mode": "0o644",
+      "sha256": "aa3dd7e9d3a9086a013efc779445cb68b205ccd038cdea28e33a52cde4b8c0e8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/update_panel.rs",
+      "bytes": 14577,
+      "mode": "0o644",
+      "sha256": "43c868986e61b3dccfcb6a99bb614c4e4b722181ec80ed98b359e4be9cb335e3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/updater/brew.rs",
+      "bytes": 31636,
+      "mode": "0o644",
+      "sha256": "198447530837de7cfd4f6a5a2beb1bfc0dcafb0477739b7e6a64990d42bf9904"
+    },
+    {
+      "path": "crates/herdr-gpui/src/updater/error.rs",
+      "bytes": 13347,
+      "mode": "0o644",
+      "sha256": "f5f59a4836917ef4f963c401d5070f72cf40673908b2a42111ea3463ed045a51"
+    },
+    {
+      "path": "crates/herdr-gpui/src/updater/install.rs",
+      "bytes": 74662,
+      "mode": "0o644",
+      "sha256": "b5e90f05c06b6f6375dade781e165a77f467c8517e88a660e67319f6573293d9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/updater/release.rs",
+      "bytes": 32127,
+      "mode": "0o644",
+      "sha256": "8b708cf75ec7e8ab3c861190be80f012196d168347f4c1d3f6d2a73271015451"
+    },
+    {
+      "path": "crates/herdr-gpui/src/updater/unsupported.rs",
+      "bytes": 2603,
+      "mode": "0o644",
+      "sha256": "60b122163b6a564d9a62921f3b0de4cb6e4611256721a30b98c9d3d22279c46c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/updater.rs",
+      "bytes": 21537,
+      "mode": "0o644",
+      "sha256": "c7d446196deb2e14622b0f7139c298ae2d5fcc7d45a426786b6fb415efe4cbf7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/cookies.rs",
+      "bytes": 12536,
+      "mode": "0o644",
+      "sha256": "f9d3332af8a6fc35aada74626621a6462b1d21b52e1505ee2eb64dc415ca082b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/icons.rs",
+      "bytes": 10911,
+      "mode": "0o644",
+      "sha256": "02b89f626b6c0c49d2b90ad6f4f81ecd0d9b76409e8784b819978eb40c8dd90e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/model.rs",
+      "bytes": 13055,
+      "mode": "0o644",
+      "sha256": "de8a7812ff75c65fcaa16e3ca2edd2fd04a5453d6bc1863584cdf854111d796a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/panel.rs",
+      "bytes": 12156,
+      "mode": "0o644",
+      "sha256": "14713bac38655a16f41a4032f01952f18c7bcfeca94e3b64d51734d4e368762f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/probe.rs",
+      "bytes": 37926,
+      "mode": "0o644",
+      "sha256": "cd83a5cc64ed18fad65b80e8248a070cf60bd8cce4a1c2594f6fd3545646b018"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/abacus.rs",
+      "bytes": 6611,
+      "mode": "0o644",
+      "sha256": "e4307b458a2119fdfefdab7ebefdaffc195edb77ebc638fd4b3b73ad8f68d6d3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/aiand.rs",
+      "bytes": 8070,
+      "mode": "0o644",
+      "sha256": "e373a6f03432620ce32cd17e6daee1e1689f3e10483ff91c52684ddb4114d38d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/aixy.rs",
+      "bytes": 21947,
+      "mode": "0o644",
+      "sha256": "45c1fbef2248592dd1eeec33d2d6b71dac713d8e061f6c29c73a96a5ccac0b6c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/alibaba.rs",
+      "bytes": 19556,
+      "mode": "0o644",
+      "sha256": "011a3eb299ecd00d9d219b70831b67370b10cbc7754d011fd9c16d0bf65ae685"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/alibabatokenplan.rs",
+      "bytes": 36849,
+      "mode": "0o644",
+      "sha256": "048045090e2345859fa0208d85972cdd70b3acff060e59305b0223e62bb961fd"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/amp.rs",
+      "bytes": 27437,
+      "mode": "0o644",
+      "sha256": "0aa342ee5263c1cc760403b0005bde729a6e7ff7c6dc17bfdbfb30c2da149330"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/antigravity.rs",
+      "bytes": 12285,
+      "mode": "0o644",
+      "sha256": "c2301babb28de0d9ccc710ae086f9bb9bfdcc84fdbe9f65b0b53e312f3124e18"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/atlascloud.rs",
+      "bytes": 4386,
+      "mode": "0o644",
+      "sha256": "f2962b56f5c5ab6b5c51b2ad951fc842f06b221d5c5ce5311625ba113e602f80"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/augment.rs",
+      "bytes": 13978,
+      "mode": "0o644",
+      "sha256": "c75c401291a6102f031bdac61975618202d45ad11704a876eac70be2ac9a073d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/azureopenai.rs",
+      "bytes": 9625,
+      "mode": "0o644",
+      "sha256": "f3991328932eb529a328bca22b828a513a260707c476ac643f742b41c5b0acc8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/bedrock.rs",
+      "bytes": 9939,
+      "mode": "0o644",
+      "sha256": "d3460e59b93ff6d4afc71fa0dbbc5597be269af23400c3fe7001b94b58c46353"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/bifrost.rs",
+      "bytes": 25689,
+      "mode": "0o644",
+      "sha256": "c18123eb7f011738bf57e8e4f61f3bd7bc4ef72e65f2438aa6d934926e81d499"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/chutes.rs",
+      "bytes": 23778,
+      "mode": "0o644",
+      "sha256": "bb30b86fc0e21a06c0602e4d0922874273cadbc62c5104d6185bfa9195aa2daa"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/claude.rs",
+      "bytes": 7703,
+      "mode": "0o644",
+      "sha256": "c11be95e8a53bd4191e13c8a338f2612a3fdc38b6102ced3b0883eb67247b6bc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/clawrouter.rs",
+      "bytes": 12532,
+      "mode": "0o644",
+      "sha256": "d57119bc52b84e812a04c3aaf42a249c66a9885977a937543a3ff2c86e817e54"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/clinepass.rs",
+      "bytes": 4689,
+      "mode": "0o644",
+      "sha256": "dbe1bcf9f654323b1d7d067c7605550613add8977acae51af9f0f23bf4a34450"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/codebuff.rs",
+      "bytes": 10724,
+      "mode": "0o644",
+      "sha256": "4cae1328148aac856135d7e927b1a4656603aed6b4e820cea850565b524b964e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/coderabbit.rs",
+      "bytes": 6876,
+      "mode": "0o644",
+      "sha256": "865e7e0af116ee21f726d2316720701161a2e6ce31ba214f2c5e0990fe792ae2"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/codex.rs",
+      "bytes": 4704,
+      "mode": "0o644",
+      "sha256": "b9cc8736c17654004547bccc250cc5e4055d1c823d28d1e37456b23d2f83ec46"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/commandcode.rs",
+      "bytes": 10518,
+      "mode": "0o644",
+      "sha256": "bd5e0db5bac2a8628592790fe68cda8a5500190a6944c2389b50320b8e55a71a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/copilot.rs",
+      "bytes": 13184,
+      "mode": "0o644",
+      "sha256": "a78292c353b1e3297c76c56666f561ec47f7a00f98313fea379f2d36d8369562"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/cursor.rs",
+      "bytes": 18129,
+      "mode": "0o644",
+      "sha256": "49aacb122693c53c9a7a8a839be594f3a8dfadd930f839bd4cca5b8929b43cce"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/deepgram.rs",
+      "bytes": 9558,
+      "mode": "0o644",
+      "sha256": "6b4499143821b822e72246cb990814e87289a466e51722bb43c802ef7957bee9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/deepinfra.rs",
+      "bytes": 6468,
+      "mode": "0o644",
+      "sha256": "fc0460c287e94c42f52a6b9d023dade6f868c4703cf3ec077ba4098ff0df5391"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/deepseek.rs",
+      "bytes": 11749,
+      "mode": "0o644",
+      "sha256": "9f2919e34af305eafe7073a9c3d3f607592dd16e83b582aaa70f07d0b6457f6e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/devin.rs",
+      "bytes": 10694,
+      "mode": "0o644",
+      "sha256": "aad63a5934118bd7f7d41a4231eeda1f7fcd45b234e099f55f1e64aec2b5cd9a"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/devpass.rs",
+      "bytes": 7976,
+      "mode": "0o644",
+      "sha256": "e21f4699330d7442702c7a32f2e93c0699e6f793406e5a784db1e3750ab1e78c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/doubao.rs",
+      "bytes": 7185,
+      "mode": "0o644",
+      "sha256": "3cd90b5cb495b183f05cac1f7ee933d0381adb4d287c659f3d10e5fdee817e6e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/elevenlabs.rs",
+      "bytes": 7745,
+      "mode": "0o644",
+      "sha256": "38a70a4759663e40fb20cfde98086cc12b64b7676495258147c49daa6453ca10"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/factory.rs",
+      "bytes": 18221,
+      "mode": "0o644",
+      "sha256": "584785fb40807df57b00120a6cdc9e3b67cc55864d2b66acf57739090e8bf8a2"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/fireworks.rs",
+      "bytes": 10138,
+      "mode": "0o644",
+      "sha256": "8ad113d398c10c1fc86e24f986049b5d12a71de89a3f7794e018a545ad06b67f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/gemini.rs",
+      "bytes": 17723,
+      "mode": "0o644",
+      "sha256": "2c066711d75d56c722e0b120d2d138891651c341c777992c5b6bde246da98876"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/gitkraken.rs",
+      "bytes": 7602,
+      "mode": "0o644",
+      "sha256": "37cfc9e1d05a6c5845c0cbe5c7616ba002c0869d79bcb2f598f8b5c2b6e9865d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/grok.rs",
+      "bytes": 11797,
+      "mode": "0o644",
+      "sha256": "1df6186d8123429c4cc6ded88180c84ce5bb3de2ed8e8958f6fee58eb9115c71"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/groq.rs",
+      "bytes": 7451,
+      "mode": "0o644",
+      "sha256": "8c9f22698a59bd4d0e19836c420fc90ef21dedcc44210d59276a86b452e0ff4b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/helmcode.rs",
+      "bytes": 12486,
+      "mode": "0o644",
+      "sha256": "bb83c77e7c75e10453a33738aa5c42f3571e07bb8e020e7b33d4dbae8d2afe63"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/huggingface.rs",
+      "bytes": 17994,
+      "mode": "0o644",
+      "sha256": "d0171bd45b8aeaaced40489f49c9e80a5b8f0c281ca427e16cc4dfcf01c8d819"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/hyper.rs",
+      "bytes": 5070,
+      "mode": "0o644",
+      "sha256": "5a25afc2d6c4f2b6165a63edc37712561269ca5db11b403796a979dc0b903108"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/ibmbob.rs",
+      "bytes": 12662,
+      "mode": "0o644",
+      "sha256": "d203ae16dc31bbe36588f1dd72a0a2b0ccebd68518d42aac2983c7c207238cf4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/jetbrains.rs",
+      "bytes": 14739,
+      "mode": "0o644",
+      "sha256": "ebd9e2768aaa5bffb1f62d5a92bafe97cb37ca8f8e2c9a9c9ea19ab584bde9e4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/kilo.rs",
+      "bytes": 19605,
+      "mode": "0o644",
+      "sha256": "b5974b6b85bd2d84958580a5de5847707bb95d2f4b1b74027f183ea2884fd4c0"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/kimi.rs",
+      "bytes": 29681,
+      "mode": "0o644",
+      "sha256": "155a0c6e5676bc65d756d26248f27018d9007c4e2fe16b52139344a339f95904"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/kiro.rs",
+      "bytes": 17345,
+      "mode": "0o644",
+      "sha256": "0adcc5a9978fdd392eae05cb1a73c584c901e98cc80243b62454fcfe103eff46"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/litellm.rs",
+      "bytes": 16350,
+      "mode": "0o644",
+      "sha256": "55e7c00512d003e8dd984fb62269d70484db28ccb79f7fb2d59a312ed926d298"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/llmman.rs",
+      "bytes": 15609,
+      "mode": "0o644",
+      "sha256": "b3bbd52f50b63264fbdf60a7a5742c8e20dabcc1bf02058162bde72c610153a7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/llmproxy.rs",
+      "bytes": 10279,
+      "mode": "0o644",
+      "sha256": "b98956e4a38fa41ee1b04531bc78b7582f0e9e5fadda6a6952e06f09e9e6a837"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/longcat.rs",
+      "bytes": 12287,
+      "mode": "0o644",
+      "sha256": "08dc8ee3593438483da500de64ea8508379871e150162e3d176bcd3dd8602834"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/manus.rs",
+      "bytes": 9230,
+      "mode": "0o644",
+      "sha256": "2dc2c9d0e8f614311127fb3bb4dc9ef7e4099f16ffb92d1d9b5854760bf47917"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/mimo.rs",
+      "bytes": 9643,
+      "mode": "0o644",
+      "sha256": "6edc3e1b91482e7a93ab346198ed8d4f9dfd93dcbe51d43f9e6d3c483d4e6d51"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/minimax.rs",
+      "bytes": 18726,
+      "mode": "0o644",
+      "sha256": "b1f6247ed14579d6ab9026cb68061e7c83a2e3a440512445520cd52a07a9b3fc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/mistral.rs",
+      "bytes": 20026,
+      "mode": "0o644",
+      "sha256": "47df99121b8621ef9ceae9b1ba25b3e6c4b0ccac2e4f1c01574a3758019c11b4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/moonshot.rs",
+      "bytes": 6554,
+      "mode": "0o644",
+      "sha256": "2f41df1f272da990ef2104ec6a92a28d51e51be20fce4796c9c3068c9e7b0705"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/muse.rs",
+      "bytes": 8540,
+      "mode": "0o644",
+      "sha256": "8e08c4bbc6eee2d0a2721acace79d1f8362c2b922dbb3f294408f1f6d79a45d2"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/neuralwatt.rs",
+      "bytes": 11527,
+      "mode": "0o644",
+      "sha256": "d77f77cf33d55fb185aa341bf7f7d582cf57076fe004d22e3c682833ece3c49c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/notion.rs",
+      "bytes": 17247,
+      "mode": "0o644",
+      "sha256": "b585ba6ecda7350ac92ccd91432f91d7e776ed40cba2a66606cd507c5b3b03fc"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/nous.rs",
+      "bytes": 15431,
+      "mode": "0o644",
+      "sha256": "9b11ff6a158082bbfdcba1ce4c00b67bae01b76ba0792edf01574ff995bbe9ec"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/ollama.rs",
+      "bytes": 18243,
+      "mode": "0o644",
+      "sha256": "667f979bcc8f86d9bf75744e45aaad2ddb31e823bf5c7a67a740bfe3d20e5000"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/openai.rs",
+      "bytes": 22947,
+      "mode": "0o644",
+      "sha256": "8c7489bb72b2bd54069e9580c86f58b2c826bdb37045e69437e7db0f81fdc6c6"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/opencode.rs",
+      "bytes": 20654,
+      "mode": "0o644",
+      "sha256": "62ae289686a6a1527a306fa77fa1bd38d132f7d291e1c72cd3008ba5aba84b15"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/opencodego.rs",
+      "bytes": 17733,
+      "mode": "0o644",
+      "sha256": "e7aeef1920d90ed9db861357d1c9f64a6d4ad75684a5a89bb6cc24c54bdc8207"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/openrouter.rs",
+      "bytes": 13948,
+      "mode": "0o644",
+      "sha256": "b9cb319f261fe944ef593548cc1642eb8fcb0e7bcd157c2236583addc7b6aba2"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/perplexity.rs",
+      "bytes": 10675,
+      "mode": "0o644",
+      "sha256": "12be4b498e39606e5ce84ef5f126d90fe033b27711c3940f42f27dc265ebf11f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/pi.rs",
+      "bytes": 1047,
+      "mode": "0o644",
+      "sha256": "bf37e060250bc992864a616c42e43a9c575c66a06a119fa01efa594710eefa57"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/poe.rs",
+      "bytes": 13123,
+      "mode": "0o644",
+      "sha256": "435a8d598966010233801d85b6bc7712d6ddcaf521f0dc778f49a30228b43057"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/qoder.rs",
+      "bytes": 8183,
+      "mode": "0o644",
+      "sha256": "f44d383ed7357b4f621d853f883e7fe48972e938c1e96c7a105fdb387ad96881"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/qwencloud.rs",
+      "bytes": 8679,
+      "mode": "0o644",
+      "sha256": "3894baabb9c96ce6267a2c48f323f22af2580adf0a673917f4d2bdafa846f7d4"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/raycast.rs",
+      "bytes": 7209,
+      "mode": "0o644",
+      "sha256": "207e21652a06718d511166de4ab869d109f881472e3e9300070139f314630222"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/replicate.rs",
+      "bytes": 11288,
+      "mode": "0o644",
+      "sha256": "1f63b568fa003ff1d11353a78c38be2882b27fd11140efd05c618707886e697e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/sakana.rs",
+      "bytes": 13729,
+      "mode": "0o644",
+      "sha256": "a9e9ea0fb7a842d6e6ae5f40728dd72d0af91aea20c0aa351547a8352a0804b5"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/stepfun.rs",
+      "bytes": 11729,
+      "mode": "0o644",
+      "sha256": "05257c034da161b7238185efe402c64d2ba5999c7badd3fefd6fe52c6207c2fe"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/sub2api.rs",
+      "bytes": 13569,
+      "mode": "0o644",
+      "sha256": "5472d258016a4ffed13a97fcd2ba5ea34e9c629509ba341b28e1d17f3e922b4c"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/synthetic.rs",
+      "bytes": 15776,
+      "mode": "0o644",
+      "sha256": "a8ad984042cb42080e5e83352ab4399f36830acf680cd7fd5363d0898aa7d02e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/t3chat.rs",
+      "bytes": 10175,
+      "mode": "0o644",
+      "sha256": "25ec7c9fbb8d20a70c60093b6c4af727c81cc8bf56ff90f53f16ca652c5870b7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/typesafe.rs",
+      "bytes": 14206,
+      "mode": "0o644",
+      "sha256": "977952546e6bc2838d097ce33a8f8675f5728f60b6566d0b554952f054a92a39"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/v0.rs",
+      "bytes": 8498,
+      "mode": "0o644",
+      "sha256": "9c36381d5620648add3a2e7a779da95adcf7789d8b20229fb08d5e912583f647"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/venice.rs",
+      "bytes": 14934,
+      "mode": "0o644",
+      "sha256": "e4ac712080d29744f1b55e00c7d1d2088dec0720b1b91aac4fff7eea92f86d78"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/vercel.rs",
+      "bytes": 3983,
+      "mode": "0o644",
+      "sha256": "5045071caaa934bef20d662e5affda78d96a19b2eb3c6c9d5340eaa5b1070e8e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/vertexai.rs",
+      "bytes": 14673,
+      "mode": "0o644",
+      "sha256": "ac432ad2236b9bdd66924e5d452a03f19b1ece9d7ff5cc153ea72669ca7d0f67"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/warp.rs",
+      "bytes": 10780,
+      "mode": "0o644",
+      "sha256": "ee55561ce35aa4c60ca202de89170b81d12a781e50c16f58c6747f4fb55717ee"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/wayfinder.rs",
+      "bytes": 11864,
+      "mode": "0o644",
+      "sha256": "e0147cdae4c3104d5ebc8e34dc739b8c82f001a21c7dcb097e13c162301a05f2"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/windsurf.rs",
+      "bytes": 13472,
+      "mode": "0o644",
+      "sha256": "bf425456b9e1568cac9d06e382c11458a4db0e480616b0bd2208d95accba1521"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/xai.rs",
+      "bytes": 8794,
+      "mode": "0o644",
+      "sha256": "b83dad8b04ae587ca407f1d8f727db843bfceaa5ed3306acc7632dce54a9bfb7"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/xkiro.rs",
+      "bytes": 10146,
+      "mode": "0o644",
+      "sha256": "72a0004ba802e7dadcfdc4603a92c6916c7d4b54935c3111c1bc526ba2f191ca"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/zai.rs",
+      "bytes": 23560,
+      "mode": "0o644",
+      "sha256": "a19b6e51ac874ab5412ae41326dffc0eebf1944d89dec71cb9454bcdc12a9141"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/zed.rs",
+      "bytes": 15083,
+      "mode": "0o644",
+      "sha256": "a6ca9d9e995e8097a04a23a94c65e350b0107ac4ee75fa38f6096b426ed7b2cf"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/zenmux.rs",
+      "bytes": 8584,
+      "mode": "0o644",
+      "sha256": "3652158a3c7fe9ad1db726e5c3ef6e64215feb83abe10f36cc83e9393f60264f"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers/zoommate.rs",
+      "bytes": 9593,
+      "mode": "0o644",
+      "sha256": "05d8dffb776e982a8468c86fd97d1851b9090ed6029e928b76e3a45e773f5be0"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/providers.rs",
+      "bytes": 2317,
+      "mode": "0o644",
+      "sha256": "b0f296d7531b21e38503ed509752307205edcfa34c45e5ecf10b063ab269fb0b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/registry.rs",
+      "bytes": 3626,
+      "mode": "0o644",
+      "sha256": "7ddb3717583eb73c3ffc7a56193c7009b132f3a9c93f6bcfb576af77b99e8641"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/render.rs",
+      "bytes": 9659,
+      "mode": "0o644",
+      "sha256": "8ad60f22867f0694313f07526b497f39c515c659519ca5f3708c528f0eecd055"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/service.rs",
+      "bytes": 5732,
+      "mode": "0o644",
+      "sha256": "3bec168ced18844c12d47b2d8af24d6028174cf862b8b7f247e48e6dec16a48d"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/settings.rs",
+      "bytes": 5838,
+      "mode": "0o644",
+      "sha256": "60cdda0b864a6bab44445ba877c7647a73f5e3eb98007603595f6cf09707865b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/tests.rs",
+      "bytes": 30038,
+      "mode": "0o644",
+      "sha256": "e3f05f38f6643ea719aaf78cab63f2b3f7063a662f1b4e60178318615a8c5dc5"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/ui.rs",
+      "bytes": 7606,
+      "mode": "0o644",
+      "sha256": "29cea1ef0188be59aaf3dffb1ef2f35b1baca1a856c9fc6f13c59d6167a4e537"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage/values.rs",
+      "bytes": 6086,
+      "mode": "0o644",
+      "sha256": "f975a61577d14775d545ca3cca763d1a54c0ad67f685dbe6e822098f889c76fd"
+    },
+    {
+      "path": "crates/herdr-gpui/src/usage.rs",
+      "bytes": 14686,
+      "mode": "0o644",
+      "sha256": "f204facbb1d8483fb769660734e6d4dd5f10b12ff9bcb07beb04085c388c7429"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/announcement.rs",
+      "bytes": 6214,
+      "mode": "0o644",
+      "sha256": "00eeae783ececadfdc074051ca4e0236372d67b8e139d7661afb4775129f1add"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/clipboard.rs",
+      "bytes": 18065,
+      "mode": "0o644",
+      "sha256": "67fe65139a10685d600b1111907065bc4010c09112e500308fc329666327a5d9"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/commands.rs",
+      "bytes": 22526,
+      "mode": "0o644",
+      "sha256": "60cc6666a453c04774778c774d9f39ef66a60e11b590411a590e93dabfa70b15"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/config_diagnostic.rs",
+      "bytes": 12794,
+      "mode": "0o644",
+      "sha256": "ea7fadfe99479f6004d80c58b73226f4c966b0070e60298a7f270fd75cccf6cf"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/copy_mode.rs",
+      "bytes": 18203,
+      "mode": "0o644",
+      "sha256": "aa32adf814a13225f6d369bf0487f79d290c5aee1a9e4a5fed223148e6c916e8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/double_shift.rs",
+      "bytes": 8935,
+      "mode": "0o644",
+      "sha256": "7127826811d9b889b13fdf88b6bdbde8a4d10d54687549c63734c0afc176aa52"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/file_drop.rs",
+      "bytes": 15247,
+      "mode": "0o644",
+      "sha256": "24dba17cfffb1eba0af08d285df7da4db068259af9250ebf737b6d4514285ad3"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/find.rs",
+      "bytes": 24949,
+      "mode": "0o644",
+      "sha256": "cf8ed520a106f5a51381766223046efc349fd2418087f3069133e96ea050ad72"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/flash.rs",
+      "bytes": 2107,
+      "mode": "0o644",
+      "sha256": "f2552e9ca7c0ef13802df414879f63c41ed677116343f779b0c73cf386e50c49"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/font_size_tests.rs",
+      "bytes": 5128,
+      "mode": "0o644",
+      "sha256": "8b37d2f77e2f5a8a7f87d6a2fb039d4eef39b6e11fff7f2fd54462b143566131"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/image_source.rs",
+      "bytes": 35487,
+      "mode": "0o644",
+      "sha256": "115a267e55315cd71f229054275f9d94741ee0dd670019f37e0d90ca48d0d401"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/images.rs",
+      "bytes": 21782,
+      "mode": "0o644",
+      "sha256": "4cb31a8a11a76bd646ea32be76697efa10a23946b18fac815fec5be0c659f9e6"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/input.rs",
+      "bytes": 9056,
+      "mode": "0o644",
+      "sha256": "130af69cb9e589b21486b0dfe2a465a98faf72f5c66094b05a2bbb6ca5294442"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/key_action_tests.rs",
+      "bytes": 4238,
+      "mode": "0o644",
+      "sha256": "19bfb279d60e14b886afd676674a5f79658e5f880c76e34f2a23a69961525ebd"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/lifecycle.rs",
+      "bytes": 7441,
+      "mode": "0o644",
+      "sha256": "64a2834d7a9f1dbd3b5450dd101d57e9026821b5c09210939931276067d3fc98"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/links.rs",
+      "bytes": 24094,
+      "mode": "0o644",
+      "sha256": "b9a8f668cdd7a09a83395d564c6a4648de0a9aed63235cfd7588bf1841f38f32"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/mouse.rs",
+      "bytes": 22391,
+      "mode": "0o644",
+      "sha256": "6ba4538dea4c45e090d8fe57de8582d041fafcb3b623f46037f1d42ef2a92b8e"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/pending_input.rs",
+      "bytes": 5087,
+      "mode": "0o644",
+      "sha256": "c5bcd1ea9a151c1a433ca6ad25695100dec10a2ee8ece13f04c7f24d9ae8c294"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/prefix.rs",
+      "bytes": 9719,
+      "mode": "0o644",
+      "sha256": "6cdaef023bb0a4dc335346953c3db8917e3e0a29bb569de559dba5a9df8acdfd"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/render.rs",
+      "bytes": 45724,
+      "mode": "0o644",
+      "sha256": "a4e3998984989aacb0c25b73487ad219dbf2c21fe08e8efce7dc8e2a0d27172b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/resize_tests.rs",
+      "bytes": 4565,
+      "mode": "0o644",
+      "sha256": "3ca7c5b39f812f2b60e7493a99c8ec4f87bb1309a78e64d0ae0d1c68db766b70"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/selection.rs",
+      "bytes": 50503,
+      "mode": "0o644",
+      "sha256": "d822aa7bd72f29afd443df0c082bd9c347044a0e6079bb72f5c578d7d74184d0"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/server_keys.rs",
+      "bytes": 13050,
+      "mode": "0o644",
+      "sha256": "0b969015fc37426982ec53c66b3f3051d3731a4a74fc7fe33ceb1be4fbaad476"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/system_notifications.rs",
+      "bytes": 11703,
+      "mode": "0o644",
+      "sha256": "2995479154d047c10a79abafb2081edb82e3038a4e3d142b7d29ed6f9d037517"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/tab_drag.rs",
+      "bytes": 21557,
+      "mode": "0o644",
+      "sha256": "4631be0a9ea3796c2a8db8325c5bc8bf6fad59713235534e9a2bc7e17631e1e8"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/tab_strip.rs",
+      "bytes": 63776,
+      "mode": "0o644",
+      "sha256": "670c4f17d7577a84d3fb2f0779a6827b27b1a3ccdf6ebb32571eaf2eeb27cd19"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/tests.rs",
+      "bytes": 12001,
+      "mode": "0o644",
+      "sha256": "c0564b2ab9c1e36cb24c887e03d1f28003b3fcb6e2da8bbb05a5823836169a3b"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/toasts.rs",
+      "bytes": 26872,
+      "mode": "0o644",
+      "sha256": "2090343a29317c1f6e830c166c9eba121fa1458c10847cd399d94df202915362"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window/transfers.rs",
+      "bytes": 43321,
+      "mode": "0o644",
+      "sha256": "998bed0a144345e4d0d2f9d4024ae13496bc7dbb9dc8670c9154abb7f076de78"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window.rs",
+      "bytes": 27511,
+      "mode": "0o644",
+      "sha256": "1c4734e54e7b5be8a20ebb2e3c5e79fc51c400b989147ee2b208008ce2da5c37"
+    },
+    {
+      "path": "crates/herdr-gpui/src/window_state.rs",
+      "bytes": 13874,
+      "mode": "0o644",
+      "sha256": "b67911c318d9e291f09b8b5a67ccf17bf8ea99795bff37ea65c95966c98098e1"
+    },
+    {
+      "path": "crates/herdr-gpui/src/worktree.rs",
+      "bytes": 5807,
+      "mode": "0o644",
+      "sha256": "cdb16bde33d487c8f79062299a576a2b484df3daccf348c07ad74713d1ba9efd"
+    },
+    {
+      "path": "crates/herdr-gpui/src/worktree_banner.rs",
+      "bytes": 4714,
+      "mode": "0o644",
+      "sha256": "077352d8d58408878ef9af6efc23dcc2e743c4f38ecda7be6a8ed69236a75e67"
+    },
+    {
+      "path": "crates/herdr-gpui/tests/build_identity.rs",
+      "bytes": 11762,
+      "mode": "0o644",
+      "sha256": "a3aa49172f28b95c741f7e8371b1d14fec1e7fbb9e6d4eb6b0e9c31bfc195fd0"
+    },
+    {
+      "path": "crates/herdr-gpui/tests/cli.rs",
+      "bytes": 9486,
+      "mode": "0o644",
+      "sha256": "b3f46c4e76939457e467da2d67b73c2470826df7d809804d7269302491c3dfa7"
+    },
+    {
+      "path": "crates/herdr-gpui/tests/live_gui.rs",
+      "bytes": 11735,
+      "mode": "0o644",
+      "sha256": "02289303f18280f0cd270ef93a7413f16472c096ce3871c31ad6dde6aabb1b4f"
+    },
+    {
+      "path": "crates/herdr-gpui/tests/performance_gui.rs",
+      "bytes": 1427,
+      "mode": "0o644",
+      "sha256": "4d8634dedf45ab8eb010e6928aee796f78799a1a3d1a036d44228ad04dbb8eb2"
+    },
+    {
+      "path": "crates/herdr-gpui/tests/support/clipboard_capture.py",
+      "bytes": 3562,
+      "mode": "0o644",
+      "sha256": "c609e8e26056de8d7cdea847f503e94b943ff0541e285dc26d76696587c6d10e"
+    },
+    {
+      "path": "crates/herdr-gpui/tests/support/clipboard_guard.rs",
+      "bytes": 4107,
+      "mode": "0o644",
+      "sha256": "72ba44855b19a20040dedfba4faf785677715b0a1521a5681beb7e7701ed095e"
+    },
+    {
+      "path": "crates/herdr-gpui/tests/support/clipboard_ssh.py",
+      "bytes": 1533,
+      "mode": "0o644",
+      "sha256": "9ddd0703f357b600ece923119c9696169c9445b39ddf27f5921e1a637222e999"
+    },
+    {
+      "path": "crates/herdr-protocol/Cargo.toml",
+      "bytes": 384,
+      "mode": "0o644",
+      "sha256": "84756d8f4ac6cd5d88128a6d08aaadae48c5db5400c8836bbb60a005b1ecf58d"
+    },
+    {
+      "path": "crates/herdr-protocol/LICENSE-APACHE",
+      "bytes": 11357,
+      "mode": "0o644",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "crates/herdr-protocol/NOTICE.md",
+      "bytes": 2185,
+      "mode": "0o644",
+      "sha256": "247a4f649be829623095b191a83a8f3c32cd92fe8736931ffbb4cccdacde8a84"
+    },
+    {
+      "path": "crates/herdr-protocol/README.md",
+      "bytes": 4078,
+      "mode": "0o644",
+      "sha256": "53f4553f27050f512e49d029c720ba45c9830bdaaa1d0b3b12dfad226d694083"
+    },
+    {
+      "path": "crates/herdr-protocol/src/clipboard.rs",
+      "bytes": 1811,
+      "mode": "0o644",
+      "sha256": "6ffea044ddd8db87ab4f7c6eba97d6166ba088d075c5d9f8092194e040f81ca7"
+    },
+    {
+      "path": "crates/herdr-protocol/src/codec.rs",
+      "bytes": 2670,
+      "mode": "0o644",
+      "sha256": "01421302773107c84ad518d8779d93522de5060a6648c6b3650287f48d79dd17"
+    },
+    {
+      "path": "crates/herdr-protocol/src/endpoint.rs",
+      "bytes": 2154,
+      "mode": "0o644",
+      "sha256": "2f7968bef214111cf35ee92f267c2e3440cca42f54ef82d86ae28a6674dc3e46"
+    },
+    {
+      "path": "crates/herdr-protocol/src/error.rs",
+      "bytes": 2537,
+      "mode": "0o644",
+      "sha256": "ccdd41a6b01698102de5bc1ceeb411cf8663c44acfa951e513b59ceffa5c13c7"
+    },
+    {
+      "path": "crates/herdr-protocol/src/frame.rs",
+      "bytes": 3377,
+      "mode": "0o644",
+      "sha256": "82c9d6c77d9ca72501672f2d147d14ba39d9d43da8493d6b9692a8df95f0b57b"
+    },
+    {
+      "path": "crates/herdr-protocol/src/lib.rs",
+      "bytes": 626,
+      "mode": "0o644",
+      "sha256": "5231cf8e96409ef75cee10d31acd7b3db3e9247e69260f352d36c004c3a2c621"
+    },
+    {
+      "path": "crates/herdr-protocol/src/surface_delta.rs",
+      "bytes": 7205,
+      "mode": "0o644",
+      "sha256": "77253fe05bb8a9888843f0b11fd416df8cc373bdf732d93764e50f80456f2c54"
+    },
+    {
+      "path": "crates/herdr-protocol/src/surface_reuse.rs",
+      "bytes": 1970,
+      "mode": "0o644",
+      "sha256": "0896c2a729bc5ceafa60b69d2a6d8490787a59fab33dcd5e049fde9e585a5f0b"
+    },
+    {
+      "path": "crates/herdr-protocol/src/surface_scroll.rs",
+      "bytes": 6752,
+      "mode": "0o644",
+      "sha256": "fa76fae3d503fae0934a73465a6572766438de88a2e28d188bb90ba06da6b8ca"
+    },
+    {
+      "path": "crates/herdr-protocol/src/wire.rs",
+      "bytes": 19287,
+      "mode": "0o644",
+      "sha256": "12e2304a7972dc1029efdfa13458bb07c18d8e0cbe313235d688fea9d94b6404"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/clipboard.rs",
+      "bytes": 4007,
+      "mode": "0o644",
+      "sha256": "c70ffc0f4ecb579d20411ff1d7fc28c96c49ed2d4f2f74e4f39a293645e3c8a1"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/compatibility.rs",
+      "bytes": 16130,
+      "mode": "0o644",
+      "sha256": "3844e2246d314936c5b315fc19002f609798bfe1a74bc019a4ca5aedfb90dd48"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/endpoint-agent-view-v1.json",
+      "bytes": 246,
+      "mode": "0o644",
+      "sha256": "1e15b4b3a650f356946ddbe477ef84d5d27a9a1b615df7b932a3f20f93b3e316"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/endpoint-hello-v1.json",
+      "bytes": 392,
+      "mode": "0o644",
+      "sha256": "a695f06f0143842ba32bc6bfdf4ab2461afcc935ec2d4fbeb3cfbb106c5b7016"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/endpoint-snapshot-v1.json",
+      "bytes": 2132,
+      "mode": "0o644",
+      "sha256": "4b9e59dccb19576e6628df463ccdacdf2c3fc08ad4846664570e891edd9836cd"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/endpoint-welcome-v1.json",
+      "bytes": 237,
+      "mode": "0o644",
+      "sha256": "153218d58063d9f64dabf957ad6e290cd993a953fe3e03cf8775545d4f462c2a"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/surface-delta-v1.bin",
+      "bytes": 19330,
+      "mode": "0o644",
+      "sha256": "51648ac5d637dcef9c16a4fa52d2d4dacc96cb2dae7a2263c58408ac2a05da8b"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/surface-reuse-v1.bin",
+      "bytes": 7406,
+      "mode": "0o644",
+      "sha256": "85557b1044cac4073d2c36b6a57dbffe57858b792e1d7d9c6b19655b51d1e031"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/surface-scroll-down-v1.bin",
+      "bytes": 7168,
+      "mode": "0o644",
+      "sha256": "bda72d2776a8882ef042864e1dd53b969d535290e4f0c6bf8c34350526a8869b"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/fixtures/surface-scroll-up-v1.bin",
+      "bytes": 7309,
+      "mode": "0o644",
+      "sha256": "843f4aa6cbc7d2c0dcb4b643c74b00794d0b315e4611f9b129e60bd6bd7e0216"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/host_theme.rs",
+      "bytes": 3312,
+      "mode": "0o644",
+      "sha256": "5d021ef5615ed15f90b246939cd173f9be2c5d49e2b81b854cebe64dd12db639"
+    },
+    {
+      "path": "crates/herdr-protocol/tests/surface_encodings.rs",
+      "bytes": 20824,
+      "mode": "0o644",
+      "sha256": "1b75e726ac6198ce43f83a4d8ed4b754dca759e8fa81fd5d2dfd4dfae0b6170d"
+    },
+    {
+      "path": "crates/test-support/sandbox.rs",
+      "bytes": 6735,
+      "mode": "0o644",
+      "sha256": "efcda11600703e1c09c67098738ea1d5e0da848bc9a7a5be1303b63c16551ce0"
+    },
+    {
+      "path": "deny.toml",
+      "bytes": 3656,
+      "mode": "0o644",
+      "sha256": "7f86f6b38bf6f2df0ade0b03916dca638168dfd5e08f41043a511b2e0ecf9f4c"
+    },
+    {
+      "path": "docs/updating.md",
+      "bytes": 21641,
+      "mode": "0o644",
+      "sha256": "e5785c5aa6c5d0e4767b064c376981f2cbfe46d60e82068d77758f99ce0047b1"
+    },
+    {
+      "path": "docs/usage-providers.md",
+      "bytes": 10239,
+      "mode": "0o644",
+      "sha256": "9e302517993aee09c9d541057829fd31d46bb038c16f57a259a46bea53003586"
+    },
+    {
+      "path": "flake.lock",
+      "bytes": 1108,
+      "mode": "0o644",
+      "sha256": "c6a1caf932a52d5a3b71208cd3639ba7bba65b9ba6796fd619613485b1541be1"
+    },
+    {
+      "path": "flake.nix",
+      "bytes": 3849,
+      "mode": "0o644",
+      "sha256": "3f902dc4e925b5b977339ed363b39e990c7980d3a29800cd384b21c27a3c9af5"
+    },
+    {
+      "path": "homebrew/Casks/herdr-gpui.rb",
+      "bytes": 360,
+      "mode": "0o644",
+      "sha256": "b2646ae4e625042979e70402077c3c3d5671db081c8a80fda903ccc0f057ac7c"
+    },
+    {
+      "path": "justfile",
+      "bytes": 8727,
+      "mode": "0o644",
+      "sha256": "ac8ccc8eb70704c2fcc185e1a7a57e07fa3b7e71c287b04b042e3c9c3531ad3f"
+    },
+    {
+      "path": "mise.toml",
+      "bytes": 310,
+      "mode": "0o644",
+      "sha256": "f1bd44120952b265ca22b0fc16e2148a64af8e5a564821f14997bd98e613fb77"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "bytes": 86,
+      "mode": "0o644",
+      "sha256": "d378cc6bc4c46cf85f3bc26a191bcb13a6f9efab78f758b39029555f88dc6e79"
+    },
+    {
+      "path": "scripts/check-icons.swift",
+      "bytes": 2674,
+      "mode": "0o644",
+      "sha256": "cfc19b29964721706b56bc80411708fd724558e06c9d7197d3faec3dbf74bdd7"
+    },
+    {
+      "path": "scripts/ci-changes.sh",
+      "bytes": 1140,
+      "mode": "0o644",
+      "sha256": "ab9498acfcd18f1a5197e57b5e47dec6e6c4016a1c0b8b9d9483259e35cb030d"
+    },
+    {
+      "path": "scripts/generate-icons.swift",
+      "bytes": 9492,
+      "mode": "0o644",
+      "sha256": "90ef5ce4782903308afe0b0b22f1839fe96f3cdfbf70e15d40a44ae1e081e848"
+    },
+    {
+      "path": "scripts/gpg-sign-release.sh",
+      "bytes": 1393,
+      "mode": "0o755",
+      "sha256": "cdf60989d0205468854132503f8a6bd6cfabb17fab8763cf697204bc59babceb"
+    },
+    {
+      "path": "scripts/install-linux-deps.sh",
+      "bytes": 498,
+      "mode": "0o644",
+      "sha256": "d8518738bf185aafc51f0fbcab969c0eb45b63b2cc9fd713567ea983e5affa04"
+    },
+    {
+      "path": "scripts/lint-linux.sh",
+      "bytes": 3961,
+      "mode": "0o755",
+      "sha256": "386633486a2f2e2ac2c97bfb3911a632b532a8b64b1f844a53c5d5e69cd7931a"
+    },
+    {
+      "path": "scripts/release/README.md",
+      "bytes": 22365,
+      "mode": "0o644",
+      "sha256": "7e7ba76b1ce1bd6262f47a5900bf8dfd4854b2d6c24e08af7d1935252cb0b570"
+    },
+    {
+      "path": "scripts/release/about.toml",
+      "bytes": 2091,
+      "mode": "0o644",
+      "sha256": "e1be9d685951a003188b952d2af5ca9fbf50e6be05f2cccd064699ca2aa3fa77"
+    },
+    {
+      "path": "scripts/release/artifact-manifest.py",
+      "bytes": 4442,
+      "mode": "0o644",
+      "sha256": "a1c06de0d37b038976ef486cdc4ceca883121b505cb80a34e1dad359c2c4cce5"
+    },
+    {
+      "path": "scripts/release/build-icon.py",
+      "bytes": 2718,
+      "mode": "0o644",
+      "sha256": "4317cfd40235b54f7544adbf1ff77791e75fb7bcd4bece18e297699e14e1fe11"
+    },
+    {
+      "path": "scripts/release/build-macos.sh",
+      "bytes": 2296,
+      "mode": "0o644",
+      "sha256": "c95a123a49356585677e299108158418452519c278bbfe64ed5bb6fdeac92f9c"
+    },
+    {
+      "path": "scripts/release/cargo-locked.sh",
+      "bytes": 221,
+      "mode": "0o755",
+      "sha256": "a69b5ccce08404e6009ca56f1dfc4460cd1fb6f43f4b6a1c9fc0afee6c650aab"
+    },
+    {
+      "path": "scripts/release/check-commit-messages.py",
+      "bytes": 5563,
+      "mode": "0o755",
+      "sha256": "f6a0b9d879fd46c3e100431ea06b30dfd3b98d7289eb5b2b112d583cd7537590"
+    },
+    {
+      "path": "scripts/release/common.sh",
+      "bytes": 734,
+      "mode": "0o644",
+      "sha256": "f2df1cfeaa2e577f9f9de4d2726bf1e831100aaf43cf641c9bc95d1886ace4b5"
+    },
+    {
+      "path": "scripts/release/dispatch.sh",
+      "bytes": 2936,
+      "mode": "0o644",
+      "sha256": "d0324f74c0f3fbe5c2a156d4b1549fd8ee6d9b9a3a7d1762ec513b99161850fb"
+    },
+    {
+      "path": "scripts/release/generate-changelog.sh",
+      "bytes": 1521,
+      "mode": "0o755",
+      "sha256": "92ca723a0c7b8a162c166de2f0bacc32a048ec99f0be6e032eb2d66aa92f4f24"
+    },
+    {
+      "path": "scripts/release/generate-notices.py",
+      "bytes": 7224,
+      "mode": "0o644",
+      "sha256": "244275d9a8df3a3909be8acf8e2e3f4ce798caeec9e4368973373de4429cf1bd"
+    },
+    {
+      "path": "scripts/release/generate-sbom.py",
+      "bytes": 3321,
+      "mode": "0o644",
+      "sha256": "22fe4e0eca3a4052c84456d1f34ed0923eeb0ccbe1dc8cd725f735a3fbb34753"
+    },
+    {
+      "path": "scripts/release/herdr-gpui.desktop",
+      "bytes": 172,
+      "mode": "0o644",
+      "sha256": "6158aba7cec24d9ebd56f4200064c6575e1c286c4c29e56f366911c701669160"
+    },
+    {
+      "path": "scripts/release/install-nfpm.sh",
+      "bytes": 1564,
+      "mode": "0o644",
+      "sha256": "71abc57404a60d89927bd73e71cd383fa8891e73b71733b825ec49ab6b1f082e"
+    },
+    {
+      "path": "scripts/release/next-version.py",
+      "bytes": 1651,
+      "mode": "0o644",
+      "sha256": "c389c93c9b96507840c65dbbb010a27b22f99873d588cc921cd059c740bfbf36"
+    },
+    {
+      "path": "scripts/release/package-linux-distro.py",
+      "bytes": 7158,
+      "mode": "0o644",
+      "sha256": "8dae4010831d848bc2ca6840f9358e0b7592a041f061c9e8acf24b8df97d3f57"
+    },
+    {
+      "path": "scripts/release/package-linux.sh",
+      "bytes": 1722,
+      "mode": "0o644",
+      "sha256": "fd3eb961e03d98042c7910da6d45e14ec6305432de93f026c287ba5cb78a87eb"
+    },
+    {
+      "path": "scripts/release/package-macos.sh",
+      "bytes": 2348,
+      "mode": "0o644",
+      "sha256": "5ea73ae2ce3f32ce1a484f268ce404ad27019dd318296475d3ee9860b9ef0124"
+    },
+    {
+      "path": "scripts/release/package-windows.py",
+      "bytes": 3139,
+      "mode": "0o644",
+      "sha256": "7cde87d121350c049d20d7212ad267c517a6257ec423730e19c0f2506e30b65c"
+    },
+    {
+      "path": "scripts/release/render-cask.sh",
+      "bytes": 466,
+      "mode": "0o644",
+      "sha256": "74cc32e043f12c2bc551564a405ace02f64c6f75eac45045c9336ac1b724591a"
+    },
+    {
+      "path": "scripts/release/sign-macos.sh",
+      "bytes": 5767,
+      "mode": "0o644",
+      "sha256": "f120b37cf113e9b09fddec888491606f0625b62a9329ed0ab9ea7f68e33d3a2a"
+    },
+    {
+      "path": "scripts/release/smoke-linux-packages.sh",
+      "bytes": 3256,
+      "mode": "0o644",
+      "sha256": "13ce92bd4591541b2b50df94fee38d304f88c4a2dc9ce0baf195fec5db3f9528"
+    },
+    {
+      "path": "scripts/release/test-release-security.py",
+      "bytes": 29646,
+      "mode": "0o644",
+      "sha256": "4c9806eb00a13fc7fe279db5cbe58b061816d801b405a7435fb5c4e81d7245d3"
+    },
+    {
+      "path": "scripts/release/tests/mock-tool.py",
+      "bytes": 2393,
+      "mode": "0o644",
+      "sha256": "ab46d0a965fb6f5a461f99888df46398cd866c67563c3a4f402d670868696793"
+    },
+    {
+      "path": "scripts/release/tests/test_app_name.py",
+      "bytes": 3121,
+      "mode": "0o644",
+      "sha256": "e29a269eb0056651e159c36dc296c65d38fa4568280aaeabb1e6cbfe958d3967"
+    },
+    {
+      "path": "scripts/release/tests/test_build_macos.py",
+      "bytes": 8016,
+      "mode": "0o644",
+      "sha256": "1d6868ce6cad17f4b36443eed4a00eb75fc89c2a8dcd07553c0bc5cad0e0fe5f"
+    },
+    {
+      "path": "scripts/release/tests/test_changelog.py",
+      "bytes": 7741,
+      "mode": "0o644",
+      "sha256": "8f96cf9180d4ac6c1df37931743e5229ed99f56d7cecf77debbdc1f614557172"
+    },
+    {
+      "path": "scripts/release/tests/test_ci_changes.py",
+      "bytes": 3536,
+      "mode": "0o644",
+      "sha256": "2a1de27d619c426b29bd76ac0d11369c23bf2f06c27af927ca41b55d62d1bbf5"
+    },
+    {
+      "path": "scripts/release/tests/test_commit_messages.py",
+      "bytes": 6391,
+      "mode": "0o644",
+      "sha256": "b481daa25312503021dedf017a20de4eca831a4775e0eec907738583522dce8c"
+    },
+    {
+      "path": "scripts/release/tests/test_homebrew.py",
+      "bytes": 8405,
+      "mode": "0o644",
+      "sha256": "a38a71cdfed42708485e2cfaa5991ebad8d5b1bd7e37429a498e69b0155717f1"
+    },
+    {
+      "path": "scripts/release/tests/test_linux_distro.py",
+      "bytes": 10701,
+      "mode": "0o644",
+      "sha256": "2c8324f6ad74ac7b914eb38b15742cba4933e815193f44e41e9bd7a057d3796b"
+    },
+    {
+      "path": "scripts/release/tests/test_next_version.py",
+      "bytes": 2879,
+      "mode": "0o644",
+      "sha256": "c25ce5437dc5bf7084f01e9d4e5fe3fb3413dca3adf093cca561c0cf880f4c62"
+    },
+    {
+      "path": "scripts/release/tests/test_notices.py",
+      "bytes": 8370,
+      "mode": "0o644",
+      "sha256": "5d90eccde5b0d63eec74a1b26a8cfceebfa2e808cade085309ebd1ffcbce70dd"
+    },
+    {
+      "path": "scripts/release/tests/test_release.py",
+      "bytes": 19927,
+      "mode": "0o644",
+      "sha256": "651f6be68136a98992e945151e5183bd178c35f9ac221bfff211e309e2800e2e"
+    },
+    {
+      "path": "scripts/release/update-homebrew.sh",
+      "bytes": 4110,
+      "mode": "0o644",
+      "sha256": "ece977201ea1a8ee297b028fe9230b612da235c7881684a40e39955d873776aa"
+    },
+    {
+      "path": "scripts/stress-linux.sh",
+      "bytes": 3555,
+      "mode": "0o755",
+      "sha256": "9522ccdaed5ab3f2c6f95b8b4b965b521c41c43c0dcf04db97252c221376c9f8"
+    },
+    {
+      "path": "scripts/test-updater.py",
+      "bytes": 15962,
+      "mode": "0o644",
+      "sha256": "27e68224fdccca13af7f773d6592aba3eb68167183747e8e7776397d92a3f466"
+    },
+    {
+      "path": "scripts/test_mockup_recipe.py",
+      "bytes": 3137,
+      "mode": "0o644",
+      "sha256": "117ad9d5fcb7dd00480228db3ee76c1fcbe5e74e5b5653216a58f4f1a7135036"
+    },
+    {
+      "path": "scripts/test_update_manifest.py",
+      "bytes": 11772,
+      "mode": "0o644",
+      "sha256": "237f3b5ed4fd51c8330c4754c38661aa1a5f60d8c2a13fe478c19ca75f30f74e"
+    },
+    {
+      "path": "scripts/update-manifest.py",
+      "bytes": 9076,
+      "mode": "0o644",
+      "sha256": "2f5b37ff1d28b3f91a35713b009ec02f57c59a36284c234da007dc53e835816a"
+    },
+    {
+      "path": "scripts/verify-release.sh",
+      "bytes": 4259,
+      "mode": "0o755",
+      "sha256": "28d5825714182dd16e1904dca01505eba9f6df799e70c4d3092cd34844ce863b"
+    },
+    {
+      "path": "setup.sh",
+      "bytes": 50,
+      "mode": "0o644",
+      "sha256": "776cf919c36b0486586a5087b950dde721d706d840e685e526997b2acffdde00"
+    },
+    {
+      "path": "skills/herdr-gpui-browser/SKILL.md",
+      "bytes": 4928,
+      "mode": "0o644",
+      "sha256": "563d9f62bd8defaf0947ea34c57678401363be01a018fe3a37adc6b9db21af0b"
+    },
+    {
+      "path": "taplo.toml",
+      "bytes": 746,
+      "mode": "0o644",
+      "sha256": "eb7b912ec9a9dc0e4dd8a4234e88d470892656c3240d98f28f2cb2c05ba37333"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+# Kept separate from the desktop workspace, which remains on GPUI 0.3.6.
+[workspace]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-channel = "2"
+thiserror = "2"
+gpui = { package = "gpui-pre", version = "=0.3.7", default-features = false }
+gpui-mobile = { package = "gpui-pre-mobile", git = "https://github.com/longbridge/gpui-mobile", rev = "9075e3aa3eea812127f2c60ed66f0cd5798ff245", default-features = false }
+gpui-wgpu = { package = "gpui-pre-wgpu", version = "=0.3.7", default-features = false }
+jni = "0.21"
+jni-mobile = { package = "jni", version = "0.22" }
+ndk = { version = "0.9", features = ["nativewindow"] }
+android-activity = { version = "0.6", features = ["native-activity"] }
+android_logger = "0.15"
+log = "0.4"
+herdr-client = { path = "../../crates/herdr-client" }
+herdr-remote-transport = { path = "../../android-remote/rust" }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "net"] }
+zeroize = { version = "1.9", features = ["serde"] }
+ndk-context = "0.1"
+
+[package]
+name = "herdr-gpui-android"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "herdr_gpui_android"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# UI is host-checkable; only the actual activity/backend is Android-specific.
+android-ui = ["remote", "dep:async-channel", "dep:gpui", "dep:gpui-mobile", "dep:gpui-wgpu", "dep:jni", "dep:jni-mobile", "dep:ndk", "dep:android-activity", "dep:android_logger", "dep:log"]
+remote = ["dep:herdr-client", "dep:herdr-remote-transport", "dep:tokio", "dep:zeroize", "dep:jni", "dep:ndk-context"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-channel = { workspace = true, optional = true }
+thiserror = { workspace = true }
+gpui = { workspace = true, optional = true }
+# Also used by host font regressions with an empty system-font database.
+gpui-wgpu = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+herdr-client = { workspace = true, optional = true }
+herdr-remote-transport = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+zeroize = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+gpui-mobile = { workspace = true, optional = true }
+jni = { workspace = true, optional = true }
+jni-mobile = { workspace = true, optional = true }
+ndk = { workspace = true, optional = true }
+android-activity = { workspace = true, optional = true }
+android_logger = { workspace = true, optional = true }
+ndk-context = { workspace = true, optional = true }
+
+[lints.rust]
+unsafe_code = "deny"
+unused_qualifications = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"

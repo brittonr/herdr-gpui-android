@@ -1,0 +1,106 @@
+# Remote SSH preview
+
+This work adds an embedded SSH client to the existing GPUI Android terminal.
+Direct SSH speaks Herdr's binary `remote-client-bridge` protocol and does not
+require the HTTP companion. The optional HTTPS companion workflow remains
+available through **Companion hosts**. Existing Compact profiles remain in
+Compact; this separately installed app does not migrate them automatically.
+
+The remote build has application ID `dev.herdr.android.gpui.remote`. It installs
+alongside Compact 0.4.0 because the old development signing key did not survive
+the build workspace reset. It does not overwrite Compact or its saved profiles.
+See REMOTE-VALIDATION.md for the exact build and runtime evidence. Accompanying dependency notices are in android-remote/THIRD-PARTY-NOTICES.txt.
+
+## Host prerequisites
+
+Use a reachable SSH server and an existing SSH account, with Herdr already
+installed and its requested session running. The application does not install
+or upgrade Herdr, configure SSH access, or change a firewall.
+Use password authentication or provide an existing compatible OpenSSH/PEM
+private key and its optional passphrase. Credentials are used for one connection
+and are not stored in the profile. The app does not generate or install SSH keys.
+This build enables Ed25519 and ECDSA key algorithms; RSA and DSA support is not
+enabled. SSH configuration files, agent forwarding, jump hosts and interactive
+multi-factor authentication are not implemented.
+
+Herdr must advertise endpoint generation 1 and the `surface_interest`,
+`presentation_effects_fence` and `health_check` capabilities. Official Herdr
+0.9.3 reports these prerequisites. The client still checks the actual host's
+status rather than assuming compatibility from its version string. It preserves
+candidate discovery and the conditional `--idle-timeout-v1` bridge negotiation.
+
+The app refuses a session reported stopped by its initial probe. However,
+[Herdr 0.9.3's own bridge](https://github.com/herdrdev/herdr/blob/v0.9.3/src/remote/host.rs)
+starts the daemon if it is down when the bridge executes. A stop between the
+probe and bridge can therefore start it again. The Connect dialog discloses
+this; this preview cannot promise attach-only behavior with that upstream
+bridge. It does not reconnect or restart it automatically in the background.
+
+The Herdr session name is explicit in each profile. Leave it at `default` only
+if that is the session you want. The daemon and terminal processes stay on the
+host when the phone disconnects.
+
+## Connecting
+
+1. Open **Remote hosts · SSH**, add a direct TCP profile, and enter the host,
+   SSH port, username and Herdr session
+2. Inspect the server key. Compare the displayed SHA-256 fingerprint with a
+   trusted copy from the host administrator before explicitly trusting it
+3. Connect and enter the SSH password, or choose **Use private key** and provide
+   an existing key and optional passphrase. None of these credentials is saved
+4. Select a pane, then use the GPUI terminal and **Cmds** palette
+
+Inspection retrieves the public server key without authenticating. Credentials
+are sent only after the next connection verifies the explicitly saved key.
+A changed key blocks connection; it is never silently accepted. Verify the new
+key separately before using the explicit forget/retrust flow. Changes to the
+profile's connection identity clear its trust, and stale dialogs cannot save a
+pin for a different profile revision.
+
+Host settings, trusted fingerprints, extra keys and OMP quick commands are saved
+in an AndroidKeyStore-encrypted profile file excluded from backup. Password
+drafts are not saved in profiles or framework state. Authentication failure
+does not trigger automatic retries.
+
+## Input and lifecycle
+
+The binary client preserves its remote health checks, bounded queues, surface
+validation and daemon boot-ID fences. Only the selected pane receives input.
+Focus changes are explicit and input waits for the corresponding host state.
+
+Binary semantic input has no daemon acknowledgement. **Input queued over SSH**
+means it entered the client queue, not that the shell consumed it. Send + Enter
+is one ordered semantic batch containing the text and Enter. The palette still
+requires confirmation that OMP is idle with an empty prompt and never clears
+existing input. A failed connection can leave an action applied at the host;
+inspect the terminal before retrying. Nothing is replayed automatically.
+
+Leaving the remote terminal closes its connection and discards pending input.
+Reconnect from Remote hosts and enter credentials again. A daemon restart,
+deleted pane or stale launch cannot silently retarget a command.
+
+The first remote renderer continues to show bounded plain text extracted from
+the selected, validated binary surface. Exact VT colors, cursor, graphics and
+unlimited scrollback are not implied by the new transport.
+
+## SSH over Iroh
+
+Choose **Iroh + SSH** and enter the receiver's endpoint ID, SSH username and
+Herdr session. The app uses Iroh's N0 address discovery and relay configuration;
+an ephemeral client identity is sufficient. Credentials still belong to SSH,
+and the server key is verified through the same explicit trust flow as TCP.
+
+The wire interoperability target is
+[rustonbsd/iroh-ssh 0.2.12](https://github.com/rustonbsd/iroh-ssh/tree/d0e9b6a823d25bf5b02757bbf9c17edeb39cfad5):
+ALPN `/iroh/ssh`, one bidirectional stream carrying raw SSH bytes. That receiver
+must run on the remote host and forward to its existing SSH server; Iroh does
+not replace SSH authentication or host-key verification. The receiver chooses
+the SSH destination port. It is not configured or deployed by this app. No
+companion bearer token is required. The reference receiver does not add its own
+peer allowlist; knowing its endpoint ID permits reaching the SSH server, whose
+authentication remains essential.
+
+Transport tests use local Iroh endpoints with discovery and relays disabled.
+They verify raw SSH, exact ALPN, pinning, output bounds and closure even when the
+client runtime ends. Public relay/NAT traversal, an actual deployed receiver,
+and physical Android network transitions require separate verification.

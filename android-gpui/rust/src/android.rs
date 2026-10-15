@@ -1,0 +1,458 @@
+//! Process-lived SurfaceView host and bounded JNI bridge. No networking here.
+use crate::model::{self, Snapshot};
+use gpui::{App, AppContext, WindowOptions};
+use jni::{
+    JNIEnv,
+    objects::{JClass, JString},
+    sys::{jboolean, jlong, jstring},
+};
+
+// The transitive android-activity crate references this symbol. The actual host
+// is a plain Activity + SurfaceView; NativeActivity must never initialize GPUI.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+fn android_main(_app: android_activity::AndroidApp) {
+    log::error!("Use the SurfaceView host entry point, not NativeActivity");
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeStart<'local>(
+    mut env: jni_mobile::EnvUnowned<'local>,
+    _class: jni_mobile::objects::JClass<'local>,
+    activity: jni_mobile::objects::JObject<'local>,
+) {
+    env.with_env(|env| -> jni_mobile::errors::Result<()> {
+        gpui_mobile::android::jni::set_host_activity(env, &activity).map_err(|_| {
+            jni_mobile::errors::Error::JniCall(jni_mobile::errors::JniError::Unknown)
+        })?;
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Warn)
+                .with_tag("herdr-gpui"),
+        );
+        gpui_mobile::android::jni::install_panic_hook();
+        gpui_mobile::android::host::start(|cx: &mut App| {
+            // Android does not promise desktop generic aliases or GPUI's
+            // fallback families. Install our fonts before any window can paint.
+            if let Err(error) = crate::fonts::install(cx.text_system()) {
+                log::error!("GPUI Android font initialization failed: {error}");
+                return;
+            }
+            if cx
+                .open_window(WindowOptions::default(), |window, cx| {
+                    cx.new(|cx| crate::ui::TerminalView::new(window, cx))
+                })
+                .is_err()
+            {
+                log::error!("GPUI Android window initialization failed");
+            }
+        });
+        Ok(())
+    })
+    .resolve::<jni_mobile::errors::ThrowRuntimeExAndDefault>();
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSurfaceCreated(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    surface: jni::objects::JObject<'_>,
+    scale: jni::sys::jfloat,
+) {
+    if surface.is_null() || !scale.is_finite() || scale <= 0.0 {
+        return;
+    }
+    // SAFETY: JVM supplies a live Surface local ref and attached JNIEnv for this
+    // call. NDK acquires its own ANativeWindow reference; NativeWindow owns it.
+    let window =
+        unsafe { ndk::native_window::NativeWindow::from_surface(env.get_raw(), surface.as_raw()) };
+    if let Some(window) = window {
+        gpui_mobile::android::host::surface_created(window, scale);
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSurfaceDestroyed(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) {
+    gpui_mobile::android::host::surface_destroyed();
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeResumed(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) {
+    gpui_mobile::android::host::resumed();
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativePaused(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) {
+    gpui_mobile::android::host::paused();
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeTouch(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    action: jni::sys::jint,
+    action_index: jni::sys::jint,
+    ids: jni::objects::JIntArray<'_>,
+    xs: jni::objects::JFloatArray<'_>,
+    ys: jni::objects::JFloatArray<'_>,
+) -> jboolean {
+    if !matches!(action, 0 | 1 | 2 | 3 | 5 | 6) || ids.is_null() || xs.is_null() || ys.is_null() {
+        return 0;
+    }
+    let Ok(length) = env.get_array_length(&ids) else {
+        return 0;
+    };
+    if !(1..=16).contains(&length)
+        || action_index < 0
+        || action_index >= length
+        || env.get_array_length(&xs).ok() != Some(length)
+        || env.get_array_length(&ys).ok() != Some(length)
+    {
+        return 0;
+    }
+    let mut pointer_ids = [0; 16];
+    let mut x = [0.0; 16];
+    let mut y = [0.0; 16];
+    let length = length as usize;
+    if env
+        .get_int_array_region(&ids, 0, &mut pointer_ids[..length])
+        .is_err()
+        || env
+            .get_float_array_region(&xs, 0, &mut x[..length])
+            .is_err()
+        || env
+            .get_float_array_region(&ys, 0, &mut y[..length])
+            .is_err()
+    {
+        return 0;
+    }
+    let mut pointers = Vec::with_capacity(length);
+    for i in 0..length {
+        if !x[i].is_finite() || !y[i].is_finite() {
+            return 0;
+        }
+        pointers.push(gpui_mobile::android::host::Pointer {
+            id: pointer_ids[i],
+            x: x[i],
+            y: y[i],
+        });
+    }
+    u8::from(gpui_mobile::android::host::motion_event(
+        action as u32,
+        action_index as usize,
+        &pointers,
+    ))
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeKey(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    key_code: jni::sys::jint,
+    action: jni::sys::jint,
+    meta_state: jni::sys::jint,
+    unicode_codepoint: jni::sys::jint,
+) -> jboolean {
+    if action == 1 {
+        return 1;
+    }
+    if action != 0 {
+        return 0;
+    }
+    let state = model::mailbox().state();
+    if !state.active || state.generation != generation {
+        return 0;
+    }
+    // Preserve the original physical device/layout result from Java. A negative
+    // value carries Android's COMBINING_ACCENT marker and is never stripped.
+    let unicode = unicode_codepoint as u32;
+    let Some(stroke) =
+        gpui_mobile::android::keyboard::android_key_to_keystroke(key_code, meta_state, unicode)
+    else {
+        return 0;
+    };
+    let m = stroke.modifiers;
+    // SYM is not represented in GPUI Modifiers; never lose it during conversion.
+    if m.function || m.platform || meta_state & 0x04 != 0 {
+        return 0;
+    }
+    let command =
+        model::physical_key(&stroke.key, m.control, m.alt, m.shift, m.platform).or_else(|| {
+            if m.control || m.alt {
+                return None;
+            }
+            // Respect Android's actual layout/dead-key result. Do not fall back
+            // to the backend's US key-name guess when no Unicode was produced.
+            char::from_u32(unicode)
+                .filter(|c| !c.is_control())
+                .map(|c| model::Command::Text {
+                    text: c.to_string(),
+                })
+        });
+    let Some(command) = command else {
+        return 0;
+    };
+    // Capture generation on the Java callback thread, not later on the render
+    // thread: a paused/reopened terminal can never consume this physical key.
+    u8::from(model::mailbox().enqueue(generation, command).is_ok())
+}
+
+pub(crate) fn request_keyboard(generation: i64) -> bool {
+    let state = model::mailbox().state();
+    if state.generation != generation || !state.active {
+        return false;
+    }
+    // Both this grant and the subsequent upstream show callback are posted to
+    // Android's UI queue in order. Java rechecks the generation before granting.
+    gpui_mobile::android::jni::with_env(|env| {
+        let activity = gpui_mobile::android::jni::activity(env)?;
+        let name = jni_mobile::strings::JNIString::from("gpuiRequestKeyboard");
+        let signature = jni_mobile::signature::RuntimeMethodSignature::from_str("(J)V")
+            .map_err(|e| e.to_string())?;
+        env.call_method(
+            &activity,
+            name,
+            signature.method_signature(),
+            &[jni_mobile::objects::JValue::Long(generation)],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    })
+    .is_ok()
+}
+
+pub(crate) fn close_activity(generation: i64) -> bool {
+    if model::mailbox().state().generation != generation {
+        return false;
+    }
+    gpui_mobile::android::jni::with_env(|env| {
+        let activity = gpui_mobile::android::jni::activity(env)?;
+        let name = jni_mobile::strings::JNIString::from("gpuiClose");
+        let signature = jni_mobile::signature::RuntimeMethodSignature::from_str("(J)V")
+            .map_err(|e| e.to_string())?;
+        env.call_method(
+            &activity,
+            name,
+            signature.method_signature(),
+            &[jni_mobile::objects::JValue::Long(generation)],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    })
+    .is_ok()
+}
+
+fn bounded_string(
+    env: &mut JNIEnv<'_>,
+    value: &JString<'_>,
+    limit: usize,
+) -> jni::errors::Result<Option<String>> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    let length = env.call_method(value, "length", "()I", &[])?.i()?;
+    if length < 0 || length as usize > limit {
+        return Ok(None);
+    }
+    let value: String = env.get_string(value)?.into();
+    Ok((value.len() <= limit).then_some(value))
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetActive(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    active: jboolean,
+) {
+    let changed = model::mailbox().set_active(generation, active != 0);
+    if changed && active == 0 {
+        // Release the mailbox before JNI callbacks, and invalidate old IME events.
+        gpui_mobile::android::jni::hide_keyboard_android();
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetDisplayPreferences(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    font_size: jni::sys::jfloat,
+    compact: jboolean,
+) {
+    let result = model::mailbox().set_display_preferences(font_size, compact != 0);
+    if result.is_err() {
+        let _ = env.throw_new(
+            "java/lang/IllegalArgumentException",
+            "GPUI display font size must be finite and between 11 and 36 logical pixels",
+        );
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnapshot(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    title: JString<'_>,
+    text: JString<'_>,
+    status: JString<'_>,
+    shortcuts: JString<'_>,
+) {
+    if model::mailbox().state().generation != generation {
+        return;
+    }
+    let snapshot = (|| -> jni::errors::Result<Option<Snapshot>> {
+        let Some(title) = bounded_string(&mut env, &title, 1024)? else {
+            return Ok(None);
+        };
+        let Some(text) = bounded_string(&mut env, &text, model::MAX_SNAPSHOT_BYTES)? else {
+            return Ok(None);
+        };
+        let Some(status) = bounded_string(&mut env, &status, 4096)? else {
+            return Ok(None);
+        };
+        let Some(shortcuts) = bounded_string(&mut env, &shortcuts, model::MAX_SHORTCUT_JSON)?
+        else {
+            return Ok(None);
+        };
+        Ok(Snapshot::new(&title, &text, &status, &shortcuts).ok())
+    })();
+    match snapshot {
+        Ok(Some(snapshot)) => {
+            model::mailbox().set_snapshot(generation, snapshot);
+        }
+        Ok(None) => {
+            let _ = env.throw_new(
+                "java/lang/IllegalArgumentException",
+                "Invalid or oversized GPUI snapshot",
+            );
+        }
+        Err(_) => {
+            // Preserve an existing Java exception; never log terminal contents.
+            if !env.exception_check().unwrap_or(true) {
+                let _ = env.throw_new(
+                    "java/lang/IllegalStateException",
+                    "Could not read GPUI snapshot",
+                );
+            }
+        }
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeTakeCommand(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+) -> jstring {
+    let Some(command) = model::mailbox().take_command(generation) else {
+        return std::ptr::null_mut();
+    };
+    // Allocation failure never causes an old terminal command to be replayed.
+    match serde_json::to_string(&command)
+        .ok()
+        .and_then(|json| env.new_string(json).ok())
+    {
+        Some(value) => value.into_raw(),
+        None => std::ptr::null_mut(),
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSendKey(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    key: JString<'_>,
+) -> jboolean {
+    let Ok(Some(key)) = bounded_string(&mut env, &key, 64) else {
+        return 0;
+    };
+    let command = model::Command::Keys { keys: vec![key] };
+    u8::from(model::mailbox().enqueue(generation, command).is_ok())
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetImeSession(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    session: jlong,
+) {
+    model::mailbox().set_ime_session(generation, session);
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeImeEvent(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    session: jlong,
+    kind: jni::sys::jint,
+    text: JString<'_>,
+    start: jni::sys::jint,
+    end: jni::sys::jint,
+) -> jboolean {
+    if start < 0 || end < 0 {
+        return 0;
+    }
+    let Ok(Some(text)) = bounded_string(&mut env, &text, model::MAX_TEXT_BYTES) else {
+        return 0;
+    };
+    let accepted = model::mailbox()
+        .ime_event(
+            generation,
+            session,
+            kind,
+            &text,
+            start as usize,
+            end as usize,
+        )
+        .is_ok();
+    if accepted && kind == 4 {
+        // Dismiss locally only. The model lock is released before Java callbacks.
+        gpui_mobile::android::jni::hide_keyboard_android();
+    }
+    u8::from(accepted)
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSendCommand(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    json: JString<'_>,
+) -> jboolean {
+    let Ok(Some(json)) = bounded_string(&mut env, &json, model::MAX_COMMAND_JSON) else {
+        return 0;
+    };
+    let Ok(command) = model::parse_command(&json) else {
+        return 0;
+    };
+    u8::from(model::mailbox().enqueue(generation, command).is_ok())
+}

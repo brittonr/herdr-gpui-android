@@ -1,0 +1,32 @@
+plugins { id 'com.android.application' }
+
+def herdrAndroidAbi = System.getenv('HERDR_ANDROID_ABI') ?: 'arm64-v8a'
+if (!(herdrAndroidAbi in ['arm64-v8a', 'x86_64'])) {
+    throw new GradleException("Unsupported Android ABI: $herdrAndroidAbi")
+}
+
+android {
+    namespace 'dev.herdr.android'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'dev.herdr.android.gpui.remote'
+        minSdk 29
+        targetSdk 35
+        versionCode 5
+        versionName '0.5.0-gpui-remote'
+        ndk { abiFilters herdrAndroidAbi }
+    }
+    sourceSets {
+        main {
+            java.srcDirs = ['../../android/app/src/main/java', 'src/main/java']
+            res.srcDirs = ['../../android/app/src/main/res']
+            assets.srcDirs = ['../../android/app/src/main/assets', 'src/main/assets']
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    packaging { jniLibs { useLegacyPackaging = true } }
+    buildTypes { release { minifyEnabled false } }
+}

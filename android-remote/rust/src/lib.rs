@@ -1,0 +1,562 @@
+//! Embedded, strictly pinned SSH transport. The caller owns the Tokio runtime.
+//! Dropping a session or bridge cancels its network work without joining a thread.
+
+use iroh::{Endpoint, EndpointAddr, EndpointId, endpoint::presets};
+use russh::{
+    ChannelMsg, client,
+    keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate},
+};
+use std::{
+    future::Future,
+    io,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    task::{Context, Poll},
+    time::Duration,
+};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+pub use tokio_util::sync::CancellationToken;
+use zeroize::Zeroizing;
+
+pub type Result<T> = std::result::Result<T, Error>;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const CHANNEL_TIMEOUT: Duration = Duration::from_secs(15);
+// rustonbsd/iroh-ssh 0.2.12 forwards one bidirectional stream directly to SSH.
+// There is no application header or capability exchange before the SSH banner.
+const IROH_SSH_ALPN: &[u8] = b"/iroh/ssh";
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("operation cancelled")]
+    Cancelled,
+    #[error("operation timed out")]
+    Timeout,
+    #[error("this transport is not supported yet")]
+    UnsupportedTransport,
+    #[error("a SHA256 host-key fingerprint is required before authentication")]
+    MissingFingerprint,
+    #[error("the server host key does not match the saved fingerprint")]
+    HostKeyMismatch,
+    #[error("the SSH server rejected authentication")]
+    AuthenticationRejected,
+    #[error("the SSH server rejected the command")]
+    CommandRejected,
+    #[error("the SSH channel closed before an exit status was received")]
+    MissingExitStatus,
+    #[error("remote output exceeded its {stream} byte limit ({limit})")]
+    OutputLimit { stream: &'static str, limit: usize },
+    #[error("invalid transport configuration: {0}")]
+    InvalidConfig(&'static str),
+    #[error("SSH transport failed")]
+    Ssh(#[from] russh::Error),
+    #[error("SSH private key could not be decoded")]
+    PrivateKey(#[from] russh::keys::Error),
+    #[error("transport I/O failed")]
+    Io(#[from] io::Error),
+    #[error("Iroh endpoint could not start")]
+    IrohBind(#[from] iroh::endpoint::BindError),
+    #[error("Iroh connection failed")]
+    IrohConnect(#[from] iroh::endpoint::ConnectError),
+    #[error("Iroh stream failed")]
+    IrohStream(#[from] iroh::endpoint::ConnectionError),
+}
+
+#[derive(Clone, Debug)]
+pub enum Transport {
+    Tcp { host: String, port: u16 },
+    Iroh { endpoint_id: String },
+}
+
+#[derive(Clone, Debug)]
+pub struct Config {
+    pub transport: Transport,
+    pub username: String,
+    pub expected_fingerprint: Option<String>,
+}
+
+/// Secrets are never formatted by this type, and its owned buffers zeroize on drop.
+pub struct Credentials(CredentialKind);
+enum CredentialKind {
+    Password(Zeroizing<String>),
+    PrivateKey {
+        encoded: Zeroizing<String>,
+        passphrase: Option<Zeroizing<String>>,
+    },
+}
+impl Credentials {
+    pub fn password(password: String) -> Self {
+        Self(CredentialKind::Password(Zeroizing::new(password)))
+    }
+    pub fn private_key(encoded: String, passphrase: Option<String>) -> Self {
+        Self(CredentialKind::PrivateKey {
+            encoded: Zeroizing::new(encoded),
+            passphrase: passphrase.map(Zeroizing::new),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ExecLimits {
+    pub timeout: Duration,
+    pub max_stdout_bytes: usize,
+    pub max_stderr_bytes: usize,
+}
+impl Default for ExecLimits {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(15),
+            max_stdout_bytes: 1024 * 1024,
+            max_stderr_bytes: 64 * 1024,
+        }
+    }
+}
+#[derive(Debug)]
+pub struct ExecOutput {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub exit_status: u32,
+}
+
+struct HostKeyHandler {
+    expected: Option<String>,
+    observed: Arc<Mutex<Option<String>>>,
+}
+impl client::Handler for HostKeyHandler {
+    type Error = russh::Error;
+    async fn check_server_key(
+        &mut self,
+        key: &PublicKeyOrCertificate,
+    ) -> std::result::Result<bool, Self::Error> {
+        let fingerprint = key.public_key().fingerprint(HashAlg::Sha256).to_string();
+        if let Ok(mut observed) = self.observed.lock() {
+            *observed = Some(fingerprint.clone());
+        }
+        Ok(self.expected.as_deref() == Some(fingerprint.as_str()))
+    }
+}
+
+/// Cancels the underlying socket even when russh owns a background task.
+struct ConnectionGuard(CancellationToken, Option<tokio::task::JoinHandle<()>>);
+impl ConnectionGuard {
+    async fn shutdown(&mut self) {
+        self.0.cancel();
+        if let Some(task) = self.1.take() {
+            let _ = task.await;
+        }
+    }
+}
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.0.cancel();
+        // Detach the Iroh close task so QUIC can drain close packets. Joining or
+        // aborting it here would block the UI or strand the remote SSH socket.
+    }
+}
+struct CancelStream<S> {
+    stream: S,
+    cancelled: Pin<Box<dyn Future<Output = ()> + Send>>,
+}
+impl<S: AsyncRead + Unpin> AsyncRead for CancelStream<S> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        if self.cancelled.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(Ok(()));
+        }
+        Pin::new(&mut self.stream).poll_read(cx, buf)
+    }
+}
+impl<S: AsyncWrite + Unpin> AsyncWrite for CancelStream<S> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bytes: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        if self.cancelled.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "SSH cancelled",
+            )));
+        }
+        Pin::new(&mut self.stream).poll_write(cx, bytes)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        if self.cancelled.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(Ok(()));
+        }
+        Pin::new(&mut self.stream).poll_flush(cx)
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.stream).poll_shutdown(cx)
+    }
+}
+
+async fn bounded<T>(
+    token: &CancellationToken,
+    timeout: Duration,
+    work: impl Future<Output = Result<T>>,
+) -> Result<T> {
+    tokio::select! {
+        biased;
+        _ = token.cancelled() => Err(Error::Cancelled),
+        result = tokio::time::timeout(timeout, work) => result.map_err(|_| Error::Timeout)?,
+    }
+}
+
+enum DialTarget {
+    Tcp {
+        host: String,
+        port: u16,
+    },
+    Iroh {
+        endpoint: Endpoint,
+        address: EndpointAddr,
+    },
+}
+
+async fn dial_target(config: &Config) -> Result<DialTarget> {
+    match &config.transport {
+        Transport::Tcp { host, port } if !host.trim().is_empty() && *port != 0 => {
+            Ok(DialTarget::Tcp {
+                host: host.clone(),
+                port: *port,
+            })
+        }
+        Transport::Tcp { .. } => Err(Error::InvalidConfig("host and port are required")),
+        Transport::Iroh { endpoint_id } => {
+            let id: EndpointId = endpoint_id
+                .parse()
+                .map_err(|_| Error::InvalidConfig("a valid Iroh endpoint ID is required"))?;
+            // Only the explicit Iroh connection path starts discovery or relay work.
+            let endpoint = Endpoint::bind(presets::N0).await?;
+            Ok(DialTarget::Iroh {
+                endpoint,
+                address: id.into(),
+            })
+        }
+    }
+}
+async fn handshake(
+    target: impl Future<Output = Result<DialTarget>>,
+    token: &CancellationToken,
+    expected: Option<String>,
+    observed: Arc<Mutex<Option<String>>>,
+) -> Result<(client::Handle<HostKeyHandler>, ConnectionGuard)> {
+    let owned = token.child_token();
+    let mut guard = ConnectionGuard(owned.clone(), None);
+    let result = bounded(token, CONNECT_TIMEOUT, async {
+        let handle = match target.await? {
+            DialTarget::Tcp { host, port } => {
+                let stream = tokio::net::TcpStream::connect((host.as_str(), port)).await?;
+                stream.set_nodelay(true)?;
+                ssh_handshake(stream, owned, expected, observed).await?
+            }
+            DialTarget::Iroh { endpoint, address } => {
+                // Fully complete the QUIC handshake; never use replayable 0-RTT.
+                let connection = endpoint.connect(address, IROH_SSH_ALPN).await?;
+                let lifetime = owned.clone();
+                let closing = connection.clone();
+                guard.1 = Some(tokio::spawn(async move {
+                    // Own both handles through the whole session/bridge lifetime.
+                    lifetime.cancelled().await;
+                    closing.close(0u32.into(), b"SSH session closed");
+                    let _ = tokio::time::timeout(Duration::from_secs(4), endpoint.close()).await;
+                }));
+                let (send, recv) = connection.open_bi().await?;
+                // Writing SSH's banner opens the stream at the peer. Waiting for a
+                // server banner first would deadlock the raw-stream receiver.
+                ssh_handshake(tokio::io::join(recv, send), owned, expected, observed).await?
+            }
+        };
+        Ok(handle)
+    })
+    .await;
+    match result {
+        Ok(handle) => Ok((handle, guard)),
+        Err(error) => {
+            // Inspection rejects the key deliberately. Finish QUIC closure before
+            // returning even when the caller destroys its runtime immediately.
+            guard.shutdown().await;
+            Err(error)
+        }
+    }
+}
+
+async fn ssh_handshake<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+    stream: S,
+    owned: CancellationToken,
+    expected: Option<String>,
+    observed: Arc<Mutex<Option<String>>>,
+) -> Result<client::Handle<HostKeyHandler>> {
+    let stream = CancelStream {
+        stream,
+        cancelled: Box::pin(owned.cancelled_owned()),
+    };
+    let settings = client::Config {
+        window_size: 256 * 1024,
+        channel_buffer_size: 8,
+        nodelay: true,
+        ..Default::default()
+    };
+    let handler = HostKeyHandler { expected, observed };
+    Ok(client::connect_stream(Arc::new(settings), stream, handler).await?)
+}
+
+/// Observes and rejects the server key, without attempting any authentication.
+/// The caller must obtain independent approval before persisting the returned key.
+pub async fn inspect_host_key(config: &Config, token: CancellationToken) -> Result<String> {
+    inspect_with_target(dial_target(config), token).await
+}
+
+async fn inspect_with_target(
+    target: impl Future<Output = Result<DialTarget>>,
+    token: CancellationToken,
+) -> Result<String> {
+    let observed = Arc::new(Mutex::new(None));
+    let result = handshake(target, &token, None, observed.clone()).await;
+    if token.is_cancelled() {
+        return Err(Error::Cancelled);
+    }
+    if let Some(fingerprint) = observed.lock().ok().and_then(|value| value.clone()) {
+        return Ok(fingerprint);
+    }
+    match result {
+        Err(error) => Err(error),
+        Ok(_) => Err(Error::HostKeyMismatch),
+    }
+}
+
+pub struct Session {
+    handle: client::Handle<HostKeyHandler>,
+    guard: ConnectionGuard,
+}
+
+/// Rejects unknown or changed keys before sending credentials. No reconnect/replay.
+pub async fn connect(
+    config: &Config,
+    credentials: Credentials,
+    token: CancellationToken,
+) -> Result<Session> {
+    connect_with_target(config, credentials, token, dial_target(config)).await
+}
+
+async fn connect_with_target(
+    config: &Config,
+    credentials: Credentials,
+    token: CancellationToken,
+    target: impl Future<Output = Result<DialTarget>>,
+) -> Result<Session> {
+    let expected = config
+        .expected_fingerprint
+        .as_deref()
+        .filter(|value| value.starts_with("SHA256:"))
+        .ok_or(Error::MissingFingerprint)?;
+    if config.username.trim().is_empty() {
+        return Err(Error::InvalidConfig("username is required"));
+    }
+    let observed = Arc::new(Mutex::new(None));
+    let result = handshake(target, &token, Some(expected.to_owned()), observed.clone()).await;
+    let (mut handle, mut guard) = match result {
+        Ok(connection) => connection,
+        Err(error) => {
+            if observed
+                .lock()
+                .ok()
+                .and_then(|value| value.clone())
+                .is_some_and(|actual| actual != expected)
+            {
+                return Err(Error::HostKeyMismatch);
+            }
+            return Err(error);
+        }
+    };
+    let authentication = bounded(&guard.0, CONNECT_TIMEOUT, async {
+        let result = match credentials.0 {
+            CredentialKind::Password(password) => {
+                handle
+                    .authenticate_password(&config.username, password.as_str())
+                    .await?
+            }
+            CredentialKind::PrivateKey {
+                encoded,
+                passphrase,
+            } => {
+                let key = russh::keys::decode_secret_key(
+                    &encoded,
+                    passphrase.as_ref().map(|secret| secret.as_str()),
+                )?;
+                // Never fall back to legacy SHA-1 signatures for RSA keys.
+                let hash = Some(
+                    handle
+                        .best_supported_rsa_hash()
+                        .await?
+                        .flatten()
+                        .unwrap_or(HashAlg::Sha256),
+                );
+                handle
+                    .authenticate_publickey(
+                        &config.username,
+                        PrivateKeyWithHashAlg::new(Arc::new(key), hash),
+                    )
+                    .await?
+            }
+        };
+        if !result.success() {
+            return Err(Error::AuthenticationRejected);
+        }
+        Ok(())
+    })
+    .await;
+    if let Err(error) = authentication {
+        guard.shutdown().await;
+        return Err(error);
+    }
+    Ok(Session { handle, guard })
+}
+
+fn append_bounded(
+    target: &mut Vec<u8>,
+    bytes: &[u8],
+    limit: usize,
+    stream: &'static str,
+) -> Result<()> {
+    if bytes.len() > limit.saturating_sub(target.len()) {
+        return Err(Error::OutputLimit { stream, limit });
+    }
+    target.extend_from_slice(bytes);
+    Ok(())
+}
+
+impl Session {
+    /// Close and drain transport resources before destroying the caller's runtime.
+    /// Call this on a background thread; ordinary Drop remains nonblocking.
+    pub async fn shutdown(mut self) {
+        self.guard.shutdown().await;
+    }
+
+    pub async fn exec_bounded(&mut self, command: &str, limits: ExecLimits) -> Result<ExecOutput> {
+        let result = bounded(&self.guard.0, limits.timeout, async {
+            let mut channel = self.handle.channel_open_session().await?;
+            channel.exec(true, command.as_bytes()).await?;
+            channel.eof().await?;
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let mut status = None;
+            while let Some(message) = channel.wait().await {
+                match message {
+                    ChannelMsg::Data { data } => {
+                        append_bounded(&mut stdout, &data, limits.max_stdout_bytes, "stdout")?
+                    }
+                    ChannelMsg::ExtendedData { data, .. } => {
+                        append_bounded(&mut stderr, &data, limits.max_stderr_bytes, "stderr")?
+                    }
+                    ChannelMsg::ExitStatus { exit_status } => status = Some(exit_status),
+                    ChannelMsg::Failure => return Err(Error::CommandRejected),
+                    ChannelMsg::Close => break,
+                    _ => {}
+                }
+            }
+            Ok(ExecOutput {
+                stdout,
+                stderr,
+                exit_status: status.ok_or(Error::MissingExitStatus)?,
+            })
+        })
+        .await;
+        // Failed operations must not leave a remote command running behind the UI.
+        if result.is_err() {
+            self.guard.0.cancel();
+        }
+        result
+    }
+
+    #[cfg(unix)]
+    pub async fn into_bridge(mut self, command: &str) -> Result<Bridge> {
+        let prepared = bounded(&self.guard.0, CHANNEL_TIMEOUT, async {
+            let mut channel = self.handle.channel_open_session().await?;
+            channel.exec(true, command.as_bytes()).await?;
+            loop {
+                match channel.wait().await {
+                    Some(ChannelMsg::Success) => break,
+                    Some(ChannelMsg::WindowAdjusted { .. }) => {}
+                    _ => return Err(Error::CommandRejected),
+                }
+            }
+            let (socket, pump_socket) = std::os::unix::net::UnixStream::pair()?;
+            pump_socket.set_nonblocking(true)?;
+            let pump_socket = tokio::net::UnixStream::from_std(pump_socket)?;
+            Ok((channel, socket, pump_socket))
+        })
+        .await;
+        let (channel, socket, mut pump_socket) = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.shutdown().await;
+                return Err(error);
+            }
+        };
+        let token = self.guard.0.clone();
+        let cancel = token.clone();
+        let iroh_close = self.guard.1.take();
+        let task = tokio::spawn(async move {
+            // Session and its socket guard remain owned until the pump finishes.
+            let _session = self;
+            let mut stream = channel.into_stream();
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => {},
+                _ = tokio::io::copy_bidirectional(&mut pump_socket, &mut stream) => {},
+            }
+        });
+        Ok(Bridge {
+            socket,
+            guard: BridgeGuard {
+                token,
+                task,
+                iroh_close,
+            },
+        })
+    }
+}
+
+#[cfg(unix)]
+pub struct Bridge {
+    socket: std::os::unix::net::UnixStream,
+    guard: BridgeGuard,
+}
+#[cfg(unix)]
+impl Bridge {
+    pub fn into_parts(self) -> (std::os::unix::net::UnixStream, BridgeGuard) {
+        (self.socket, self.guard)
+    }
+}
+#[cfg(unix)]
+pub struct BridgeGuard {
+    token: CancellationToken,
+    task: tokio::task::JoinHandle<()>,
+    iroh_close: Option<tokio::task::JoinHandle<()>>,
+}
+#[cfg(unix)]
+impl BridgeGuard {
+    /// Stop the byte pump and finish bounded QUIC shutdown before its runtime ends.
+    pub async fn shutdown(mut self) {
+        self.token.cancel();
+        self.task.abort();
+        let _ = (&mut self.task).await;
+        if let Some(task) = self.iroh_close.take() {
+            let _ = task.await;
+        }
+    }
+}
+#[cfg(unix)]
+impl Drop for BridgeGuard {
+    fn drop(&mut self) {
+        self.token.cancel();
+        self.task.abort();
+    }
+}
+
+#[cfg(test)]
+mod tests;

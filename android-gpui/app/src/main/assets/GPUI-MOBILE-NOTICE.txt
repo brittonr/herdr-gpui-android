@@ -1,0 +1,11 @@
+This Android terminal uses GPUI Mobile from https://github.com/longbridge/gpui-mobile
+at revision 9075e3aa3eea812127f2c60ed66f0cd5798ff245.
+Copyright contributors to GPUI Mobile and the GPUI project.
+The Apache-2.0 option is selected from its GPL-3.0-or-later OR AGPL-3.0-or-later OR Apache-2.0 license.
+GpuiInputActivity.java is adapted from that revision's Android example host.
+Changes: NativeActivity import/superclass become Activity for the process-lived
+SurfaceView host; InputProxy callbacks are routed through a protected gpuiIme
+hook with documented comments. The app overrides that hook to keep committed
+IME and physical input in one ordered, session-fenced FIFO. Android InputConnection
+composition mechanics are retained.
+This integration uses gpui-pre and gpui-pre-wgpu 0.3.7 without changing the desktop app's pinned 0.3.6.
