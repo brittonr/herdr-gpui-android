@@ -3236,9 +3236,9 @@ checksum = "a1bb25850ad31b88bbdef454afb93ec4cdb81f5e200ba5b3f1a0368111780d2c"
 
 [[package]]
 name = "gpui-wry"
-version = "0.6.5"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f61db6c0e1cbe9496883ab9072b9301b25d38b03ee950e191ea722576bc0a558"
+checksum = "529390779b0b86f97444b0512e4d5605e755f16210a53617eaa7c54bee21a4d0"
 dependencies = [
  "anyhow",
  "gpui-pre",
