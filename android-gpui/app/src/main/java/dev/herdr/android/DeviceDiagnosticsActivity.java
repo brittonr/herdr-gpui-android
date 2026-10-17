@@ -7,6 +7,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.CheckBox;
 import android.widget.TextView;
 import org.json.JSONException;
 
@@ -25,8 +26,17 @@ public final class DeviceDiagnosticsActivity extends Activity {
         description.setText("Local diagnostics only. No remote access, root, or background monitoring. Tap below to read device information.");
         description.setTextColor(Color.WHITE);
         column.addView(description);
+        CheckBox enabled = new CheckBox(this);
+        enabled.setText("Enable local diagnostics for this screen");
+        enabled.setTextColor(Color.WHITE);
+        column.addView(enabled);
         Button read = new Button(this);
         read.setText("Read diagnostics");
+        read.setEnabled(false);
+        enabled.setOnCheckedChangeListener((button, checked) -> {
+            read.setEnabled(DiagnosticsPolicy.canRead(checked));
+            if (!checked) output.setText("");
+        });
         column.addView(read);
         output = new TextView(this);
         output.setTextColor(Color.WHITE);
@@ -36,6 +46,7 @@ public final class DeviceDiagnosticsActivity extends Activity {
         column.addView(scroll);
         setContentView(column);
         read.setOnClickListener(v -> {
+            if (!DiagnosticsPolicy.canRead(enabled.isChecked())) return;
             try {
                 output.setText(DeviceDiagnostics.snapshot(this).toString(2));
             } catch (JSONException | RuntimeException failure) {
