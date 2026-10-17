@@ -49,7 +49,7 @@ Lockfiles and the GPUI Mobile revision are pinned, but bit-for-bit reproducibili
 - [Remote validation](android-gpui/REMOTE-VALIDATION.md): historical build/runtime evidence and limitations
 - [Provenance](PROVENANCE.md): exact upstream baseline and publication changes
 
-Inherited upstream GitHub workflows and CODEOWNERS assignments are omitted. This repository currently has no CI or release automation; historical validation is not a passing CI claim.
+Inherited upstream GitHub workflows and CODEOWNERS assignments are omitted. The [Android CI and release workflow](android-gpui/RELEASE.md) builds and checks both ABIs and creates tag-driven draft prereleases. Historical validation is not a passing CI claim; drafts require signing and runtime validation before publication.
 
 ## Provenance and licenses
 
