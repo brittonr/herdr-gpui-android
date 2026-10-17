@@ -70,7 +70,7 @@ jobs:
         run: android-gpui/scripts/build-native.sh
       - name: Gradle build and lint
         working-directory: android-gpui
-        run: ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease :app:lintDebug :app:lintRelease
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lintDebug :app:lintRelease
       - name: Verify and collect APKs
         run: android-gpui/scripts/ci-artifacts.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
