@@ -7,8 +7,11 @@ GPUI Mobile revision, Gradle 8.9 with distribution SHA-256, AGP 8.7.3, Temurin
 Actions are commit-pinned. NDK r30 was used historically; CI deliberately uses a
 stable published NDK version. The hosted runner image and downloaded Maven/SDK
 packages still prevent a claim of bit-for-bit reproducibility. The Android setup
-action accepts SDK licenses in the ephemeral CI runner; enabling this workflow
-requires the repository operator to be entitled to accept those terms.
+action accepts SDK licenses in the ephemeral CI runner. The first build step
+fails before SDK setup unless repository variable `ANDROID_SDK_LICENSES_ACCEPTED`
+is exactly `true`. Set it only after the repository operator approves those terms;
+no local SDK installation or license acceptance is needed. This variable is consent,
+not a secret, and is separate from release-signing configuration.
 
 Each ABI artifact contains a development-signed debug APK, an **unsigned** release
 APK, badging reports, native source/hash record, source commit and SHA256SUMS.
