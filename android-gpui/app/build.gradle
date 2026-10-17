@@ -8,6 +8,7 @@ if (!(herdrAndroidAbi in ['arm64-v8a', 'x86_64'])) {
 android {
     namespace 'dev.herdr.android'
     compileSdk 35
+    buildToolsVersion "35.0.0"
     defaultConfig {
         applicationId 'dev.herdr.android.gpui.remote'
         minSdk 29
@@ -27,6 +28,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-    packaging { jniLibs { useLegacyPackaging = true } }
+    packaging { jniLibs { useLegacyPackaging = false
+        keepDebugSymbols += ["**/*.so"] } }
     buildTypes { release { minifyEnabled false } }
 }
