@@ -6,7 +6,7 @@
     <application android:label="Herdr GPUI Remote" android:theme="@style/AppTheme"
         android:icon="@drawable/ic_herdr" android:allowBackup="false"
         android:usesCleartextTraffic="false" android:hardwareAccelerated="true"
-        android:extractNativeLibs="true" android:supportsRtl="true">
+        android:supportsRtl="true">
         <activity android:name="dev.herdr.android.RemoteHostsActivity" android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
