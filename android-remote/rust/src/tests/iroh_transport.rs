@@ -29,7 +29,11 @@ struct IrohFixture {
 
 impl IrohFixture {
     async fn new() -> Self {
-        let ssh = Fixture::new().await;
+        Self::with_auth(TestAuth::Normal).await
+    }
+
+    async fn with_auth(auth: TestAuth) -> Self {
+        let ssh = Fixture::with_options("127.0.0.1", auth).await;
         let Transport::Tcp { port, .. } = ssh.config.transport else {
             unreachable!()
         };
@@ -405,4 +409,34 @@ async fn iroh_session_shutdown_drains_before_its_dedicated_runtime_is_destroyed(
         .await
         .unwrap();
     fixture.finish().await;
+}
+
+#[tokio::test]
+async fn iroh_auth_policy_failure_never_retries_or_falls_back() {
+    for mode in [TestAuth::PublicKeyOnly, TestAuth::KeyboardInteractiveOnly] {
+        let fixture = IrohFixture::with_auth(mode).await;
+        let result = fixture
+            .connect(
+                &fixture.ssh.config,
+                Credentials::password("public-test-password".into()),
+                CancellationToken::new(),
+            )
+            .await;
+        match mode {
+            TestAuth::PublicKeyOnly => assert!(matches!(
+                result,
+                Err(Error::AuthenticationMethodUnavailable { method: "password" })
+            )),
+            TestAuth::KeyboardInteractiveOnly => {
+                assert!(matches!(
+                    result,
+                    Err(Error::AuthenticationMethodUnavailable { method: "password" })
+                ))
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(fixture.ssh.password_attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(fixture.ssh.publickey_attempts.load(Ordering::SeqCst), 0);
+        fixture.finish().await;
+    }
 }

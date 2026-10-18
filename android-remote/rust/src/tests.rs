@@ -5,6 +5,13 @@ use russh::{Channel, ChannelId, server};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+#[derive(Clone, Copy)]
+enum TestAuth {
+    Normal,
+    PublicKeyOnly,
+    KeyboardInteractiveOnly,
+}
+
 struct Fixture {
     config: Config,
     password_attempts: Arc<AtomicUsize>,
@@ -15,6 +22,9 @@ struct Fixture {
 }
 impl Fixture {
     async fn new() -> Self {
+        Self::with_options("127.0.0.1", TestAuth::Normal).await
+    }
+    async fn with_options(address: &str, auth: TestAuth) -> Self {
         let key =
             russh::keys::PrivateKey::random(&mut rand::rng(), russh::keys::Algorithm::Ed25519)
                 .unwrap();
@@ -26,9 +36,7 @@ impl Fixture {
             inactivity_timeout: Some(Duration::from_secs(10)),
             ..Default::default()
         });
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind((address, 0)).await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let password_attempts = Arc::new(AtomicUsize::new(0));
         let publickey_attempts = Arc::new(AtomicUsize::new(0));
@@ -46,7 +54,7 @@ impl Fixture {
                     _ = task_stop.cancelled() => break,
                     connection = listener.accept() => {
                         let Ok((stream, _)) = connection else { break };
-                        let handler = TestServer { password_attempts: attempts.clone(), publickey_attempts: key_attempts.clone(), disconnected: ended.clone(), echo: false };
+                        let handler = TestServer { password_attempts: attempts.clone(), publickey_attempts: key_attempts.clone(), disconnected: ended.clone(), echo: false, auth };
                         let server_config = server_config.clone();
                         let connection_stop = task_stop.clone();
                         sessions.spawn(async move {
@@ -66,7 +74,7 @@ impl Fixture {
         Self {
             config: Config {
                 transport: Transport::Tcp {
-                    host: "127.0.0.1".into(),
+                    host: address.into(),
                     port,
                 },
                 username: "fixture".into(),
@@ -97,6 +105,7 @@ impl Fixture {
     }
 }
 struct TestServer {
+    auth: TestAuth,
     password_attempts: Arc<AtomicUsize>,
     publickey_attempts: Arc<AtomicUsize>,
     disconnected: Arc<tokio::sync::Notify>,
@@ -115,10 +124,33 @@ impl server::Handler for TestServer {
         password: &str,
     ) -> std::result::Result<server::Auth, Self::Error> {
         self.password_attempts.fetch_add(1, Ordering::SeqCst);
+        match self.auth {
+            TestAuth::PublicKeyOnly => {
+                return Ok(server::Auth::Reject {
+                    proceed_with_methods: Some([MethodKind::PublicKey].as_slice().into()),
+                    partial_success: false,
+                });
+            }
+            TestAuth::KeyboardInteractiveOnly => {
+                return Ok(server::Auth::Reject {
+                    proceed_with_methods: Some([MethodKind::KeyboardInteractive].as_slice().into()),
+                    partial_success: false,
+                });
+            }
+            TestAuth::Normal => {}
+        }
         Ok(if user == "fixture" && password == "public-test-password" {
             server::Auth::Accept
         } else {
-            server::Auth::reject()
+            // Keep password available after a wrong password, as OpenSSH does.
+            server::Auth::Reject {
+                proceed_with_methods: Some(
+                    [MethodKind::Password, MethodKind::PublicKey]
+                        .as_slice()
+                        .into(),
+                ),
+                partial_success: false,
+            }
         })
     }
     async fn auth_publickey(
@@ -440,3 +472,133 @@ async fn invalid_iroh_id_is_rejected_before_network() {
 }
 
 mod iroh_transport;
+
+#[test]
+fn tcp_ipv6_brackets_are_normalized_without_reinterpreting_other_addresses() {
+    for (input, expected) in [
+        ("[::1]", "::1"),
+        ("[2001:db8::1]", "2001:db8::1"),
+        ("::1", "::1"),
+        ("localhost", "localhost"),
+        ("127.0.0.1", "127.0.0.1"),
+    ] {
+        assert_eq!(tcp_host(input).unwrap(), expected);
+    }
+    for bad in [
+        "[localhost]",
+        "[127.0.0.1]",
+        "[::1]:22",
+        "[::1",
+        "::1]",
+        "https://[::1]",
+    ] {
+        assert!(matches!(tcp_host(bad), Err(Error::InvalidConfig(_))));
+    }
+}
+
+#[tokio::test]
+async fn bracketed_ipv6_supports_pinned_ssh_inspection_and_exec() {
+    let mut fixture = Fixture::with_options("::1", TestAuth::Normal).await;
+    if let Transport::Tcp { host, .. } = &mut fixture.config.transport {
+        *host = "[::1]".into();
+    }
+    assert_eq!(
+        inspect_host_key(&fixture.config, CancellationToken::new())
+            .await
+            .unwrap(),
+        fixture.config.expected_fingerprint.clone().unwrap()
+    );
+    assert_eq!(fixture.password_attempts.load(Ordering::SeqCst), 0);
+    let mut session = fixture.session().await;
+    assert_eq!(
+        session
+            .exec_bounded("output", ExecLimits::default())
+            .await
+            .unwrap()
+            .stdout,
+        b"hello"
+    );
+    session.shutdown().await;
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn tcp_auth_policy_failure_never_retries_or_falls_back() {
+    for mode in [TestAuth::PublicKeyOnly, TestAuth::KeyboardInteractiveOnly] {
+        let fixture = Fixture::with_options("127.0.0.1", mode).await;
+        let result = connect(
+            &fixture.config,
+            Credentials::password("public-test-password".into()),
+            CancellationToken::new(),
+        )
+        .await;
+        match mode {
+            TestAuth::PublicKeyOnly => assert!(matches!(
+                result,
+                Err(Error::AuthenticationMethodUnavailable { method: "password" })
+            )),
+            TestAuth::KeyboardInteractiveOnly => {
+                assert!(matches!(
+                    result,
+                    Err(Error::AuthenticationMethodUnavailable { method: "password" })
+                ))
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(fixture.password_attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(fixture.publickey_attempts.load(Ordering::SeqCst), 0);
+        fixture.finish().await;
+    }
+}
+
+#[test]
+fn auth_failure_classification_preserves_partial_success_and_unknown_policy() {
+    for attempted in [MethodKind::Password, MethodKind::PublicKey] {
+        assert!(authentication_result(client::AuthResult::Success, attempted).is_ok());
+        for methods in [russh::MethodSet::empty(), [attempted].as_slice().into()] {
+            assert!(matches!(
+                authentication_result(
+                    client::AuthResult::Failure {
+                        remaining_methods: methods,
+                        partial_success: false,
+                    },
+                    attempted
+                ),
+                Err(Error::AuthenticationRejected)
+            ));
+        }
+        let error = authentication_result(
+            client::AuthResult::Failure {
+                remaining_methods: [attempted].as_slice().into(),
+                partial_success: true,
+            },
+            attempted,
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::AuthenticationIncomplete));
+        assert!(error.to_string().contains("additional authentication"));
+    }
+}
+
+#[test]
+fn unavailable_public_key_method_is_reported_without_server_text() {
+    let error = authentication_result(
+        client::AuthResult::Failure {
+            remaining_methods: [MethodKind::KeyboardInteractive].as_slice().into(),
+            partial_success: false,
+        },
+        MethodKind::PublicKey,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        Error::AuthenticationMethodUnavailable {
+            method: "publickey"
+        }
+    ));
+    assert!(
+        error
+            .to_string()
+            .contains("publickey authentication at this stage")
+    );
+}
