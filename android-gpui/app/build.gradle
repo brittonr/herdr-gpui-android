@@ -40,3 +40,10 @@ android {
 dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
+
+tasks.register('compileVmTests', Exec) {
+    dependsOn 'assembleDebug'
+    workingDir rootProject.projectDir
+    environment 'HERDR_VM_DEBUG_KEYSTORE', android.signingConfigs.debug.storeFile.absolutePath
+    commandLine rootProject.file('vm-tests/build.sh').absolutePath
+}

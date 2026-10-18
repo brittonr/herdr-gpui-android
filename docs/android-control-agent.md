@@ -72,14 +72,16 @@ remains part of any future app-store distribution, not this source PR.
 cd android-gpui
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug \
   :app:assembleRelease :app:lintDebug :app:lintRelease
-HERDR_VM_DEBUG_KEYSTORE=/path/to/the-target/debug.keystore ./vm-tests/build.sh
+./gradlew --no-daemon :app:compileVmTests
 HERDR_VM_DIAGNOSTICS_ONLY=1 ./vm-tests/run.sh emulator-5554 \
   /absolute/path/to/app-debug.apk /absolute/path/to/fresh-evidence
 ```
 
 Use only an explicitly selected disposable emulator. The separate test APK must
-be signed with the target's development key. The runner exercises actual Android
-Views, permissions, foreground notifications, Binder callbacks, request bounds,
+be signed with the target's development key. `compileVmTests` builds the debug
+target first and selects Gradle's configured debug keystore, not a guessed home
+directory. The runner exercises actual Android Views, permissions, foreground
+notifications, Binder callbacks, request bounds,
 HOME, and recreation; captures use in-process `View.draw` without removing
 `FLAG_SECURE`. No GPUI/JNI, remote host, or profile store is needed. See
 [the runtime harness](../android-gpui/vm-tests/README.md).

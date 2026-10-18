@@ -7,14 +7,19 @@ separate test APK. It exercises the app's real local diagnostics Activity,
 foreground service, notification actions, and Binder callbacks. No GPUI/JNI,
 remote daemon, network fixture, or stored host profile is used.
 
-Build with the selected target APK's development signing key, then run only on
-an explicitly selected disposable emulator:
+For the Gradle-built debug target, compile with its configured development
+signing key, then run only on an explicitly selected disposable emulator:
 
 ```sh
-HERDR_VM_DEBUG_KEYSTORE=/path/to/target/debug.keystore ./vm-tests/build.sh
+./gradlew --no-daemon :app:compileVmTests
 HERDR_VM_DIAGNOSTICS_ONLY=1 ./vm-tests/run.sh emulator-5554 \
   /absolute/path/to/app-debug.apk /absolute/path/to/fresh-evidence
 ```
+
+The Gradle task builds the debug target and uses its signing configuration; it
+does not assume a keystore location under `$HOME`. For a standalone SDK-packaged
+target, set `HERDR_VM_DEBUG_KEYSTORE` to that APK's development key and run
+`./vm-tests/build.sh` directly.
 
 The mode is mutually exclusive with remote, frame, layout, and quick-command
 modes. Evidence is written to `files/diagnostics-vm-tests/<run_id>` in the target
