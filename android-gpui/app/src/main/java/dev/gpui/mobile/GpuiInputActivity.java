@@ -259,10 +259,11 @@ public class GpuiInputActivity extends Activity {
                 @Override public boolean performEditorAction(int action) {
                     if (connectionSession != session || connectionEpoch != epoch) return false;
                     if (action == EditorInfo.IME_ACTION_DONE) {
-                        finishComposingText();
+                        if (!finishComposingText()) return false;
                         gpuiIme(session, 4, "", 0, 0);
                         return true;
                     }
+                    if (!ImeEditorAction.submits(action)) return false;
                     return commitText("\n", 1);
                 }
             };
