@@ -140,6 +140,7 @@ public final class RemoteHostsActivity extends Activity {
         content.addView(label("Connect to an existing Herdr daemon through SSH. Verify its host key before entering credentials.", 15, MUTED));
         content.addView(button("Add remote host", () -> editProfile(null)));
         content.addView(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class))));
+        content.addView(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
         if (hosts.isEmpty()) content.addView(label("No remote profiles saved yet", 18, TEXT));
         for (SavedRemoteHost host : hosts) {
             LinearLayout card = column();

@@ -19,6 +19,12 @@ Run `sha256sum --check SHA256SUMS` inside the extracted artifact. The native
 library is optimized in both APK variants. Debug keys are ephemeral and cannot
 provide a stable upgrade identity. x86_64 is for emulator testing, not ARM64 proof.
 
+Both build jobs run the diagnostics JVM boundary tests and compile the separate
+Android runtime instrumentation APK with the build's development key. The build
+uses `:app:compileVmTests` to select Gradle's configured debug keystore rather
+than assuming a home-directory path. The workflow does not execute an emulator;
+runtime evidence is a separate gate.
+
 ## Tag-driven draft
 
 After successful CI and merging, increment `versionCode` and `versionName` in

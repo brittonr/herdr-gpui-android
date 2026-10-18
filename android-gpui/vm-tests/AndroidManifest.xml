@@ -2,11 +2,17 @@
 <!-- build.sh rewrites both package identities from app/build.gradle into build/AndroidManifest.xml. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.herdr.android.gpui.compact.vmtests">
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
-    <application android:label="Herdr GPUI synthetic VM tests" android:debuggable="true" android:allowBackup="false" />
+    <application android:label="Herdr GPUI synthetic VM tests" android:debuggable="true" android:allowBackup="false">
+        <service android:name="dev.herdr.android.vm.DiagnosticsVmInstrumentation$ExternalBindProbeService"
+            android:exported="true" android:process=":diagnostics_probe" />
+    </application>
     <instrumentation android:name="dev.herdr.android.vm.GpuiVmInstrumentation"
         android:targetPackage="dev.herdr.android.gpui.compact"
         android:label="Synthetic transport / real GPUI runtime" />
     <instrumentation android:name="dev.herdr.android.vm.RemoteVmInstrumentation"
         android:targetPackage="dev.herdr.android.gpui.compact"
         android:label="Loopback SSH / synthetic Herdr protocol / real GPUI" />
+    <instrumentation android:name="dev.herdr.android.vm.DiagnosticsVmInstrumentation"
+        android:targetPackage="dev.herdr.android.gpui.compact"
+        android:label="App-local read-only diagnostics lifecycle" />
 </manifest>
