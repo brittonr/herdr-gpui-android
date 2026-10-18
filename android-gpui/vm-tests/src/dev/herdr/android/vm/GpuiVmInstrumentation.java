@@ -253,6 +253,20 @@ public final class GpuiVmInstrumentation extends Instrumentation {
         SystemClock.sleep(250);
         require(healthy.posts().size() == beforeOversized, "IME modifier was silently stripped into terminal input");
         pass("IME Shift/Ctrl/Alt Enter/Delete events are rejected without stripping modifiers");
+        int beforeNavigation = healthy.posts().size();
+        onMain(() -> {
+            requireUnchecked(ime[0].setComposingText("pending", 1), "Preedit rejected");
+            for (int action : new int[]{EditorInfo.IME_ACTION_NEXT, EditorInfo.IME_ACTION_PREVIOUS,
+                    -1, 100, EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_SEND}) {
+                requireUnchecked(!ime[0].performEditorAction(action), "Non-submit editor action accepted");
+                requireUnchecked("pending".contentEquals(proxy.getText()), "Navigation changed preedit");
+            }
+        });
+        SystemClock.sleep(250);
+        require(healthy.posts().size() == beforeNavigation && ready(first),
+                "Editor navigation submitted terminal input or closed the connection");
+        onMain(() -> requireUnchecked(ime[0].commitText("", 1), "Preedit cancellation rejected"));
+        pass("IME navigation and unknown actions preserve preedit without submitting terminal input");
         int beforeComposition = healthy.posts().size();
         onMain(() -> {
             requireUnchecked(ime[0].setComposingText("draft", 1), "setComposingText rejected");

@@ -104,3 +104,24 @@ Transport tests use local Iroh endpoints with discovery and relays disabled.
 They verify raw SSH, exact ALPN, pinning, output bounds and closure even when the
 client runtime ends. Public relay/NAT traversal, an actual deployed receiver,
 and physical Android network transitions require separate verification.
+
+## Address and authentication compatibility
+
+Direct TCP accepts a hostname, IPv4, bare IPv6 (`2001:db8::1`), or bracketed IPv6
+(`[2001:db8::1`). Enter the SSH port in its separate field; `[address]:port` and
+URLs are not hostnames. Brackets are stripped only for valid IPv6 literals when
+dialing; saved profile identity and SSH trust are not rewritten. Bracketed scoped
+IPv6 addresses (`[fe80::1%interface]`) are not supported by this normalization.
+
+The same SSH authentication policy applies over TCP and Iroh. A failed attempt
+now distinguishes a rejected credential, a method the server does not offer at
+that stage, and a credential accepted only as the first authentication step.
+An unavailable method can reflect server policy or account policy, not necessarily
+a bad password or key. Empty method lists remain a generic authentication failure.
+The app never retries with a different method automatically. Keyboard-interactive,
+interactive MFA and multi-step authentication remain unsupported; no authentication
+or host-key restrictions are relaxed by these diagnostics.
+
+See [compatibility validation](TRANSPORT-COMPAT-VALIDATION.md) for tested cases,
+upstream source references, and the distinction between local synthetic Iroh
+coverage and deployed receiver interoperability.

@@ -3,7 +3,7 @@
 
 use iroh::{Endpoint, EndpointAddr, EndpointId, endpoint::presets};
 use russh::{
-    ChannelMsg, client,
+    ChannelMsg, MethodKind, client,
     keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate},
 };
 use std::{
@@ -39,6 +39,14 @@ pub enum Error {
     HostKeyMismatch,
     #[error("the SSH server rejected authentication")]
     AuthenticationRejected,
+    #[error(
+        "SSH accepted this credential but requires additional authentication; multi-factor authentication is not supported"
+    )]
+    AuthenticationIncomplete,
+    #[error(
+        "the SSH server does not offer {method} authentication at this stage; choose a supported method or check the server authentication policy"
+    )]
+    AuthenticationMethodUnavailable { method: &'static str },
     #[error("the SSH server rejected the command")]
     CommandRejected,
     #[error("the SSH channel closed before an exit status was received")]
@@ -216,11 +224,45 @@ enum DialTarget {
     },
 }
 
+// Tuple-based DNS resolution expects bare IPv6, unlike a host:port string.
+// Only strip brackets after validating an IPv6 literal; never reinterpret a URL.
+fn tcp_host(host: &str) -> Result<&str> {
+    if host.contains(['[', ']']) {
+        let literal = host
+            .strip_prefix('[')
+            .and_then(|value| value.strip_suffix(']'))
+            .filter(|value| value.parse::<std::net::Ipv6Addr>().is_ok())
+            .ok_or(Error::InvalidConfig(
+                "brackets require an IPv6 address without a port",
+            ))?;
+        return Ok(literal);
+    }
+    Ok(host)
+}
+
+fn authentication_result(result: client::AuthResult, attempted: MethodKind) -> Result<()> {
+    match result {
+        client::AuthResult::Success => Ok(()),
+        client::AuthResult::Failure {
+            partial_success: true,
+            ..
+        } => Err(Error::AuthenticationIncomplete),
+        client::AuthResult::Failure {
+            remaining_methods, ..
+        } if !remaining_methods.is_empty() && !remaining_methods.contains(&attempted) => {
+            Err(Error::AuthenticationMethodUnavailable {
+                method: (&attempted).into(),
+            })
+        }
+        client::AuthResult::Failure { .. } => Err(Error::AuthenticationRejected),
+    }
+}
+
 async fn dial_target(config: &Config) -> Result<DialTarget> {
     match &config.transport {
         Transport::Tcp { host, port } if !host.trim().is_empty() && *port != 0 => {
             Ok(DialTarget::Tcp {
-                host: host.clone(),
+                host: tcp_host(host)?.to_owned(),
                 port: *port,
             })
         }
@@ -373,6 +415,10 @@ async fn connect_with_target(
         }
     };
     let authentication = bounded(&guard.0, CONNECT_TIMEOUT, async {
+        let attempted = match &credentials.0 {
+            CredentialKind::Password(_) => MethodKind::Password,
+            CredentialKind::PrivateKey { .. } => MethodKind::PublicKey,
+        };
         let result = match credentials.0 {
             CredentialKind::Password(password) => {
                 handle
@@ -403,10 +449,7 @@ async fn connect_with_target(
                     .await?
             }
         };
-        if !result.success() {
-            return Err(Error::AuthenticationRejected);
-        }
-        Ok(())
+        authentication_result(result, attempted)
     })
     .await;
     if let Err(error) = authentication {

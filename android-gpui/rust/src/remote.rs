@@ -844,6 +844,28 @@ mod tests {
         });
     }
     #[test]
+    fn authentication_policy_diagnostic_survives_client_error_boundary() {
+        for transport in [
+            herdr_remote_transport::Error::AuthenticationIncomplete,
+            herdr_remote_transport::Error::AuthenticationMethodUnavailable {
+                method: "publickey",
+            },
+        ] {
+            let expected = transport.to_string();
+            let error = herdr_client::Error::from(io::Error::other(Error::Transport(transport)));
+            assert!(error.to_string().contains(&expected));
+            let mut state = State::default();
+            let reason = apply_event(
+                &mut state,
+                ClientEvent::Disconnected {
+                    reason: error.to_string(),
+                },
+            );
+            assert!(reason.unwrap().contains(&expected));
+        }
+    }
+
+    #[test]
     fn focus_requires_correlated_ack_and_matching_projection() {
         let mut state = State::default();
         assert!(

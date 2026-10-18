@@ -65,6 +65,8 @@ jobs:
           python3 android-gpui/scripts/test-native-build-record.py
           python3 android-gpui/scripts/test-apk-verifier.py
           sh android/tests/run.sh
+          cargo test --locked --manifest-path android-remote/rust/Cargo.toml
+          sh android-gpui/tests/run-ime.sh
           cargo test --locked --manifest-path android-gpui/rust/Cargo.toml --features remote
       - name: Build actual GPUI native library
         run: android-gpui/scripts/build-native.sh
