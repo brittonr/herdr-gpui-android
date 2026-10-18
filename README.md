@@ -13,12 +13,14 @@ This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Tita
 - Per-host OMP quick commands with editable previews and separately confirmed Send + Enter
 - Compact keyboard-first display options intended for the Titan 2 Elite
 - Optional HTTPS phone-companion workflow
+- Opt-in, app-local read-only device diagnostics with a visible foreground
+  notification; leaving the screen revokes access
 
 ## Current limits
 
 The terminal displays **bounded plain text extracted from validated binary surfaces**. Full VT colors/cursor fidelity, graphics, responsive terminal sizing, unlimited scrollback and split-pane editing are not implemented.
 
-The passing Android runtime evidence uses actual JNI, SSH and GPUI with a **synthetic generation-1 protocol peer**, not a real Herdr daemon or shell. Physical ARM64/Titan execution, real deployed Iroh receiver/public relay traversal, and device network transitions are unverified. Full Gradle/Android Lint and whole-desktop-workspace verification are incomplete. Existing validation records distinguish passed, failed and unrun checks.
+The passing terminal runtime evidence uses actual JNI, SSH and GPUI with a **synthetic generation-1 protocol peer**, not a real Herdr daemon or shell. Physical ARM64/Titan execution, real deployed Iroh receiver/public relay traversal, and device network transitions are unverified. Local diagnostics have a separate [contract and verification scope](docs/android-control-agent.md); they do not prove terminal or remote-control behavior. Whole-desktop-workspace verification remains incomplete. Existing validation records distinguish passed, failed and unrun checks.
 
 The application closes remote connections on leaving/backgrounding and does not automatically reconnect or replay input. A command may already have reached the host when a connection fails. Herdr 0.9.3's bridge can start its daemon if it stops between the initial status probe and bridge execution; this preview cannot guarantee attach-only behavior.
 
@@ -34,7 +36,7 @@ cd android-gpui
 ./gradlew :app:assembleDebug :app:lintDebug
 ```
 
-The alternative `./scripts/build-verification-apk.sh` uses the official SDK tools and generates a development-signed APK. The recorded builds used that packager; the standard Gradle commands above have not been independently validated for this publication. Do not use development signing for a production release.
+The alternative `./scripts/build-verification-apk.sh` uses the official SDK tools and generates a development-signed APK. Historical builds used that packager. Standard Gradle debug/release builds, diagnostics JVM tests, and debug/release lint have also passed for x86_64. Physical-device execution remains a separate gate. Do not use development signing for a production release.
 
 Default ABI is ARM64 (`arm64-v8a`). Set `HERDR_ANDROID_ABI=x86_64` and install the corresponding Rust target for emulator builds. The app requires Android API 29+ and a GPU supported by GPUI Mobile. Current application ID: `dev.herdr.android.gpui.remote`.
 

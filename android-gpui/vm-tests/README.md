@@ -1,5 +1,41 @@
 # Android VM runtime tests
 
+## Local diagnostics suite
+
+`HERDR_VM_DIAGNOSTICS_ONLY=1` selects `DiagnosticsVmInstrumentation` in the same
+separate test APK. It exercises the app's real local diagnostics Activity,
+foreground service, notification actions, and Binder callbacks. No GPUI/JNI,
+remote daemon, network fixture, or stored host profile is used.
+
+Build with the selected target APK's development signing key, then run only on
+an explicitly selected disposable emulator:
+
+```sh
+HERDR_VM_DEBUG_KEYSTORE=/path/to/target/debug.keystore ./vm-tests/build.sh
+HERDR_VM_DIAGNOSTICS_ONLY=1 ./vm-tests/run.sh emulator-5554 \
+  /absolute/path/to/app-debug.apk /absolute/path/to/fresh-evidence
+```
+
+The mode is mutually exclusive with remote, frame, layout, and quick-command
+modes. Evidence is written to `files/diagnostics-vm-tests/<run_id>` in the target
+and extracted by `run.sh`. The report identifies `diagnostics-phase-1-runtime`.
+Captures draw the actual Android Views in-process with `FLAG_SECURE` retained.
+
+Coverage includes default-off/no restored result, a distinct test-APK UID denied
+binding, binding alone remaining off, Android 13+ notification denial, explicit
+enable/read, actual Android values and the fixed result allowlist, uncheck,
+notification Stop, HOME/return, and recreation. A temporary test-only worker
+scheduling delay exercises concurrent-request rejection and the real five-second
+deadline; in-flight revocation must complete once without stale data. The
+scheduler's factory/keepalive are restored in `finally`. The suite temporarily
+changes only the selected test app's notification grant. `run.sh` records its
+original value, denies it before instrumentation, and restores and verifies it
+after instrumentation or on runner failure. Revocation cannot happen inside the
+instrumented process because Android terminates that process. Android versions
+before 33 explicitly skip only the runtime notification permission case. This
+does not prove physical Titan/ARM64 behavior, third-party
+keyboards, the terminal renderer, or any remote control plane.
+
 ## Remote SSH runtime suite
 
 `RemoteVmInstrumentation` is a separate runner in the same test APK. It uses the

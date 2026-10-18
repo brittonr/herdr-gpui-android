@@ -73,6 +73,8 @@ jobs:
       - name: Gradle build and lint
         working-directory: android-gpui
         run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:lintDebug :app:lintRelease
+      - name: Compile Android runtime tests
+        run: HERDR_VM_DEBUG_KEYSTORE="$HOME/.android/debug.keystore" android-gpui/vm-tests/build.sh
       - name: Verify and collect APKs
         run: android-gpui/scripts/ci-artifacts.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
