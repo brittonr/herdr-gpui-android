@@ -153,7 +153,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write  # Creates this commit's tag and its unpublished draft release
+      contents: write  # Creates this commit's unpublished draft release
     # Serialize preview uploads so two runs cannot race on one draft.
     concurrency:
       group: android-preview-${{ github.repository }}
@@ -205,8 +205,10 @@ jobs:
           } > "$notes"
           title="$TAG (validation pending)"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # Reuse this commit's draft instead of replacing it. A cancelled run
-            # can leave it short of assets, so upload only the gaps.
+            # Reuse this commit's draft instead of replacing it or rewriting its
+            # notes. A cancelled run can leave it short of assets, so refill the
+            # whole verified set: mixing generations would leave the draft's own
+            # SHA256SUMS disagreeing with its assets.
             test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true || {
               echo "::error::Release $TAG exists and is published; automatic previews never modify a published release." >&2
               exit 1
@@ -215,19 +217,26 @@ jobs:
             while IFS= read -r name; do
               uploaded["$name"]=1
             done < <(gh release view "$TAG" --json assets --jq '.assets[].name')
-            missing=()
+            incomplete=0
+            extra=()
             for file in artifacts/*; do
               name="$(basename "$file")"
-              [[ -n "${uploaded[$name]:-}" ]] || missing+=("$file")
+              [[ -n "${uploaded[$name]:-}" ]] || incomplete=1
             done
-            if (( ${#missing[@]} > 0 )); then
-              echo "Uploading ${#missing[@]} asset(s) missing from draft $TAG"
-              gh release upload "$TAG" "${missing[@]}"
+            for name in "${!uploaded[@]}"; do
+              [[ -e "artifacts/$name" ]] || extra+=("$name")
+            done
+            if (( ${#extra[@]} > 0 )); then
+              echo "::warning::Draft $TAG holds unexpected asset(s): ${extra[*]}"
+            fi
+            if (( incomplete )); then
+              echo "Draft $TAG is missing assets; replacing the whole verified set"
+              gh release upload "$TAG" artifacts/* --clobber
             else
               echo "Draft $TAG already holds every artifact; nothing to create."
             fi
           elif gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
-            # A cancelled run can create the tag without its release.
+            # A published tag can outlive its release; reuse it instead of failing.
             gh release create "$TAG" artifacts/* --verify-tag --draft --prerelease \
               --title "$title" --notes-file "$notes"
           else

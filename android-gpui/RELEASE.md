@@ -31,11 +31,12 @@ A successful default-branch build creates its own unpublished draft, so a
 validation build never needs a hand-pushed tag. A `push` to `main` and a manual
 `workflow_dispatch` on `main` both create one, after both ABI build jobs pass.
 
-- Tag: `android-preview-<versionName>-<first 12 hex of the built commit>`,
+- Name: `android-preview-<versionName>-<first 12 hex of the built commit>`,
   derived by `android-gpui/scripts/preview-tag.py` and then checked with
-  `git check-ref-format` before it is used. The tag points at the exact built
-  commit and lives in its own namespace, so it never triggers the `android-v*`
-  release path.
+  `git check-ref-format` before it is used. GitHub keeps a draft untagged until
+  it is published, so automatic runs create no tags at all: the draft records the
+  built commit as its target, and the name lives outside the `android-v*` release
+  namespace.
 - Contents: the verified ARM64 artifact set — development-signed debug APK,
   unsigned release APK, badging reports, native build record, `SOURCE_COMMIT` and
   `SHA256SUMS`. The job re-checks the checksums, verifies both APKs' structure,
@@ -43,8 +44,10 @@ validation build never needs a hand-pushed tag. A `push` to `main` and a manual
 - No protected environment, signing identity, or secret is involved. Previews
   stay development-signed, and the job refuses to modify a release that is
   already published.
-- Re-running the same commit is idempotent: its existing draft is reused, and only
-  assets missing from it are uploaded.
+- Re-running the same commit is idempotent: an existing draft is left untouched
+  when it already holds every artifact, and otherwise refilled with that run's
+  verified set. A draft is never updated asset by asset, so its `SHA256SUMS`
+  always agrees with the files next to it.
 - One draft accumulates per built commit, and a newer push cancels an in-progress
   run, so a superseded commit can end up without a preview. Nothing prunes drafts;
   delete the ones that are no longer useful.

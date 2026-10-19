@@ -97,7 +97,8 @@ python3 scripts/preview-tag.py <40-character-commit-sha>
 
 `scripts/test-preview-tag.py` covers that derivation, and
 [RELEASE.md](../RELEASE.md) describes the drafts it names. The tag is validated
-as a git ref before any release is created.
+as a git ref before any release is created, and an automatic run leaves it
+untagged until someone chooses to publish the draft.
 
 The native verifier intentionally rejects missing entry points, foreign CPU
 architectures, 4KB-only load segments, and writable/executable segments. The
