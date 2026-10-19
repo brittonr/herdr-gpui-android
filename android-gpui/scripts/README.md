@@ -89,16 +89,16 @@ python3 scripts/test-native-build-record.py
 python3 scripts/test-apk-verifier.py
 ```
 
-Release automation names its per-commit draft preview from the source version:
+Release automation numbers its per-commit preview release from the source version:
 
 ```sh
-python3 scripts/preview-tag.py <40-character-commit-sha>
+printf '%s\n' refs/tags/android-preview-0.5.0-gpui-remote.1 | python3 scripts/next-preview-release.py
 ```
 
-`scripts/test-preview-tag.py` covers that derivation, and
-[RELEASE.md](../RELEASE.md) describes the drafts it names. The tag is validated
-as a git ref before any release is created, and an automatic run leaves it
-untagged until someone chooses to publish the draft.
+`scripts/test-next-preview-release.py` covers that numbering, and
+[RELEASE.md](../RELEASE.md) describes the releases it names: the first free
+`android-preview-<versionName>.<number>` is claimed as a tag at the built commit,
+and the release is published only after its assets match the verified build.
 
 The native verifier intentionally rejects missing entry points, foreign CPU
 architectures, 4KB-only load segments, and writable/executable segments. The

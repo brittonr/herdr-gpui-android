@@ -64,7 +64,7 @@ jobs:
           python3 android-gpui/scripts/test-native-verifier.py
           python3 android-gpui/scripts/test-native-build-record.py
           python3 android-gpui/scripts/test-apk-verifier.py
-          python3 android-gpui/scripts/test-preview-tag.py
+          python3 android-gpui/scripts/test-next-preview-release.py
           sh android/tests/run.sh
           cargo test --locked --manifest-path android-remote/rust/Cargo.toml
           sh android-gpui/tests/run-ime.sh
@@ -145,16 +145,17 @@ jobs:
             --title "Android $RELEASE_TAG (validation pending)" \
             --notes-file android-gpui/RELEASE-NOTES.md
   preview:
-    # Every successful default-branch build gets its own unpublished draft, so a
-    # validation build never needs a hand-pushed tag. Signing identities and
-    # device validation stay manual gates; see android-gpui/RELEASE.md.
+    # Every successful default-branch build publishes its own unsigned preview
+    # release, so an installable build never needs a hand-pushed tag. Stably signed
+    # android-v* releases and device validation stay separate manual paths; see
+    # android-gpui/RELEASE.md.
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: write  # Creates this commit's unpublished draft release
-    # Serialize preview uploads so two runs cannot race on one draft.
+      contents: write  # Creates this commit's preview tag and publishes its release
+    # Serialize preview publication so two runs cannot race on one release.
     concurrency:
       group: android-preview-${{ github.repository }}
       cancel-in-progress: false
@@ -166,16 +167,6 @@ jobs:
         with:
           name: android-arm64-v8a
           path: artifacts
-      - name: Derive the preview tag
-        id: preview
-        env:
-          COMMIT: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          tag="$(python3 android-gpui/scripts/preview-tag.py "$COMMIT")"
-          git check-ref-format "refs/tags/$tag"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "Preview draft tag: $tag" >> "$GITHUB_STEP_SUMMARY"
       - name: Verify the downloaded artifacts
         env:
           COMMIT: ${{ github.sha }}
@@ -183,12 +174,43 @@ jobs:
           set -euo pipefail
           test -n "$(ls -A artifacts)"
           (cd artifacts && sha256sum --check SHA256SUMS)
-          # The draft must describe the commit it is tagged with.
+          # The release must describe the commit it is tagged with.
           test "$(cat artifacts/SOURCE_COMMIT)" = "$COMMIT"
           for apk in artifacts/*.apk; do
             python3 android-gpui/scripts/verify-apk-structure.py --abi arm64-v8a "$apk"
           done
-      - name: Create or complete the draft preview
+      - name: Claim the preview release tag
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # A re-run of this commit reuses its own release instead of adding another.
+          tag="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+            --jq "first(.[] | select(.target_commitish == \"$COMMIT\") | select(.tag_name | startswith(\"android-preview-\")) | .tag_name)")"
+          if [[ -n "$tag" ]]; then
+            echo "Reusing $tag for $COMMIT"
+          else
+            existing="$(gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/android-preview-" --jq '.[].ref')"
+            candidates="$(printf '%s\n' "$existing" | python3 android-gpui/scripts/next-preview-release.py 10)"
+            mapfile -t names <<< "$candidates"
+            for name in "${names[@]}"; do
+              # Another run may have claimed this number in the meantime.
+              if gh api "repos/$GH_REPO/git/ref/tags/$name" >/dev/null 2>&1; then
+                continue
+              fi
+              gh api --method POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$name" -f sha="$COMMIT" >/dev/null
+              tag="$name"
+              break
+            done
+          fi
+          test -n "$tag" || { echo "::error::Could not claim a preview release tag at $COMMIT" >&2; exit 1; }
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" = "$COMMIT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Preview release: $tag" >> "$GITHUB_STEP_SUMMARY"
+      - name: Create, verify, and publish the preview release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -200,47 +222,51 @@ jobs:
           notes="$RUNNER_TEMP/preview-notes.md"
           {
             cat android-gpui/RELEASE-NOTES.md
-            printf '\nAutomatic draft preview of commit %s, built by [workflow run](%s).\n' "$COMMIT" "$RUN_URL"
-            printf 'Automatic previews never use a release signing identity and never publish.\n'
+            printf '\nUnsigned preview of commit %s, published from the green default-branch build in [workflow run](%s).\n' "$COMMIT" "$RUN_URL"
+            printf 'Only a development-signed debug APK and an unsigned release APK are attached: without a stable release identity, an existing installation cannot be updated in place.\n'
+            printf 'Stably signed android-v* releases remain a separate, manually validated path.\n'
           } > "$notes"
-          title="$TAG (validation pending)"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # Reuse this commit's draft instead of replacing it or rewriting its
-            # notes. A cancelled run can leave it short of assets, so refill the
-            # whole verified set: mixing generations would leave the draft's own
-            # SHA256SUMS disagreeing with its assets.
-            test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true || {
-              echo "::error::Release $TAG exists and is published; automatic previews never modify a published release." >&2
-              exit 1
-            }
-            declare -A uploaded=()
-            while IFS= read -r name; do
-              uploaded["$name"]=1
-            done < <(gh release view "$TAG" --json assets --jq '.assets[].name')
-            incomplete=0
-            extra=()
-            for file in artifacts/*; do
-              name="$(basename "$file")"
-              [[ -n "${uploaded[$name]:-}" ]] || incomplete=1
-            done
-            for name in "${!uploaded[@]}"; do
-              [[ -e "artifacts/$name" ]] || extra+=("$name")
-            done
-            if (( ${#extra[@]} > 0 )); then
-              echo "::warning::Draft $TAG holds unexpected asset(s): ${extra[*]}"
+            if [[ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != true ]]; then
+              # A re-run after publication: never rewrite a public release.
+              published="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+              missing=()
+              for file in artifacts/*; do
+                name="$(basename "$file")"
+                grep -qxF "$name" <<< "$published" || missing+=("$name")
+              done
+              if (( ${#missing[@]} > 0 )); then
+                echo "::error::Published release $TAG is missing ${missing[*]}; repair it by hand instead of rewriting it." >&2
+                exit 1
+              fi
+              echo "Release $TAG is already published; leaving it untouched."
+              echo "Published release: $TAG" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
             fi
-            if (( incomplete )); then
-              echo "Draft $TAG is missing assets; replacing the whole verified set"
-              gh release upload "$TAG" artifacts/* --clobber
-            else
-              echo "Draft $TAG already holds every artifact; nothing to create."
-            fi
-          elif gh api "repos/$GH_REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then
-            # A published tag can outlive its release; reuse it instead of failing.
-            gh release create "$TAG" artifacts/* --verify-tag --draft --prerelease \
-              --title "$title" --notes-file "$notes"
+            # Reuse the draft an interrupted run left behind, but replace its whole
+            # asset set: mixing generations would leave the draft's own SHA256SUMS
+            # disagreeing with the files next to it.
+            echo "Draft $TAG exists; replacing its assets with this run's verified set"
+            gh release upload "$TAG" artifacts/* --clobber
           else
-            gh release create "$TAG" artifacts/* --target "$COMMIT" --draft --prerelease \
-              --title "$title" --notes-file "$notes"
+            gh release create "$TAG" artifacts/* --verify-tag --target "$COMMIT" --draft --prerelease \
+              --title "$TAG (unsigned preview)" --notes-file "$notes"
           fi
-          echo "Preview draft: $TAG" >> "$GITHUB_STEP_SUMMARY"
+          # Nothing becomes public until the draft provably holds this run's bytes.
+          gh release view "$TAG" --json assets > "$RUNNER_TEMP/assets.json"
+          python3 - "$RUNNER_TEMP/assets.json" artifacts <<'PY'
+          import hashlib, json, pathlib, sys
+          assets = {asset['name']: asset for asset in json.loads(pathlib.Path(sys.argv[1]).read_text())['assets']}
+          verified = {item.name: 'sha256:' + hashlib.sha256(item.read_bytes()).hexdigest()
+                      for item in sorted(pathlib.Path(sys.argv[2]).glob('*'))}
+          missing = sorted(set(verified) - set(assets))
+          different = sorted(name for name, digest in verified.items()
+                             if name in assets and assets[name]['digest'] != digest)
+          if missing or different:
+              raise SystemExit(f'Draft assets do not match the verified build: missing={missing} different={different}')
+          if extras := sorted(set(assets) - set(verified)):
+              print(f'::warning::Draft holds asset(s) this run does not vouch for: {extras}')
+          print(f'Draft assets match the verified build: {len(verified)} file(s)')
+          PY
+          gh release edit "$TAG" --draft=false --prerelease
+          echo "Published unsigned preview: $TAG" >> "$GITHUB_STEP_SUMMARY"

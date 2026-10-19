@@ -25,32 +25,35 @@ uses `:app:compileVmTests` to select Gradle's configured debug keystore rather
 than assuming a home-directory path. The workflow does not execute an emulator;
 runtime evidence is a separate gate.
 
-## Automatic preview drafts
+## Automatic unsigned previews
 
-A successful default-branch build creates its own unpublished draft, so a
-validation build never needs a hand-pushed tag. A `push` to `main` and a manual
-`workflow_dispatch` on `main` both create one, after both ABI build jobs pass.
+A successful default-branch build publishes its own prerelease, so an installable
+build never needs a hand-pushed tag. A `push` to `main` and a manual
+`workflow_dispatch` on `main` both publish one, after both ABI build jobs pass and
+the downloaded artifacts are verified.
 
-- Name: `android-preview-<versionName>-<first 12 hex of the built commit>`,
-  derived by `android-gpui/scripts/preview-tag.py` and then checked with
-  `git check-ref-format` before it is used. GitHub keeps a draft untagged until
-  it is published, so automatic runs create no tags at all: the draft records the
-  built commit as its target, and the name lives outside the `android-v*` release
-  namespace.
-- Contents: the verified ARM64 artifact set — development-signed debug APK,
-  unsigned release APK, badging reports, native build record, `SOURCE_COMMIT` and
-  `SHA256SUMS`. The job re-checks the checksums, verifies both APKs' structure,
-  and requires `SOURCE_COMMIT` to be the built commit before uploading.
-- No protected environment, signing identity, or secret is involved. Previews
-  stay development-signed, and the job refuses to modify a release that is
-  already published.
-- Re-running the same commit is idempotent: an existing draft is left untouched
-  when it already holds every artifact, and otherwise refilled with that run's
-  verified set. A draft is never updated asset by asset, so its `SHA256SUMS`
-  always agrees with the files next to it.
-- One draft accumulates per built commit, and a newer push cancels an in-progress
-  run, so a superseded commit can end up without a preview. Nothing prunes drafts;
-  delete the ones that are no longer useful.
+- Name: `android-preview-<versionName>.<number>`, chosen by
+  `android-gpui/scripts/next-preview-release.py` as the next free number for the
+  source version. The namespace stays outside `android-v*`, so a preview can never
+  be mistaken for a validated release or reach that release's job.
+- The job creates the tag at the built commit, uploads the ARM64 artifact set to a
+  draft, and publishes only after verifying that the draft holds exactly this run's
+  bytes: checksums, `SOURCE_COMMIT`, APK structure, and every asset digest GitHub
+  reports. A failure before that point leaves an unpublished draft rather than a
+  half-populated public release.
+- Contents: the development-signed debug APK and the unsigned release APK, with
+  badging reports, the native build record, `SOURCE_COMMIT` and `SHA256SUMS`. No
+  environment, secret, or release identity is involved, so a preview cannot update
+  an existing installation: a changed debug key requires uninstalling the previous
+  preview. The APK's embedded `versionCode`/`versionName` stay the source values;
+  the release number identifies the build.
+- Re-running the same commit is idempotent: its existing tag is reused, a draft is
+  refilled with that run's whole verified set, and an already-published release is
+  left untouched. A published release that is missing assets fails the job for
+  manual repair instead of being rewritten.
+- One preview accumulates per built commit, and a newer push cancels an in-progress
+  run, so a superseded commit can end up without one. Nothing prunes previews;
+  `gh release delete <name> --yes --cleanup-tag` removes a preview and its tag.
 
 ## Tag-driven draft
 
@@ -61,7 +64,8 @@ a mismatched tag fails. The workflow rebuilds and checks both ABIs, then creates
 an ARM64 **draft prerelease**. It never overwrites a release or publishes one.
 Failed builds do not reach the release job. No unsigned APK is described as
 installable. No runtime success is inferred from a build. Only this `android-v*`
-tag path can lead to a published release; automatic preview drafts never do.
+path produces a stably signed, validated release; automatic previews are separate
+unsigned prereleases.
 
 ## Optional existing release identity
 

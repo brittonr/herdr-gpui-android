@@ -2,7 +2,7 @@
 
 Experimental Android client for Herdr, with a real Rust GPUI/wgpu terminal surface, embedded SSH over TCP or Iroh, and an Oh My Pi command palette. The current Android source is **0.5.0-gpui-remote**.
 
-This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Titan devices still need validation. No APK is published with this initial source import.
+This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Titan devices still need validation. Every green `main` build publishes an unsigned preview prerelease, but no validated, stably signed release exists yet.
 
 ## Features
 
@@ -51,7 +51,7 @@ Lockfiles and the GPUI Mobile revision are pinned, but bit-for-bit reproducibili
 - [Remote validation](android-gpui/REMOTE-VALIDATION.md): historical build/runtime evidence and limitations
 - [Provenance](PROVENANCE.md): exact upstream baseline and publication changes
 
-Inherited upstream GitHub workflows and CODEOWNERS assignments are omitted. The [Android CI and release workflow](android-gpui/RELEASE.md) builds and checks both ABIs, creates an unpublished draft preview for every successful `main` build, and creates tag-driven draft prereleases. Historical validation is not a passing CI claim; drafts require signing and runtime validation before publication.
+Inherited upstream GitHub workflows and CODEOWNERS assignments are omitted. The [Android CI and release workflow](android-gpui/RELEASE.md) builds and checks both ABIs, publishes an unsigned preview prerelease for every successful `main` build, and creates tag-driven draft prereleases. Historical validation is not a passing CI claim; the signed release path still requires a signing identity and runtime validation.
 
 ## Provenance and licenses
 
