@@ -25,6 +25,30 @@ uses `:app:compileVmTests` to select Gradle's configured debug keystore rather
 than assuming a home-directory path. The workflow does not execute an emulator;
 runtime evidence is a separate gate.
 
+## Automatic preview drafts
+
+A successful default-branch build creates its own unpublished draft, so a
+validation build never needs a hand-pushed tag. A `push` to `main` and a manual
+`workflow_dispatch` on `main` both create one, after both ABI build jobs pass.
+
+- Tag: `android-preview-<versionName>-<first 12 hex of the built commit>`,
+  derived by `android-gpui/scripts/preview-tag.py` and then checked with
+  `git check-ref-format` before it is used. The tag points at the exact built
+  commit and lives in its own namespace, so it never triggers the `android-v*`
+  release path.
+- Contents: the verified ARM64 artifact set — development-signed debug APK,
+  unsigned release APK, badging reports, native build record, `SOURCE_COMMIT` and
+  `SHA256SUMS`. The job re-checks the checksums, verifies both APKs' structure,
+  and requires `SOURCE_COMMIT` to be the built commit before uploading.
+- No protected environment, signing identity, or secret is involved. Previews
+  stay development-signed, and the job refuses to modify a release that is
+  already published.
+- Re-running the same commit is idempotent: its existing draft is reused, and only
+  assets missing from it are uploaded.
+- One draft accumulates per built commit, and a newer push cancels an in-progress
+  run, so a superseded commit can end up without a preview. Nothing prunes drafts;
+  delete the ones that are no longer useful.
+
 ## Tag-driven draft
 
 After successful CI and merging, increment `versionCode` and `versionName` in
@@ -33,7 +57,8 @@ commit (for the current source: `android-v0.5.0-gpui-remote`). Tag matching is e
 a mismatched tag fails. The workflow rebuilds and checks both ABIs, then creates
 an ARM64 **draft prerelease**. It never overwrites a release or publishes one.
 Failed builds do not reach the release job. No unsigned APK is described as
-installable. No runtime success is inferred from a build.
+installable. No runtime success is inferred from a build. Only this `android-v*`
+tag path can lead to a published release; automatic preview drafts never do.
 
 ## Optional existing release identity
 

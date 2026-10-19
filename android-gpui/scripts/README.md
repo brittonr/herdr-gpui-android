@@ -89,6 +89,16 @@ python3 scripts/test-native-build-record.py
 python3 scripts/test-apk-verifier.py
 ```
 
+Release automation names its per-commit draft preview from the source version:
+
+```sh
+python3 scripts/preview-tag.py <40-character-commit-sha>
+```
+
+`scripts/test-preview-tag.py` covers that derivation, and
+[RELEASE.md](../RELEASE.md) describes the drafts it names. The tag is validated
+as a git ref before any release is created.
+
 The native verifier intentionally rejects missing entry points, foreign CPU
 architectures, 4KB-only load segments, and writable/executable segments. The
 APK packager refuses to proceed without the real compiled Rust library.
