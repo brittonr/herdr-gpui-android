@@ -187,7 +187,7 @@ public final class RemoteHostsActivity extends Activity {
         long until = System.currentTimeMillis() + 30_000;
         JSONObject state = null;
         while (System.currentTimeMillis() < until) {
-            state = new JSONObject(RemoteNative.poll(handle));
+            state = new JSONObject(RemoteNative.poll(handle, 0, false));
             String phase = state.optString("state");
             if ("closed".equals(phase)) throw new IllegalStateException("closed");
             org.json.JSONArray panes = state.optJSONArray("panes");
@@ -208,7 +208,7 @@ public final class RemoteHostsActivity extends Activity {
         RemoteNative.focus(handle, pane);
         until = System.currentTimeMillis() + 20_000;
         while (System.currentTimeMillis() < until) {
-            state = new JSONObject(RemoteNative.poll(handle));
+            state = new JSONObject(RemoteNative.poll(handle, 0, false));
             if (pane.equals(state.optString("pane_id")) && "ready".equals(state.optString("state"))) break;
             Thread.sleep(150);
         }
@@ -639,7 +639,7 @@ public final class RemoteHostsActivity extends Activity {
         if (!current(token) || ownedHandle != handle) return;
         run(token, () -> {
             store.requireCurrent(host);
-            return result(RemoteNative.poll(handle));
+            return result(RemoteNative.poll(handle, 0, false));
         }, snapshot -> {
             if (ownedHandle != handle) return;
             setStatus(snapshot.optString("status", "Connecting…"));

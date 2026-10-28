@@ -129,7 +129,7 @@ fn parse_config(raw: &str) -> Result<(Config, String)> {
     ))
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Hash)]
 pub struct Pane {
     id: String,
     title: String,
@@ -137,14 +137,14 @@ pub struct Pane {
     tab_id: String,
     status: &'static str,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Hash)]
 pub struct Workspace {
     id: String,
     label: String,
     focused: bool,
     status: &'static str,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Hash)]
 pub struct Tab {
     id: String,
     workspace_id: String,
@@ -175,6 +175,8 @@ pub struct View {
     bell: u32,
     scroll: Scroll,
     revision: u64,
+    /// Content hash the client mirrors back in `poll`; not part of the hash.
+    token: i64,
 }
 impl Default for View {
     fn default() -> Self {
@@ -195,6 +197,7 @@ impl Default for View {
             bell: 0,
             scroll: Scroll::default(),
             revision: 0,
+            token: 0,
         }
     }
 }
@@ -340,10 +343,49 @@ pub fn close(id: u64) {
         finish(&session, "Disconnected");
     }
 }
-pub fn poll(id: u64) -> Result<String> {
+/// Returns the session view. When `since` already matches the projection
+/// revision and nothing one-shot is pending, the answer is a small summary: the
+/// app polls twenty times a second and must not re-serialise a whole tree for a
+/// frame that did not change.
+pub fn poll(id: u64, since: u64, mirror: bool) -> Result<String> {
     let json = {
         let owner = session(id)?;
         let mut state = lock(&owner.state);
+        let pending = state.view.clipboard.is_some()
+            || !state.view.notifications.is_empty()
+            || state.view.bell > 0;
+        // The projection revision moves even when nothing a client draws changes,
+        // so the token hashes the rendered content instead.
+        let token = view_token(&state.view);
+        // Zero means "I hold nothing"; a brand-new session must get the whole view
+        // even though its token is still zero.
+        if since != 0 && since == token && !pending {
+            let quiet = json!({
+                "unchanged": true,
+                "token": token as i64,
+                "revision": state.view.revision,
+                "state": state.view.state,
+                "status": state.view.status,
+                "boot_id": state.view.boot_id,
+                "pane_id": state.view.pane_id,
+                "focused_pane": state.view.focused_pane,
+                "scroll": &state.view.scroll,
+            });
+            return Ok(serde_json::to_string(&quiet)?);
+        }
+        // java.lang.Long cannot hold the top of u64, so publish it signed.
+        state.view.token = token as i64;
+        // A mirror only draws workspaces and panes; sending the surface and the
+        // pane text to every background host would dominate its payload.
+        if mirror {
+            let text = std::mem::take(&mut state.view.text);
+            let surface = std::mem::take(&mut state.view.surface);
+            let json = serde_json::to_string(&state.view)?;
+            state.view.text = text;
+            state.view.surface = surface;
+            let json = { state.view.clipboard = None; state.view.notifications.clear(); state.view.bell = 0; json };
+            return Ok(json);
+        }
         let json = serde_json::to_string(&state.view)?;
         // Clipboard writes, notifications and bells are delivered exactly once,
         // so they never inflate every later poll with the same payload.
@@ -357,6 +399,27 @@ pub fn poll(id: u64) -> Result<String> {
     }
     Ok(json)
 }
+/// Hash of everything the client renders, so an idle frame costs a few hundred
+/// bytes instead of the whole tree.
+fn view_token(view: &View) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    view.state.hash(&mut hasher);
+    view.status.hash(&mut hasher);
+    view.boot_id.hash(&mut hasher);
+    view.pane_id.hash(&mut hasher);
+    view.focused_pane.hash(&mut hasher);
+    view.text.hash(&mut hasher);
+    view.surface.hash(&mut hasher);
+    view.panes.hash(&mut hasher);
+    view.workspaces.hash(&mut hasher);
+    view.tabs.hash(&mut hasher);
+    view.scroll.offset.hash(&mut hasher);
+    view.scroll.max.hash(&mut hasher);
+    view.scroll.rows.hash(&mut hasher);
+    hasher.finish()
+}
+
 fn clean(raw: &str, max: usize) -> String {
     let mut result = String::new();
     for ch in raw.chars().filter(|c| !c.is_control()) {

@@ -101,6 +101,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile long handle;
         volatile org.json.JSONArray workspaces, tabs, panes;
         volatile boolean connected;
+        volatile long revision = -1;
         volatile long nextAttemptAt;
     }
     private final java.util.Map<String, HostSample> hostSamples = new java.util.concurrent.ConcurrentHashMap<>();
@@ -627,13 +628,18 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             }
         }
         try {
-            JSONObject state = new JSONObject(RemoteNative.poll(sample.handle));
+            JSONObject state = new JSONObject(RemoteNative.poll(sample.handle, sample.revision, true));
+            if (state.optBoolean("unchanged", false)) {
+                if (sample.connected) sample.connected = true;
+                return;
+            }
             if ("closed".equals(state.optString("state"))) throw new IllegalStateException("closed");
             JSONArray panes = state.optJSONArray("panes");
             if (panes != null && panes.length() > 0) {
                 sample.panes = panes;
                 sample.workspaces = state.optJSONArray("workspaces");
                 sample.tabs = state.optJSONArray("tabs");
+                sample.revision = state.optLong("token", state.optLong("revision", 0));
                 sample.connected = true;
                 sidebarSignature = "";
                 if (!destroyed) runOnUiThread(() -> refreshSidebar(false));
@@ -751,7 +757,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         long until = SystemClock.uptimeMillis() + 45_000;
         JSONObject state = null;
         while (SystemClock.uptimeMillis() < until) {
-            state = new JSONObject(RemoteNative.poll(handle));
+            state = new JSONObject(RemoteNative.poll(handle, 0, false));
             String phase = state.optString("state");
             if ("closed".equals(phase)) throw new IllegalStateException("closed");
             // The pane list arrives with the first snapshot; an empty array is
@@ -791,7 +797,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         RemoteNative.focus(handle, pane);
         until = SystemClock.uptimeMillis() + 20_000;
         while (SystemClock.uptimeMillis() < until) {
-            state = new JSONObject(RemoteNative.poll(handle));
+            state = new JSONObject(RemoteNative.poll(handle, 0, false));
             if (pane.equals(state.optString("pane_id"))
                     && "ready".equals(state.optString("state"))) return pane;
             Thread.sleep(150);
@@ -883,7 +889,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         getSharedPreferences("terminal-display", MODE_PRIVATE).edit()
                 .putBoolean("list", sidebarOpen).apply();
         applySidebarWidth();
-        if (sidebarOpen) refreshSidebar(true);
+        if (sidebarOpen) {
+            startHostSampling();
+            refreshSidebar(true);
+        } else {
+            // A hidden rail consumes nothing, so close its mirror sessions.
+            stopHostSampling();
+        }
     }
 
     private void applySidebarWidth() {
@@ -915,12 +927,21 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         StringBuilder signature = new StringBuilder();
         for (SavedRemoteHost host : savedHosts) {
             HostSample sample = hostSamples.get(host.id);
-            signature.append(host.id).append(':')
-                    .append(host.id.equals(currentHostId) ? "live" : sample == null ? "none"
-                            : sample.connected ? String.valueOf(sample.panes) : "down")
-                    .append(';');
+            signature.append(host.id).append(':');
+            if (host.id.equals(currentHostId)) {
+                signature.append("live:").append(current == null ? 0 : current.remoteRevision);
+            } else if (sample == null) {
+                signature.append("none");
+            } else if (!sample.connected) {
+                signature.append("down");
+            } else {
+                // The daemon's revision moves whenever the tree does, so the rail
+                // never has to stringify both arrays to notice a change.
+                signature.append('r').append(sample.revision);
+            }
+            signature.append(';');
         }
-        if (current != null) signature.append(current.paneId).append(current.workspaces).append(current.panes);
+        if (current != null) signature.append(current.paneId);
         signature.append(currentHostId);
         if (!force && signature.toString().equals(sidebarSignature)) return;
         sidebarSignature = signature.toString();
@@ -1594,6 +1615,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         super.onResume();
         if (isFinishing() || launch == null || shortcutJson == null || !hostStarted) return;
         nativeResumed();
+        startHostSampling();
         synchronized (stateLock) {
             if (connection != null) return;
             Connection next;
@@ -1614,6 +1636,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     @Override protected void onPause() {
+        // Mirrors are only useful on screen; three SSH sessions polling in the
+        // background would spend battery for a rail nobody can see.
+        stopHostSampling();
         allowNextKeyboardShow = false;
         oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
         clearControl();
@@ -2086,6 +2111,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 mutation = true;
                 String result = RemoteNative.input(current.remoteHandle, current.paneId, raw);
                 if (!new JSONObject(result).optBoolean("queued", false)) throw new IOException("Input was not queued");
+                // Keep full-speed polling briefly after typing so echo stays immediate.
+                current.fastUntil = SystemClock.uptimeMillis() + 1500;
                 // Binary input has no daemon receipt. Submit is one TextCommit+Enter
                 // batch; this status deliberately means queued, never acknowledged.
                 synchronized (stateLock) {
@@ -2094,9 +2121,34 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 mutation = false;
             }
             if (!current(current)) return;
-            String rawState = RemoteNative.poll(current.remoteHandle);
+            long nowMs = SystemClock.uptimeMillis();
+            if (nowMs < current.nextRemotePollAt) return;
+            current.nextRemotePollAt = nowMs + (nowMs < current.fastUntil ? 50 : 100);
+            String rawState = RemoteNative.poll(current.remoteHandle, current.remoteRevision, false);
             if (rawState == null || rawState.length() > 1024 * 1024) throw new IOException("Oversized remote state");
             JSONObject state = new JSONObject(rawState);
+                        if (state.optBoolean("unchanged", false)) {
+                String quietPhase = state.optString("state", "");
+                String quietPane = state.optString("pane_id", "");
+                boolean smallChange = !quietPhase.equals(current.remotePhase)
+                        || !quietPane.equals(current.paneId)
+                        || !state.optString("boot_id", "").equals(current.remoteBoot == null ? "" : current.remoteBoot);
+                if (!smallChange) {
+                    synchronized (stateLock) {
+                        if (!current(current)) return;
+                        JSONObject quietScroll = state.optJSONObject("scroll");
+                        if (quietScroll != null) {
+                            current.scrollOffset = quietScroll.optLong("offset", 0);
+                            current.scrollMax = quietScroll.optLong("max", 0);
+                            current.scrollRows = quietScroll.optLong("rows", 0);
+                        }
+                    }
+                    return;
+                }
+                // The tree did not move but the connection did: fetch the full view once.
+                rawState = RemoteNative.poll(current.remoteHandle, 0, false);
+                state = new JSONObject(rawState);
+            }
             String phase = state.getString("state");
             if ("closed".equals(phase)) {
                 fail(current, GpuiTerminalProtocol.title(state.optString("status", "Remote session closed")));
@@ -2117,6 +2169,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     return;
                 }
                 if (selected) current.remoteBoot = boot;
+                current.remotePhase = phase;
+                current.remoteRevision = state.optLong("token", state.optLong("revision", 0));
                 current.text = text;
                 current.ready = selected;
                 current.surface = selected ? state.optString("surface", "") : "";
@@ -2212,6 +2266,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile boolean closed;
         String remoteBoot;
         volatile String paneId = launch.paneId;
+        volatile long remoteRevision;
+        volatile String remotePhase = "";
+        volatile long fastUntil;
+        long nextRemotePollAt;
         volatile String title = launch.title;
         volatile String hostName = launch.name();
         String text = "";

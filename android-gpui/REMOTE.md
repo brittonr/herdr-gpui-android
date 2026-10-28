@@ -110,7 +110,13 @@ every three seconds, so all trees are visible at once; the terminal itself still
 owns exactly one connection at a time. Tapping a pane under another host opens
 that host's session and focuses the pane. The client keeps at most eight live
 sessions (terminal plus mirrors plus a transient connection while switching) and
-refuses more.
+refuses more. Mirrors exist only while they can be seen: hiding the rail or
+leaving the activity closes them and brings the session count back to one.
+
+The terminal polls its session for a delta: the native side hashes everything the
+client renders and answers an idle poll with a few hundred bytes instead of the
+whole tree. A mirror poll omits the surface and pane text it never draws, and the
+cadence drops from twenty polls a second to ten when no input arrived recently.
 
 Rail text, dots and titles are drawn from the same palette as the terminal chrome,
 so keep colour literals opaque (a 24-bit literal has a zero alpha channel and

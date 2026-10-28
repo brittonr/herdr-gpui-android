@@ -4,7 +4,7 @@ use crate::remote;
 use jni::{
     JNIEnv, JavaVM,
     objects::{GlobalRef, JClass, JObject, JString},
-    sys::{jlong, jstring},
+    sys::{jboolean, jlong, jstring},
 };
 use std::sync::{Mutex, OnceLock};
 use zeroize::Zeroizing;
@@ -153,8 +153,10 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_poll(
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,
     handle: jlong,
+    since: jlong,
+    mirror: jboolean,
 ) -> jstring {
-    result_string(&mut env, remote::poll(handle as u64))
+    result_string(&mut env, remote::poll(handle as u64, since as u64, mirror != 0))
 }
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
