@@ -271,6 +271,9 @@ impl DisplayMetrics {
         let font_size = if preferences.font_size > 0. {
             preferences.font_size
         } else if widest_line_chars > 0 && viewport_width > 0. {
+            // Measured: even 10 px does not fit a 90-character pane on the 494 dp
+            // cover, and fitting it would need about 8 px, which is unreadable.
+            // The floor stays at 11 and panning covers the tail.
             (viewport_width / (widest_line_chars as f32 * CELL_ADVANCE_EM) * preferences.scale)
                 .clamp(11., 36.)
         } else {

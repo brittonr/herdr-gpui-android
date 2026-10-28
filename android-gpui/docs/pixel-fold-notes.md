@@ -61,6 +61,11 @@ inferred from code. Update it when a behaviour changes.
 - Frame cadence was never measured: `dumpsys SurfaceFlinger --latency` on the
   GPUI SurfaceView returns an empty buffer while idle, so sample during
   interaction.
+- **Cover-panel typography is settled by measurement, not preference.** At
+  494 dp a 70–90 character pane cannot fit at a readable size: the fit floors at
+  11 px and clips the tail, and dropping the floor to 10 px still clipped the
+  widest lines because fitting them would need about 8 px. Panning is the answer;
+  do not lower the floor again without re-measuring `widest_line_chars`.
 - The cover panel is exercised by resizing the display (`wm size 1080x2152`,
   then `wm size reset`), not by folding hardware.
 
