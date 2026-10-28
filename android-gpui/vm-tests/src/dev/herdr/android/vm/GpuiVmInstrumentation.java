@@ -976,8 +976,8 @@ public final class GpuiVmInstrumentation extends Instrumentation {
         require(bounds.bottom <= viewBounds.top, "Surface and native options row overlap");
         require(bounds.width() > 200 * density(current) && bounds.height() > 64 * density(current),
                 "Native terminal has no usable compact area");
-        for (String label : new String[]{"View", "Cmds", "Ctrl"}) {
-            Button control = button(current, label);
+        for (String controlLabel : new String[]{"View", "Cmds", "Ctrl"}) {
+            Button control = button(current, controlLabel);
             Rect controlBounds = bounds(control);
             Rect visibleControl = new Rect();
             require(controlBounds.height() >= 47 * density(current)
@@ -985,7 +985,7 @@ public final class GpuiVmInstrumentation extends Instrumentation {
                     && control.getGlobalVisibleRect(visibleControl)
                     && visibleControl.width() == controlBounds.width()
                     && visibleControl.height() == controlBounds.height(),
-                    label + " control is clipped or below the 48dp safe touch target");
+                    controlLabel + " control is clipped or below the 48dp safe touch target");
         }
         require((Boolean) field(current, "compactDisplay") == expectedCompact, "Wrong resolved compact profile");
         observations.put(new JSONObject().put("geometry", label).put("density", density(current))
