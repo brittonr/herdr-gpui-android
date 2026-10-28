@@ -222,6 +222,8 @@ struct State {
     follow_focus: bool,
     /// Scroll offsets requested but not yet answered by a frame, oldest first.
     pending_offsets: std::collections::VecDeque<i64>,
+    /// Pane the currently held text belongs to, so a skew never blanks it.
+    text_pane: String,
 }
 struct Session {
     state: Mutex<State>,
@@ -877,7 +879,14 @@ fn project(state: &mut State) {
             state.follow_focus = matching_surface(state, &state.view.pane_id).is_none();
         }
     }
-    state.view.text.clear();
+    // A snapshot and its matching surface arrive as separate messages, so their
+    // revisions disagree for a frame or two. Blanking the pane on that skew made
+    // every update flash; only a different pane may discard the held text.
+    if state.text_pane != state.view.pane_id {
+        state.view.text.clear();
+        state.view.surface.clear();
+        state.text_pane.clone_from(&state.view.pane_id);
+    }
     state.view.state = if state.snapshot.is_some() && state.pending_focus.is_none() {
         "ready"
     } else {
@@ -910,7 +919,7 @@ fn project(state: &mut State) {
                 rows: metrics.viewport_rows,
             })
             .unwrap_or_default();
-    } else if !state.view.pane_id.is_empty() {
+    } else if !state.view.pane_id.is_empty() && state.view.text.is_empty() {
         state.view.state = "connecting";
         state.view.status = "Waiting for the selected pane surface".into();
     }

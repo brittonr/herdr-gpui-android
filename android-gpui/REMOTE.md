@@ -123,6 +123,10 @@ target would look like a jump), requests are coalesced instead of dropped, the n
 delivered when the finger lifts, a flick keeps travelling under momentum, and a
 poll never overwrites the target with the last offset the daemon applied.
 
+A snapshot and its matching surface arrive as separate messages, so their
+revisions disagree for a frame or two; the client keeps the last drawn pane
+instead of blanking it during that skew.
+
 The terminal polls its session for a delta: the native side hashes everything the
 client renders and answers an idle poll with a few hundred bytes instead of the
 whole tree. A mirror poll omits the surface and pane text it never draws, and the

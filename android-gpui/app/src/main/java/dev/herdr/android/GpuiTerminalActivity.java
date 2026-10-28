@@ -163,8 +163,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // A restored activity cannot recover authority from Intent extras or framework saved state.
         launch = state == null ? GpuiLaunch.consume(System.nanoTime()) : null;
         super.onCreate(null);
-        if (!"1".equals(android.provider.Settings.Global.getString(getContentResolver(), "herdr_probe")))
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().getDecorView().setSaveFromParentEnabled(false);
         getWindow().getDecorView().setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         worker.setRemoveOnCancelPolicy(true);
