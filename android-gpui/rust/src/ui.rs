@@ -232,6 +232,12 @@ impl Render for TerminalView {
         }
         let row_width = px(metrics.row_width(snapshot.widest_line_chars));
         let row_height = px(metrics.row_height);
+        // A pane whose grid is shorter than the surface used to paint from the
+        // top, leaving a dead band under the last row. Anchor those rows to the
+        // bottom the way a terminal does.
+        let surface_height = viewport.height.to_f64() - f64::from(metrics.header_height);
+        let content_height = f64::from(metrics.row_height) * snapshot.lines.len() as f64;
+        let short_pane = content_height < surface_height - 1.;
         div()
             .size_full()
             .flex()
@@ -284,8 +290,17 @@ impl Render for TerminalView {
                     .min_w_0()
                     .relative()
                     .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .when(short_pane, |body| body.justify_end())
                     .child(
-                        uniform_list(
+                        div()
+                            .min_w_0()
+                            .when(short_pane, |box_| {
+                                box_.h(px(content_height.max(0.) as f32))
+                            })
+                            .when(!short_pane, |box_| box_.size_full())
+                            .child(uniform_list(
                             "terminal-lines",
                             snapshot.lines.len(),
                             move |range, _, _| {
@@ -320,6 +335,7 @@ impl Render for TerminalView {
                             ListHorizontalSizingBehavior::Unconstrained,
                         )
                         .track_scroll(&self.scroll),
+                            ),
                     )
                     .child(
                         canvas(
