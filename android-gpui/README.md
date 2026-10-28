@@ -98,7 +98,9 @@ schemes. Launching the app reopens the remembered host and pane directly, skippi
 **Remote Herdr** list; **Tab > Remote hosts…** opens the list from a terminal, and
 its **Reopen the last session at launch** checkbox turns the behaviour off. The
 rail opens by default on both displays (narrower on the cover) and remembers
-whether you hid it. It starts with **Hosts**: every saved SSH host, with the current
+whether you hid it. It starts with **Hosts** - every saved machine expanded with its own workspaces
+and agents, kept fresh by one background session per host - so you can see and
+jump into any of them from one tree.: every saved SSH host, with the current
 one marked. Tapping another host reconnects in place with the saved device key
 and the rail switches to that host's workspaces and agents; the GPUI surface and
 your scroll position stay in the app. The terminal opens the pane you last used

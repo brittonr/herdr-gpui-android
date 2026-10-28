@@ -16,7 +16,9 @@ use std::{
 };
 use zeroize::Zeroizing;
 
-const MAX_HANDLES: usize = 4;
+/// Live sessions: the terminal, one background mirror per other saved host, and
+/// transient connections while switching. Still bounded and refused past this.
+const MAX_HANDLES: usize = 8;
 const MAX_CONFIG: usize = 8192;
 const MAX_PANES: usize = 1024;
 /// Rows the phone picker can show; the poll payload serializes no more.

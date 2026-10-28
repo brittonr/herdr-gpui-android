@@ -105,6 +105,13 @@ the terminal without showing the host list. The list remains reachable from the
 terminal's **Tab > Remote hosts…**, where **Reopen the last session at launch**
 switches the behaviour back to starting on the list.
 
+Every saved host is mirrored in the rail by its own read-only session, polled
+every three seconds, so all trees are visible at once; the terminal itself still
+owns exactly one connection at a time. Tapping a pane under another host opens
+that host's session and focuses the pane. The client keeps at most eight live
+sessions (terminal plus mirrors plus a transient connection while switching) and
+refuses more.
+
 The rail is open by default at every width and its hidden/shown choice persists;
 **List** / **Hide** toggles it. It lists every saved host above the session tree. Choosing one
 opens a new SSH connection with the saved device key, focuses the pane this phone
