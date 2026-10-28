@@ -26,8 +26,9 @@ import org.json.JSONObject;
 
 /** SSH login and pane selection. Credentials never enter a profile, Intent or saved state. */
 public final class RemoteHostsActivity extends Activity {
-    private static final int BG = Color.rgb(16, 18, 22), TEXT = Color.rgb(231, 234, 240);
-    private static final int MUTED = Color.rgb(155, 167, 185);
+    // Same tokens as the terminal chrome and the desktop palette.
+    private static final int BG = Color.rgb(16, 21, 29), TEXT = Color.rgb(220, 229, 239);
+    private static final int MUTED = Color.rgb(159, 176, 198);
     private final Handler main = new Handler();
     private final ThreadPoolExecutor worker = new ThreadPoolExecutor(1, 1, 0L,
             TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(8));
@@ -52,7 +53,12 @@ public final class RemoteHostsActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(null);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        // Matches the terminal: only a debuggable build that opts in may be captured.
+        boolean capturable = (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && "1".equals(android.provider.Settings.Global.getString(
+                        getContentResolver(), "herdr_probe"));
+        if (!capturable) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new RemoteHostStore(this);
         identityStore = new RemoteIdentityStore(this);
         shell();
@@ -803,8 +809,17 @@ public final class RemoteHostsActivity extends Activity {
         return label;
     }
     private Button button(String text, Runnable action) {
+        // The desktop chrome is a flat slate bar with the terminal foreground; the
+        // platform button tint reads as a different product beside it.
         Button button = new Button(this);
-        button.setText(text); button.setAllCaps(false); privateView(button);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextColor(0xffdce5ef);
+        button.setTextSize(14);
+        button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff1e222a));
+        button.setMinHeight(dp(44));
+        button.setStateListAnimator(null);
+        privateView(button);
         button.setOnClickListener(view -> action.run());
         return button;
     }
