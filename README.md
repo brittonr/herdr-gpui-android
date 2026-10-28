@@ -11,7 +11,8 @@ This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Tita
 - Direct TCP or Iroh `/iroh/ssh` transport to Herdr's binary remote-client bridge
 - GPUI/wgpu terminal surface, ordered keyboard/IME input, and explicit pane selection
 - Per-host OMP quick commands with editable previews and separately confirmed Send + Enter
-- Compact keyboard-first display options intended for the Titan 2 Elite, plus Default, Nord, Mocha and light Latte themes
+- Terminal type that fits the pane's own wrap width, multiplied by Android's system font scale, with an explicit 11-18 sp override in **View**; Default, Nord, Mocha and light Latte themes
+- Tablet-aware chrome: the rail opens by default at 600 dp and wider, interactive rows and every toolbar control are at least 48 dp, and the sheet surfaces group primary, secondary and destructive actions
 - Optional HTTPS phone-companion workflow
 - Opt-in, app-local read-only device diagnostics with a visible foreground
   notification; leaving the screen revokes access
@@ -20,9 +21,11 @@ This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Tita
 
 The terminal paints the selected pane from validated binary surfaces: named, indexed and truecolor cells, bold/dim/italic/underline/reverse/strikethrough attributes and a block cursor, bounded per row. Graphics, responsive terminal sizing, unlimited scrollback and split-pane editing are not implemented.
 
+Herdr sizes a pane itself: a client's hello surface and `client_shell.resize` do not change the row count, and `pane.resize` only nudges split ratios. A pane therefore keeps the daemon's own rows and columns on a panel that has room for more, which is why the terminal is letterboxed rather than full-bleed; horizontal panning would let larger type stay lossless and is not implemented.
+
 The passing terminal runtime evidence uses actual JNI, SSH and GPUI with a **synthetic generation-1 protocol peer**, not a real Herdr daemon or shell. Physical ARM64/Titan execution, real deployed Iroh receiver/public relay traversal, and device network transitions are unverified. Local diagnostics have a separate [contract and verification scope](docs/android-control-agent.md); they do not prove terminal or remote-control behavior. Whole-desktop-workspace verification remains incomplete. Existing validation records distinguish passed, failed and unrun checks.
 
-The application closes remote connections on leaving/backgrounding and does not automatically reconnect or replay input. A command may already have reached the host when a connection fails. Herdr 0.9.3's bridge can start its daemon if it stops between the initial status probe and bridge execution; this preview cannot guarantee attach-only behavior.
+The application closes remote connections on leaving/backgrounding. It does not reconnect automatically or replay input: a lost transport shows a banner naming the failure with **Hosts** and **Reconnect** actions, and Reconnect opens a fresh session for the saved host without replaying the old one. A command may already have reached the host when a connection fails. Herdr 0.9.3's bridge can start its daemon if it stops between the initial status probe and bridge execution; this preview cannot guarantee attach-only behavior.
 
 ## Build
 

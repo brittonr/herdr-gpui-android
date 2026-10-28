@@ -97,8 +97,11 @@ targets are forwarded, to the platform browser, never to files or custom
 schemes. Launching the app reopens the remembered host and pane directly, skipping the
 **Remote Herdr** list; **Tab > Remote hosts…** opens the list from a terminal, and
 its **Reopen the last session at launch** checkbox turns the behaviour off. The
-rail opens by default on both displays (narrower on the cover) and remembers
-whether you hid it. It starts with **Hosts** - every saved machine expanded with its own workspaces
+rail opens by default on panels 600 dp and wider (so the inner fold display, not
+the cover) and remembers whether you hid it.
+Terminal type follows the pane's own wrap width and Android's system font scale;
+pick a fixed size in **View** to override it. A lost transport offers **Hosts**
+and **Reconnect** instead of leaving the surface frozen. It starts with **Hosts** - every saved machine expanded with its own workspaces
 and agents, kept fresh by one background session per host - so you can see and
 jump into any of them from one tree.: every saved SSH host, with the current
 one marked. Tapping another host reconnects in place with the saved device key
