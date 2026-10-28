@@ -91,7 +91,10 @@ The SSH workflow paints the daemon's whole surface frame from its own cells: 16
 named colors, indexed and truecolor cells, bold, dim, italic, underline, reverse,
 strikethrough, hidden text and a block cursor, with every run bounded and
 validated before it reaches the renderer. Split panes and their borders are
-painted together and the panes' focused border carries the accent ring. A
+painted together and the panes' focused border carries the accent ring.
+Terminal hyperlinks in the daemon's table become tappable runs; only `http(s)`
+targets are forwarded, to the platform browser, never to files or custom
+schemes. A
 surface whose runs do not tile the extracted text exactly falls back to bounded
 **plain text**, which is also what the HTTPS companion workflow shows. Graphics,
 images, responsive daemon resize and full scrollback are not rendered yet. No

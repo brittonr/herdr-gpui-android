@@ -705,6 +705,14 @@ fn valid_geometry(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> bool {
 
 const SURFACE_LIMIT: usize = 300_000;
 
+/// Only links a browser can open, with no control characters.
+fn openable_link(url: &str) -> bool {
+    let url = url.trim();
+    (url.starts_with("https://") || url.starts_with("http://"))
+        && url.len() <= 2048
+        && !url.chars().any(char::is_control)
+}
+
 fn inside(rect: SurfaceRect, x: u16, y: u16) -> bool {
     u32::from(x) >= u32::from(rect.x)
         && u32::from(x) < u32::from(rect.x) + u32::from(rect.width)
@@ -730,11 +738,13 @@ fn cell_style(cell: &CellData, cursor: bool, focused_border: bool) -> (u32, u32,
 fn surface_style(surface: &PaneSurfaceFrame) -> String {
     let frame = &surface.frame;
     let cursor = frame.cursor.as_ref().filter(|cursor| cursor.visible);
+    let mut links: Vec<&str> = Vec::new();
+    let mut link_index: Vec<Option<u16>> = vec![None; frame.hyperlinks.len()];
     let focused = surface.panes.iter().find(|pane| pane.focused);
     let mut rows = Vec::new();
     for y in 0..frame.height.min(model::MAX_LINES as u16) {
         let mut text = String::new();
-        let mut runs: Vec<(usize, usize, u32, u32, u16)> = Vec::new();
+        let mut runs: Vec<(usize, usize, u32, u32, u16, u32)> = Vec::new();
         for x in 0..frame.width {
             let Some(cell) = frame
                 .cells
@@ -759,9 +769,21 @@ fn surface_style(surface: &PaneSurfaceFrame) -> String {
             let focused_border = focused
                 .is_some_and(|pane| inside(pane.rect, x, y) && !inside(pane.inner_rect, x, y));
             let (fg, bg, modifier) = cell_style(cell, on_cursor, focused_border);
+            let link = cell.hyperlink.and_then(|index| {
+                let slot = link_index.get_mut(index as usize)?;
+                if slot.is_none() {
+                    let url = frame.hyperlinks.get(index as usize)?;
+                    if links.len() >= 256 || !openable_link(url) {
+                        return None;
+                    }
+                    links.push(url);
+                    *slot = Some((links.len() - 1) as u16);
+                }
+                *slot
+            });
             let full = runs.len() >= model::MAX_RUNS_PER_LINE;
             match runs.last_mut() {
-                Some(run) if run.2 == fg && run.3 == bg && run.4 == modifier => {
+                Some(run) if run.2 == fg && run.3 == bg && run.4 == modifier && run.5 == link.map_or(u32::MAX, u32::from) => {
                     run.1 = text.len() - run.0;
                 }
                 _ if full => {
@@ -769,17 +791,18 @@ fn surface_style(surface: &PaneSurfaceFrame) -> String {
                         run.1 = text.len() - run.0;
                     }
                 }
-                _ => runs.push((start, text.len() - start, fg, bg, modifier)),
+                _ => runs.push((start, text.len() - start, fg, bg, modifier, link.map_or(u32::MAX, u32::from))),
             }
         }
         rows.push((text, runs));
     }
     let json = json!({
+        "links": links,
         "rows": rows
             .iter()
             .map(|(text, runs)| json!({
                 "t": text,
-                "r": runs.iter().map(|run| json!([run.0, run.1, run.2, run.3, run.4])).collect::<Vec<_>>(),
+                "r": runs.iter().map(|run| json!([run.0, run.1, run.2, run.3, run.4, run.5])).collect::<Vec<_>>(),
             }))
             .collect::<Vec<_>>(),
     })
@@ -1142,8 +1165,9 @@ mod tests {
             u64::from(model::BOLD | model::UNDERLINE)
         );
         // The model accepts exactly what the projection produces.
-        let rows = model::parse_surface(&style).unwrap();
+        let (rows, links) = model::parse_surface(&style).unwrap();
         assert_eq!(rows.len(), 3);
+        assert!(links.is_empty(), "no hyperlinks in this fixture");
         // Resolution is a render-time step, so a palette changes these colors.
         let default = model::PALETTES[0];
         let latte = model::PALETTES[3];
@@ -1163,7 +1187,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
         let run = &parsed["rows"][1]["r"][1];
         assert_ne!(run[4].as_u64().unwrap() & u64::from(model::HIDDEN), 0);
-        let rows = model::parse_surface(&style).unwrap();
+        let (rows, _) = model::parse_surface(&style).unwrap();
         let hidden = rows[1].runs[1];
         let (fg, bg) = model::styled_colors(&hidden, &model::PALETTES[0]);
         assert_eq!(fg, bg, "hidden text never draws a visible glyph");
@@ -1171,6 +1195,28 @@ mod tests {
         surface.panes[0].inner_rect.width = u16::MAX;
         assert!(!valid_geometry(&surface, &surface.panes[0]));
         assert_eq!(parsed["rows"].as_array().unwrap().len(), 3);
+    }
+    #[test]
+    fn surface_style_projects_bounded_openable_links() {
+        let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
+        surface.frame.hyperlinks = vec![
+            "https://example.com/a".into(),
+            "javascript:alert(1)".into(),
+        ];
+        surface.frame.cells[5].hyperlink = Some(0);
+        surface.frame.cells[6].hyperlink = Some(1);
+        let style = surface_style(&surface);
+        let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
+        // Only the http(s) target is exposed, with one shared index.
+        assert_eq!(parsed["links"].as_array().unwrap().len(), 1);
+        assert_eq!(parsed["links"][0], "https://example.com/a");
+        let runs = parsed["rows"][1]["r"].as_array().unwrap();
+        assert_eq!(runs[0][5], u32::MAX);
+        assert_eq!(runs[1][5], 0);
+        assert_eq!(runs[2][5], u32::MAX);
+        let (rows, links) = model::parse_surface(&style).unwrap();
+        assert_eq!(links, vec!["https://example.com/a".to_owned()]);
+        assert_eq!(rows[1].runs[1].link, Some(0));
     }
     #[test]
     fn surface_rows_follow_the_frame_height_not_one_pane() {

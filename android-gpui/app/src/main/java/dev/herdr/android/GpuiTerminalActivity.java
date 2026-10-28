@@ -811,6 +811,25 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         super.onDestroy();
     }
 
+    /** Opens a terminal link through the platform browser; never a file or custom scheme. */
+    public void gpuiOpenLink(long expectedGeneration, String url) {
+        runOnUiThread(() -> {
+            synchronized (stateLock) {
+                if (destroyed || isFinishing() || connection == null
+                        || connection.generation != expectedGeneration) return;
+            }
+            if (url == null || url.length() > 2048) return;
+            String lower = url.toLowerCase(java.util.Locale.ROOT);
+            if (!lower.startsWith("http://") && !lower.startsWith("https://")) return;
+            try {
+                startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (RuntimeException noBrowser) {
+                Toast.makeText(this, "No app can open this link", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     /** Called by GPUI directly, independent of the HTTP command queue and connection health. */
     public void gpuiClose(long expectedGeneration) {
         runOnUiThread(() -> {

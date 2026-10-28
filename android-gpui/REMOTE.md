@@ -94,6 +94,11 @@ each row exactly or the row falls back to plain text, so a malformed surface can
 never misalign colors. Graphics, images and unlimited scrollback are not
 rendered yet.
 
+Links the pane publishes (OSC 8) open in the platform browser when tapped. The
+client forwards only `http` and `https` targets, at most 2 KiB without control
+characters, and the activity rechecks the scheme before starting the intent; no
+file, `intent:` or custom scheme is reachable this way.
+
 **View > Theme** switches between the built-in palettes (Default, Nord, Mocha
 and the light Latte). The palette is applied when a frame is painted, so an open
 terminal repaints immediately without reconnecting or waiting for output.

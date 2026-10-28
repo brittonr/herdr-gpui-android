@@ -135,9 +135,38 @@ fn button(
         .child(div().min_w_0().truncate().child(label.into()))
 }
 
-/// One terminal row painted from the daemon's cells: colors, attributes and the
-/// block cursor arrive already resolved, so this only maps them to GPUI runs.
-fn styled_row(row: &model::StyledRow, metrics: DisplayMetrics) -> StyledText {
+/// One terminal row as a row of painted runs. Linked runs are clickable and
+/// open through the bounded Android intent path.
+fn styled_row_element(
+    row: &model::StyledRow,
+    links: &Arc<Vec<String>>,
+    generation: i64,
+    row_index: usize,
+    metrics: DisplayMetrics,
+) -> Div {
+    let mut line = div().flex().flex_none().items_center();
+    for (index, run) in row.runs.iter().enumerate() {
+        let piece = &row.text[run.start..run.start + run.len];
+        // Interactive spans need an element id; the run index keeps it stable.
+        let mut span = div()
+            .flex_none()
+            .whitespace_nowrap()
+            .id(ElementId::Name(format!("r{row_index}-{index}").into()));
+        if let Some(url) = run.link.and_then(|link| links.get(usize::from(link)).cloned()) {
+            span = span
+                .cursor_pointer()
+                .hover(|style| style.bg(rgb(model::palette().chrome)))
+                .on_click(move |_, _, _| {
+                    crate::android::open_link(generation, &url);
+                });
+        }
+        line = line.child(span.child(styled_run(piece, run, metrics)));
+    }
+    line
+}
+
+/// One terminal run painted with the palette's colors and its attributes.
+fn styled_run(text: &str, run: &model::StyledRun, metrics: DisplayMetrics) -> StyledText {
     let base = Font {
         family: crate::fonts::MONO_FAMILY.into(),
         features: Default::default(),
@@ -146,35 +175,31 @@ fn styled_row(row: &model::StyledRow, metrics: DisplayMetrics) -> StyledText {
         style: FontStyle::Normal,
     };
     let palette = model::palette();
-    let mut runs = Vec::with_capacity(row.runs.len());
-    for run in &row.runs {
-        let mut font = base.clone();
-        if run.modifier & model::BOLD != 0 {
-            font.weight = FontWeight::BOLD;
-        }
-        if run.modifier & model::ITALIC != 0 {
-            font.style = FontStyle::Italic;
-        }
-        let (fg, bg) = model::styled_colors(run, &palette);
-        let color = rgb(fg).into();
-        runs.push(TextRun {
-            len: run.len,
-            font,
-            color,
-            background_color: (bg != palette.background).then(|| rgb(bg).into()),
-            underline: (run.modifier & model::UNDERLINE != 0).then(|| UnderlineStyle {
-                thickness: px(1.),
-                color: Some(color),
-                wavy: false,
-            }),
-            strikethrough: (run.modifier & model::STRIKETHROUGH != 0).then(|| StrikethroughStyle {
-                thickness: px(1.),
-                color: Some(color),
-            }),
-        });
+    let mut font = base;
+    if run.modifier & model::BOLD != 0 {
+        font.weight = FontWeight::BOLD;
     }
+    if run.modifier & model::ITALIC != 0 {
+        font.style = FontStyle::Italic;
+    }
+    let (fg, bg) = model::styled_colors(run, &palette);
+    let color = rgb(fg).into();
     let _ = metrics;
-    StyledText::new(row.text.clone()).with_runs(runs)
+    StyledText::new(text.to_owned()).with_runs(vec![TextRun {
+        len: text.len(),
+        font,
+        color,
+        background_color: (bg != palette.background).then(|| rgb(bg).into()),
+        underline: (run.modifier & model::UNDERLINE != 0).then(|| UnderlineStyle {
+            thickness: px(1.),
+            color: Some(color),
+            wavy: false,
+        }),
+        strikethrough: (run.modifier & model::STRIKETHROUGH != 0).then(|| StrikethroughStyle {
+            thickness: px(1.),
+            color: Some(color),
+        }),
+    }])
 }
 
 impl Render for TerminalView {
@@ -308,7 +333,13 @@ impl Render for TerminalView {
                                         // Painted cells win when their runs tile the
                                         // plain line; otherwise keep the plain text.
                                         match rows.styled.as_ref().and_then(|styled| styled.get(index)) {
-                                            Some(styled_line) => line.child(styled_row(styled_line, metrics)),
+                                            Some(styled_line) => line.child(styled_row_element(
+                                                styled_line,
+                                                &rows.links,
+                                                generation,
+                                                index,
+                                                metrics,
+                                            )),
                                             None => line.child(SharedString::from(rows.lines[index].clone())),
                                         }
                                     })

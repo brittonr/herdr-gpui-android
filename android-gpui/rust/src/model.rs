@@ -181,10 +181,12 @@ pub struct StyledRun {
     pub start: usize,
     /// Length in bytes.
     pub len: usize,
-    /// Resolved 0xRRGGBB; named and indexed colors are already mapped.
+    /// Wire-encoded color; the renderer resolves it against the palette.
     pub fg: u32,
     pub bg: u32,
     pub modifier: u16,
+    /// Index into `Snapshot::links` when this run is clickable.
+    pub link: Option<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -446,6 +448,8 @@ pub struct Snapshot {
     pub lines: Vec<Arc<str>>,
     /// Present when the daemon surface styles tile the plain lines exactly.
     pub styled: Option<Arc<Vec<StyledRow>>>,
+    /// Bounded, browser-openable targets referenced by styled runs.
+    pub links: Arc<Vec<String>>,
     pub shortcuts: Vec<Shortcut>,
     pub truncated: bool,
     pub widest_line_chars: usize,
@@ -458,6 +462,7 @@ impl Default for Snapshot {
             status: "Connecting…".into(),
             lines: Vec::new(),
             styled: None,
+            links: Arc::default(),
             shortcuts: Vec::new(),
             truncated: false,
             widest_line_chars: 1,
@@ -493,6 +498,7 @@ impl Snapshot {
             status,
             lines: lines.into(),
             styled: None,
+            links: Arc::default(),
             shortcuts,
             truncated,
             widest_line_chars,
@@ -511,9 +517,10 @@ impl Snapshot {
     ) -> Result<Self> {
         let mut snapshot = Self::new(title, text, status, shortcuts)?;
         if let Some(raw) = surface.filter(|raw| !raw.is_empty()) {
-            let rows = parse_surface(raw)?;
+            let (rows, links) = parse_surface(raw)?;
             if rows.len() == snapshot.lines.len() {
                 snapshot.styled = Some(Arc::new(rows));
+                snapshot.links = Arc::new(links);
             } else {
                 snapshot.truncated = true;
             }
@@ -524,12 +531,28 @@ impl Snapshot {
 
 /// Parses `{"rows":[{"t":text,"r":[[start,len,fg,bg,modifier],…]},…]}`. Runs must
 /// tile every row exactly, so the renderer can index bytes without guessing.
-pub fn parse_surface(raw: &str) -> Result<Vec<StyledRow>> {
+pub fn parse_surface(raw: &str) -> Result<(Vec<StyledRow>, Vec<String>)> {
     if raw.len() > MAX_SNAPSHOT_BYTES {
         return Err(Error::InvalidText);
     }
     let value: serde_json::Value =
         serde_json::from_str(raw).map_err(|_| Error::InvalidText)?;
+    let mut links = Vec::new();
+    if let Some(values) = value.get("links").and_then(serde_json::Value::as_array) {
+        if values.len() > 256 {
+            return Err(Error::InvalidText);
+        }
+        for value in values {
+            let url = value.as_str().ok_or(Error::InvalidText)?;
+            if url.len() > 2048
+                || !(url.starts_with("https://") || url.starts_with("http://"))
+                || url.chars().any(char::is_control)
+            {
+                return Err(Error::InvalidText);
+            }
+            links.push(url.to_owned());
+        }
+    }
     let rows = value
         .get("rows")
         .and_then(serde_json::Value::as_array)
@@ -562,7 +585,7 @@ pub fn parse_surface(raw: &str) -> Result<Vec<StyledRow>> {
         let mut offset = 0usize;
         for span in spans {
             let fields = span.as_array().ok_or(Error::InvalidText)?;
-            if fields.len() != 5 {
+            if fields.len() != 6 {
                 return Err(Error::InvalidText);
             }
             let number = |index: usize| -> Result<u32> {
@@ -583,12 +606,20 @@ pub fn parse_surface(raw: &str) -> Result<Vec<StyledRow>> {
             if number(4)? > u16::MAX.into() {
                 return Err(Error::InvalidText);
             }
+            let link = match number(5)? {
+                u32::MAX => None,
+                index => Some(u16::try_from(index).map_err(|_| Error::InvalidText)?),
+            };
+            if link.is_some_and(|index| usize::from(index) >= links.len()) {
+                return Err(Error::InvalidText);
+            }
             runs.push(StyledRun {
                 start,
                 len,
                 fg: number(2)?,
                 bg: number(3)?,
                 modifier: number(4)? as u16,
+                link,
             });
             offset = end;
         }
@@ -600,7 +631,7 @@ pub fn parse_surface(raw: &str) -> Result<Vec<StyledRow>> {
             runs,
         });
     }
-    Ok(styled)
+    Ok((styled, links))
 }
 
 fn plain_label(value: &str, max: usize) -> String {

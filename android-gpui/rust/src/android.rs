@@ -238,6 +238,44 @@ pub(crate) fn request_keyboard(generation: i64) -> bool {
     .is_ok()
 }
 
+/// Opens a browser for a terminal link. Only http(s) targets within bounds are
+/// forwarded; Java rechecks the scheme before starting an intent.
+pub(crate) fn open_link(generation: i64, url: &str) -> bool {
+    let state = model::mailbox().state();
+    if state.generation != generation || !state.active {
+        return false;
+    }
+    if url.len() > 2048
+        || !(url.starts_with("https://") || url.starts_with("http://"))
+        || url.chars().any(char::is_control)
+    {
+        return false;
+    }
+    gpui_mobile::android::jni::with_env(|env| {
+        let activity = gpui_mobile::android::jni::activity(env)?;
+        let name = jni_mobile::strings::JNIString::from("gpuiOpenLink");
+        let signature = jni_mobile::signature::RuntimeMethodSignature::from_str(
+            "(JLjava/lang/String;)V",
+        )
+        .map_err(|e| e.to_string())?;
+        let value = env
+            .new_string(url)
+            .map_err(|e| e.to_string())?;
+        env.call_method(
+            &activity,
+            name,
+            signature.method_signature(),
+            &[
+                jni_mobile::objects::JValue::Long(generation),
+                jni_mobile::objects::JValue::Object(&value),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    })
+    .is_ok()
+}
+
 pub(crate) fn close_activity(generation: i64) -> bool {
     if model::mailbox().state().generation != generation {
         return false;
