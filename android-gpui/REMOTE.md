@@ -113,6 +113,10 @@ sessions (terminal plus mirrors plus a transient connection while switching) and
 refuses more. Mirrors exist only while they can be seen: hiding the rail or
 leaving the activity closes them and brings the session count back to one.
 
+The view stops tailing the moment a scroll target is outstanding, so incoming
+output no longer yanks a reader back to the newest line, and it only re-pins to
+the tail when lines are actually appended or the session is switched.
+
 Dragging in the terminal scrolls the daemon's scrollback: requests are coalesced
 to one per fifty milliseconds instead of dropped, the newest offset is always
 delivered when the finger lifts, a flick keeps travelling under momentum, and a

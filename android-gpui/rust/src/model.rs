@@ -716,7 +716,6 @@ fn display_text(text: &str) -> (String, bool) {
     (result, truncated)
 }
 
-#[derive(Default)]
 pub struct Mailbox {
     generation: i64,
     active: bool,
@@ -726,6 +725,7 @@ pub struct Mailbox {
     ime_session: i64,
     preedit: Arc<str>,
     display_preferences: DisplayPreferences,
+    pub follow: bool,
 }
 
 #[derive(Clone)]
@@ -736,6 +736,25 @@ pub struct ViewState {
     pub snapshot: Arc<Snapshot>,
     pub preedit: Arc<str>,
     pub display_preferences: DisplayPreferences,
+    /// Whether new output should pull the viewport to the newest line.
+    pub follow: bool,
+}
+
+impl Default for Mailbox {
+    fn default() -> Self {
+        Self {
+            generation: 0,
+            active: false,
+            revision: 0,
+            snapshot: Arc::default(),
+            commands: VecDeque::new(),
+            ime_session: 0,
+            preedit: Arc::from(""),
+            display_preferences: DisplayPreferences::default(),
+            // A fresh session tails its pane until the user scrolls back.
+            follow: true,
+        }
+    }
 }
 
 impl Mailbox {
@@ -777,6 +796,18 @@ impl Mailbox {
         Ok(true)
     }
 
+    /// The Android side owns whether the pane is tailing or reading scrollback.
+    pub fn set_follow(&mut self, generation: i64, follow: bool) -> bool {
+        if generation <= 0 || generation < self.generation || follow == self.follow {
+            return false;
+        }
+        self.follow = follow;
+        self.revision = self.revision.wrapping_add(1);
+        #[cfg(feature = "android-ui")]
+        signal_change();
+        true
+    }
+
     pub fn set_snapshot(&mut self, generation: i64, snapshot: Snapshot) -> bool {
         if generation <= 0 || generation != self.generation {
             return false;
@@ -798,6 +829,7 @@ impl Mailbox {
             snapshot: self.snapshot.clone(),
             preedit: self.preedit.clone(),
             display_preferences: self.display_preferences,
+            follow: self.follow,
         }
     }
 

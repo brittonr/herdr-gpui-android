@@ -151,6 +151,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean scrollSendScheduled;
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
+    private boolean lastFollowSent = true;
     private final Runnable scrollSend = new Runnable() {
         @Override public void run() {
             scrollSendScheduled = false;
@@ -407,6 +408,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (next == desiredScroll) return false;
         desiredScroll = next;
         scrollSeeking = true;
+        if (next > 0 && lastFollowSent) {
+            lastFollowSent = false;
+            nativeSetFollow(target.generation, false);
+        }
         long now = SystemClock.uptimeMillis();
         // Scrolling is interactive: keep the terminal polling at full speed until
         // the gesture settles, so the daemon's answer arrives in the next frame.
@@ -457,6 +462,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         desiredScroll = 0;
         lastSentScroll = -1;
         scrollSeeking = true;
+        if (!lastFollowSent) {
+            lastFollowSent = true;
+            nativeSetFollow(target.generation, true);
+        }
         try {
             worker.execute(() -> {
                 try { RemoteNative.scrollTo(target.remoteHandle, 0); }
@@ -891,6 +900,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             next = new Connection(GENERATIONS.incrementAndGet(), handle);
             next.paneId = pane;
             next.hostName = host.name;
+            scrollSeeking = false;
+            lastFollowSent = true;
             next.title = host.name;
             next.remoteBoot = null;
             connection = next;
@@ -2406,6 +2417,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private static native void nativeSetSnapshot(long generation, String title, String text, String status,
             String shortcutsJson, String surfaceJson);
     private static native void nativeSetActive(long generation, boolean active);
+    private static native void nativeSetFollow(long generation, boolean follow);
     private static native String nativeTakeCommand(long generation);
     private static native boolean nativeSendCommand(long generation, String commandJson);
     private static native boolean nativeSendKey(long generation, String key);

@@ -60,11 +60,16 @@ impl TerminalView {
         }
         let output_changed = !Arc::ptr_eq(&self.state.snapshot, &state.snapshot)
             && self.state.snapshot.lines != state.snapshot.lines;
+        // A scrolled window keeps its line count; only an append moves the tail.
+        let appended = self.state.snapshot.lines.len() != state.snapshot.lines.len();
         let geometry_changed = self.state.display_preferences != state.display_preferences
             || self.state.preedit.is_empty() != state.preedit.is_empty()
             || self.state.snapshot.truncated != state.snapshot.truncated;
+        if self.follow != state.follow {
+            self.follow = state.follow;
+        }
         if self.follow
-            && (new_generation || output_changed || geometry_changed)
+            && (new_generation || (output_changed && appended) || geometry_changed)
             && !state.snapshot.lines.is_empty()
         {
             self.scroll
