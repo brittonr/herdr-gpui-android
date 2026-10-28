@@ -49,6 +49,8 @@ public final class RemoteHostsActivity extends Activity {
     private volatile long ownedHandle;
     private boolean openingPane;
     private boolean reopenedThisVisit;
+    /** A message that must survive the asynchronous profile render. */
+    private String pendingStatus;
     private String paneSnapshot = "";
 
     @Override public void onCreate(Bundle state) {
@@ -146,7 +148,14 @@ public final class RemoteHostsActivity extends Activity {
                 host = null;
             }
             if (host == null || host.expectedFingerprint.isEmpty() || !identityStore.exists()) {
-                main.post(() -> { if (current(token)) showProfiles(); });
+                String reason = host == null ? "The remembered host is gone"
+                        : host.expectedFingerprint.isEmpty() ? "The remembered host is no longer trusted"
+                        : "No saved SSH identity on this device";
+                main.post(() -> {
+                    if (!current(token)) return;
+                    pendingStatus = reason + "; pick a host to continue";
+                    showProfiles();
+                });
                 return;
             }
             long handle = 0;
@@ -181,7 +190,12 @@ public final class RemoteHostsActivity extends Activity {
                 handle = 0;
             } catch (Exception | LinkageError failure) {
                 if (handle != 0) RemoteNative.close(handle);
-                main.post(() -> { if (current(token)) { showProfiles(); setStatus("The last session could not be reopened. Pick a host to continue."); } });
+                main.post(() -> {
+                    if (!current(token)) return;
+                    pendingStatus = "The last session could not be reopened"
+                            + (failure.getMessage() == null ? "." : ": " + failure.getMessage());
+                    showProfiles();
+                });
             }
         });
         return true;
@@ -267,7 +281,13 @@ public final class RemoteHostsActivity extends Activity {
 
     private void renderProfiles(List<SavedRemoteHost> hosts) {
         content.removeAllViews();
-        setStatus("SSH · credentials are used once and cleared on close or pause");
+        if (pendingStatus != null) {
+            String message = pendingStatus;
+            pendingStatus = null;
+            setStatus(message);
+        } else {
+            setStatus("SSH · credentials are used once and cleared on close or pause");
+        }
         content.addView(button(identityPresent ? "Replace device-wide saved SSH key" : "Save device-wide SSH key", this::editIdentity));
         if (identityPresent) {
             content.addView(label("An encrypted SSH identity is saved in Android Keystore-backed storage on this device.", 13, MUTED));
