@@ -1438,9 +1438,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1);
         nameParams.leftMargin = dp(1);
         holder.row.addView(holder.name, nameParams);
-        holder.count = railText("", 11, 0xff6f7d90);
-        holder.count.setVisibility(View.GONE);
-        holder.row.addView(holder.count);
         holder.host = host;
         holder.row.setContentDescription("Connect to " + host.name);
         holder.row.setOnClickListener(view -> {
@@ -1473,9 +1470,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         int count = workspaces == null ? 0 : workspaces.length();
         if (count != holder.counted) {
             holder.counted = count;
-            holder.count.setText(count == 0 ? "" : String.valueOf(count));
-            holder.count.setContentDescription(count + " workspaces");
-            holder.count.setVisibility(count == 0 ? View.GONE : View.VISIBLE);
+            // Workspaces are enumerated below; keep the count for screen readers.
+            holder.row.setContentDescription(count == 0
+                    ? "Connect to " + host.name
+                    : "Connect to " + host.name + ", " + count + " workspaces");
         }
     }
 
@@ -1597,7 +1595,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout row;
         View dot;
         TextView name;
-        TextView count;
         SavedRemoteHost host;
         String status;
         boolean live;
