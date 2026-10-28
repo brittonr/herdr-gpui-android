@@ -117,6 +117,11 @@ The view stops tailing the moment a scroll target is outstanding, so incoming
 output no longer yanks a reader back to the newest line, and it only re-pins to
 the tail when lines are actually appended or the session is switched.
 
+Dragging in the terminal scrolls the client's own row buffer: the session keeps
+the last 512 rows it has seen, at the offset the daemon drew them, and serves
+motion from memory. The daemon is asked only to prefetch the next rows, eight
+requests in flight, so a slow read never waits on a round trip.
+
 Dragging in the terminal scrolls the daemon's scrollback: the target is walked
 one row at a time (the daemon renders one frame per request, so a single large
 target would look like a jump), requests are coalesced instead of dropped, the newest offset is always

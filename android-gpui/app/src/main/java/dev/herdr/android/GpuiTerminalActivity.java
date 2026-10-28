@@ -153,9 +153,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean scrolling;
     /** Locally accumulated scrollback target; polls only resync it while idle. */
     private long desiredScroll, lastSentScroll = -1;
-    private static final long SCROLL_DRIP_MS = 10;
-    private boolean scrollDripping;
-    private boolean scrollDrain;
+    /** Rows requested but not yet drawn, so the local buffer stays ahead. */
+    private static final long PREFETCH_WINDOW = 8;
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
     private boolean lastFollowSent = true;
@@ -400,84 +399,65 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         return Math.max(1f, font * lineHeight * getResources().getDisplayMetrics().density);
     }
 
-    /** Drag down reveals older lines: offsets grow toward the pane's scrollback. */
+    /** Drag down reveals older lines: the client scrolls its own buffered rows. */
     private boolean requestScroll(int lines) {
         final Connection target;
         synchronized (stateLock) { target = connection; }
         if (target == null || target.isClosed() || target.remoteHandle <= 0) return false;
-        long next = Math.max(0, Math.min(target.scrollMax, desiredScroll + lines));
-        if (next == desiredScroll) return false;
-        desiredScroll = next;
-        scrollSeeking = true;
-        if (next > 0 && lastFollowSent) {
+        if (lines > 0 && lastFollowSent) {
             lastFollowSent = false;
             nativeSetFollow(target.generation, false);
         }
-        // Scrolling is interactive: keep the terminal polling at full speed until
-        // the gesture settles, so each daemon frame lands in the next poll.
         target.fastUntil = SystemClock.uptimeMillis() + 1200;
-        startScrollDrip();
+        try {
+            scrollWorker.execute(() -> {
+                try {
+                    JSONObject answer = new JSONObject(RemoteNative.scrollLocal(target.remoteHandle, lines));
+                    if (answer.optBoolean("at_edge", false)) {
+                        prefetchHistory(target);
+                    } else if (answer.optLong("offset", 0) == 0 && target.renderedScroll != 0) {
+                        sendScroll(target, 0);
+                        lastFollowSent = true;
+                        nativeSetFollow(target.generation, true);
+                    }
+                } catch (Exception | LinkageError ignored) {
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException busy) {
+            return false;
+        }
         return true;
     }
 
     /**
-     * The daemon re-renders the pane once per request, so one large target looks
-     * like a jump. Walk to the target a row at a time instead: closed-loop, one
-     * request in flight per frame, faster only when the finger is far ahead.
+     * Asks the daemon for one more row above what it has already drawn. Frames
+     * arrive one per request, so this walks backwards one row at a time and the
+     * buffer stays contiguous.
      */
-    private void startScrollDrip() {
-        if (scrollDripping || terminalSurface == null) return;
-        scrollDripping = true;
-        terminalSurface.post(scrollDrip);
-    }
-
-    private final Runnable scrollDrip = new Runnable() {
-        @Override public void run() {
-            Connection target;
-            synchronized (stateLock) { target = connection; }
-            if (target == null || target.isClosed() || target.remoteHandle <= 0) {
-                scrollDripping = false;
-                return;
-            }
-            long remaining = desiredScroll - lastSentScroll;
-            if (remaining == 0) {
-                scrollDripping = false;
-                return;
-            }
-            if (scrollDrain) {
-                sendScroll(target, desiredScroll);
-                scrollDripping = false;
-                scrollDrain = false;
-                return;
-            }
-            // A row per tick; a long flick may take up to a third of the backlog.
-            long direction = remaining > 0 ? 1 : -1;
-            long backlog = Math.abs(remaining);
-            // One row keeps the preview small; a real backlog may take two.
-            long step = direction * (backlog > 6 ? Math.min(3, backlog / 3) : backlog > 2 ? 2 : 1);
-            sendScroll(target, lastSentScroll + step);
-            if (terminalSurface != null) terminalSurface.postDelayed(this, SCROLL_DRIP_MS);
+    private void prefetchHistory(Connection target) {
+        // Keep a window of rows in flight so the buffer runs ahead of the finger;
+        // the daemon answers each request with one frame at that offset.
+        if (target.desiredHistory < target.renderedScroll) target.desiredHistory = target.renderedScroll;
+        long inFlight = target.desiredHistory - target.renderedScroll;
+        while (inFlight < PREFETCH_WINDOW && target.desiredHistory < target.scrollMax) {
+            target.desiredHistory++;
+            sendScroll(target, target.desiredHistory);
+            inFlight++;
         }
-    };
-
-    /** Sends the remaining distance immediately, for a lifted finger or a finished fling. */
-    private void flushScroll() {
-        scrollDrain = true;
-        startScrollDrip();
     }
 
+    /** Asks the daemon to render at `offset`, which backfills the local buffer. */
     private void sendScroll(Connection target, long offset) {
-        if (offset == lastSentScroll) return;
-        lastSentScroll = offset;
         try {
             scrollWorker.execute(() -> {
                 try { RemoteNative.scrollTo(target.remoteHandle, offset); }
                 catch (RuntimeException | LinkageError ignored) { }
             });
-        } catch (java.util.concurrent.RejectedExecutionException busy) {
-            lastSentScroll = -1;
-        }
+        } catch (java.util.concurrent.RejectedExecutionException busy) { }
     }
+
+    /** Nothing pends: local scrolling never waits on a round trip. */
+    private void flushScroll() { }
 
     private void jumpToLive() {
         final Connection target;
@@ -2358,6 +2338,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile String remotePhase = "";
         volatile long fastUntil;
         volatile long renderedScroll;
+        volatile long desiredHistory;
         long nextRemotePollAt;
         volatile String title = launch.title;
         volatile String hostName = launch.name();

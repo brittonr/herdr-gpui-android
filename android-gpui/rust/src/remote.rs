@@ -179,6 +179,10 @@ pub struct View {
     token: i64,
     /// Scroll offset the delivered frame was rendered at.
     rendered_scroll: i64,
+    /// Rows above the tail the client is showing from its own buffer.
+    local_offset: i64,
+    /// Number of rows the buffer can serve beyond the tail window.
+    buffered_rows: i64,
 }
 impl Default for View {
     fn default() -> Self {
@@ -201,6 +205,8 @@ impl Default for View {
             revision: 0,
             token: 0,
             rendered_scroll: 0,
+            local_offset: 0,
+            buffered_rows: 0,
         }
     }
 }
@@ -224,6 +230,12 @@ struct State {
     pending_offsets: std::collections::VecDeque<i64>,
     /// Pane the currently held text belongs to, so a skew never blanks it.
     text_pane: String,
+    /// Rows seen for this pane, keyed by distance from the bottom.
+    history: std::collections::BTreeMap<i64, StoredRow>,
+    /// Rows above the tail this client is showing; zero means tailing.
+    local_offset: i64,
+    /// Hyperlink table shared by the buffered rows.
+    history_links: serde_json::Value,
 }
 struct Session {
     state: Mutex<State>,
@@ -861,6 +873,90 @@ fn matching_surface<'a>(
         .find(|pane| pane.pane_id == pane_id && pane.focused)?;
     Some((surface, pane))
 }
+/// The latest surface for `pane_id`. Scrolling and history depend on the frame
+/// the daemon drew, not on its snapshot revision having caught up.
+fn surface_for_pane<'a>(
+    state: &'a State,
+    pane_id: &str,
+) -> Option<(&'a PaneSurfaceFrame, &'a PaneSurfacePane)> {
+    let surface = state.surface.as_ref()?;
+    if state.view.boot_id != surface.boot_id {
+        return None;
+    }
+    let pane = surface.panes.iter().find(|pane| pane.pane_id == pane_id)?;
+    Some((surface, pane))
+}
+
+/// Buffered row: the text and styled runs a frame produced for one line.
+#[derive(Clone)]
+struct StoredRow {
+    text: String,
+    runs: String,
+}
+
+/// Rows kept for local scrolling; one screen is 24 rows.
+const HISTORY_ROWS: i64 = 512;
+
+impl State {
+    /// Stores one frame's rows under the offset the daemon rendered them at.
+    fn remember_rows(&mut self, offset: i64, text: &str, style: &str) {
+        let (links, rows) = style_parts(style);
+        self.history_links = links;
+        let lines: Vec<&str> = text.split('\n').collect();
+        for (index, line) in lines.iter().enumerate() {
+            let row = offset + (lines.len() as i64 - 1 - index as i64);
+            self.history.insert(
+                row,
+                StoredRow {
+                    text: (*line).to_owned(),
+                    runs: rows.get(index).cloned().unwrap_or_default(),
+                },
+            );
+        }
+        let newest = offset + lines.len() as i64;
+        let oldest = (newest - HISTORY_ROWS).max(0);
+        self.history.retain(|row, _| *row >= oldest && *row <= newest);
+    }
+
+    /// The window shown for the current local offset, clamped to the buffer.
+    fn window_at(&mut self, rows: usize) -> Option<(String, String)> {
+        let newest = *self.history.keys().next_back()?;
+        let oldest = *self.history.keys().next()?;
+        let tail_top = newest - rows as i64 + 1;
+        let top = (tail_top - self.local_offset).clamp(oldest, tail_top);
+        self.local_offset = tail_top - top;
+        let mut text = String::new();
+        let mut styled: Vec<String> = Vec::with_capacity(rows);
+        for (index, row) in (top..top + rows as i64).enumerate() {
+            let stored = self.history.get(&row)?;
+            if index != 0 {
+                text.push('\n');
+            }
+            text.push_str(&stored.text);
+            styled.push(stored.runs.clone());
+        }
+        let style = format!(
+            "{{\"links\":{},\"rows\":[{}]}}",
+            self.history_links,
+            styled.join(",")
+        );
+        Some((text, style))
+    }
+}
+
+fn style_parts(style: &str) -> (serde_json::Value, Vec<String>) {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(style) else {
+        return (json!([]), Vec::new());
+    };
+    let links = value.get("links").cloned().unwrap_or_else(|| json!([]));
+    let rows = value
+        .get("rows")
+        .and_then(|rows| rows.as_array())
+        .map(|rows| rows.iter().map(|row| row.to_string()).collect())
+        .unwrap_or_default();
+    (links, rows)
+}
+
 fn project(state: &mut State) {
     if state.view.state == "closed" {
         return;
@@ -899,7 +995,7 @@ fn project(state: &mut State) {
     }
     .into();
     let pane_id = state.view.pane_id.clone();
-    let projection = matching_surface(state, &pane_id).map(|(surface, _pane)| {
+    let projection = surface_for_pane(state, &pane_id).map(|(surface, _pane)| {
         (
             surface_text(surface),
             surface_style(surface),
@@ -907,10 +1003,7 @@ fn project(state: &mut State) {
         )
     });
     if let Some((text, surface, revision)) = projection {
-        state.view.text = text;
-        state.view.surface = surface;
-        state.view.revision = revision;
-        state.view.scroll = matching_surface(state, &pane_id)
+        state.view.scroll = surface_for_pane(state, &pane_id)
             .and_then(|(_, pane)| pane.scroll)
             .filter(|metrics| metrics.viewport_rows > 0)
             .map(|metrics| Scroll {
@@ -919,6 +1012,25 @@ fn project(state: &mut State) {
                 rows: metrics.viewport_rows,
             })
             .unwrap_or_default();
+        let rows = state.view.scroll.rows.max(1) as usize;
+        state.remember_rows(state.view.scroll.offset as i64, &text, &surface);
+        state.view.revision = revision;
+        if state.local_offset == 0 {
+            state.view.text = text;
+            state.view.surface = surface;
+        } else if let Some((local_text, local_surface)) = state.window_at(rows) {
+            state.view.text = local_text;
+            state.view.surface = local_surface;
+        } else {
+            state.local_offset = 0;
+            state.view.text = text;
+            state.view.surface = surface;
+        }
+        let newest = state.history.keys().next_back().copied().unwrap_or(0);
+        let oldest = state.history.keys().next().copied().unwrap_or(0);
+        let tail_top = newest - rows as i64 + 1;
+        state.view.local_offset = state.local_offset;
+        state.view.buffered_rows = (tail_top - oldest).max(0);
     } else if !state.view.pane_id.is_empty() && state.view.text.is_empty() {
         state.view.state = "connecting";
         state.view.status = "Waiting for the selected pane surface".into();
@@ -1158,6 +1270,31 @@ const SESSION_ACTIONS: [&str; 7] = [
 
 /// Scrolls the focused pane to an absolute offset from the bottom. Zero returns
 /// to the live view; the daemon bounds the request to the pane's scrollback.
+/// Moves the client viewport `delta` rows into its own buffer. The daemon is not
+/// touched; `at_edge` tells the caller to prefetch more history.
+pub fn scroll_local(id: u64, delta: i64) -> Result<String> {
+    let owner = session(id)?;
+    let mut state = lock(&owner.state);
+    if state.view.state == "closed" || owner.cancel.is_cancelled() {
+        return Err(Error::Closed);
+    }
+    let rows = state.view.scroll.rows.max(1) as i64;
+    let newest = state.history.keys().next_back().copied().unwrap_or(0);
+    let oldest = state.history.keys().next().copied().unwrap_or(0);
+    let tail_top = newest - rows + 1;
+    let limit = (tail_top - oldest).max(0);
+    let next = (state.local_offset + delta).clamp(0, limit);
+    state.local_offset = next;
+    project(&mut state);
+    Ok(json!({
+        "offset": next,
+        "limit": limit,
+        "rows": rows,
+        "at_edge": next == limit && delta > 0,
+    })
+    .to_string())
+}
+
 pub fn scroll_to(id: u64, offset: i64) -> Result<String> {
     let owner = session(id)?;
     let mut state = lock(&owner.state);
