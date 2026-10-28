@@ -117,8 +117,9 @@ The view stops tailing the moment a scroll target is outstanding, so incoming
 output no longer yanks a reader back to the newest line, and it only re-pins to
 the tail when lines are actually appended or the session is switched.
 
-Dragging in the terminal scrolls the daemon's scrollback: requests are coalesced
-to one per fifty milliseconds instead of dropped, the newest offset is always
+Dragging in the terminal scrolls the daemon's scrollback: the target is walked
+one row at a time (the daemon renders one frame per request, so a single large
+target would look like a jump), requests are coalesced instead of dropped, the newest offset is always
 delivered when the finger lifts, a flick keeps travelling under momentum, and a
 poll never overwrites the target with the last offset the daemon applied.
 

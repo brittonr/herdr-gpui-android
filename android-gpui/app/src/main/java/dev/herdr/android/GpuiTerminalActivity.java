@@ -146,18 +146,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean scrolling;
     /** Locally accumulated scrollback target; polls only resync it while idle. */
     private long desiredScroll, lastSentScroll = -1;
-    private long lastScrollSentAt;
-    private static final long SEND_SCROLL_MS = 50;
-    private boolean scrollSendScheduled;
+    private static final long SCROLL_DRIP_MS = 20;
+    private boolean scrollDripping;
+    private boolean scrollDrain;
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
     private boolean lastFollowSent = true;
-    private final Runnable scrollSend = new Runnable() {
-        @Override public void run() {
-            scrollSendScheduled = false;
-            flushScroll();
-        }
-    };
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
     /** Index into the renderer's built-in palettes. */
@@ -412,42 +406,63 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             lastFollowSent = false;
             nativeSetFollow(target.generation, false);
         }
-        long now = SystemClock.uptimeMillis();
         // Scrolling is interactive: keep the terminal polling at full speed until
-        // the gesture settles, so the daemon's answer arrives in the next frame.
-        target.fastUntil = now + 1200;
-        // Requests coalesce instead of dropping: the newest offset is always
-        // delivered, at most once per poll interval.
-        long wait = SEND_SCROLL_MS - (now - lastScrollSentAt);
-        if (wait > 0) {
-            scheduleScrollSend(wait);
-            return true;
-        }
-        sendScroll(target);
+        // the gesture settles, so each daemon frame lands in the next poll.
+        target.fastUntil = SystemClock.uptimeMillis() + 1200;
+        startScrollDrip();
         return true;
     }
 
-    /** Delivers the newest requested offset once the send window reopens. */
-    private void scheduleScrollSend(long delayMs) {
-        if (scrollSendScheduled || terminalSurface == null) return;
-        scrollSendScheduled = true;
-        terminalSurface.postDelayed(scrollSend, Math.max(1, delayMs));
+    /**
+     * The daemon re-renders the pane once per request, so one large target looks
+     * like a jump. Walk to the target a row at a time instead: closed-loop, one
+     * request in flight per frame, faster only when the finger is far ahead.
+     */
+    private void startScrollDrip() {
+        if (scrollDripping || terminalSurface == null) return;
+        scrollDripping = true;
+        terminalSurface.post(scrollDrip);
     }
 
+    private final Runnable scrollDrip = new Runnable() {
+        @Override public void run() {
+            Connection target;
+            synchronized (stateLock) { target = connection; }
+            if (target == null || target.isClosed() || target.remoteHandle <= 0) {
+                scrollDripping = false;
+                return;
+            }
+            long remaining = desiredScroll - lastSentScroll;
+            if (remaining == 0) {
+                scrollDripping = false;
+                return;
+            }
+            if (scrollDrain) {
+                sendScroll(target, desiredScroll);
+                scrollDripping = false;
+                scrollDrain = false;
+                return;
+            }
+            // A row per tick; a long flick may take up to a third of the backlog.
+            long direction = remaining > 0 ? 1 : -1;
+            long step = Math.abs(remaining) > 6 ? direction * (Math.abs(remaining) / 3) : direction;
+            sendScroll(target, lastSentScroll + step);
+            if (terminalSurface != null) terminalSurface.postDelayed(this, SCROLL_DRIP_MS);
+        }
+    };
+
+    /** Sends the remaining distance immediately, for a lifted finger or a finished fling. */
     private void flushScroll() {
-        Connection target;
-        synchronized (stateLock) { target = connection; }
-        if (target != null && !target.isClosed() && target.remoteHandle > 0) sendScroll(target);
+        scrollDrain = true;
+        startScrollDrip();
     }
 
-    private void sendScroll(Connection target) {
-        long next = desiredScroll;
-        lastScrollSentAt = SystemClock.uptimeMillis();
-        if (next == lastSentScroll) return;
-        lastSentScroll = next;
+    private void sendScroll(Connection target, long offset) {
+        if (offset == lastSentScroll) return;
+        lastSentScroll = offset;
         try {
             worker.execute(() -> {
-                try { RemoteNative.scrollTo(target.remoteHandle, next); }
+                try { RemoteNative.scrollTo(target.remoteHandle, offset); }
                 catch (RuntimeException | LinkageError ignored) { }
             });
         } catch (java.util.concurrent.RejectedExecutionException busy) {
@@ -2226,7 +2241,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (!current(current)) return;
             long nowMs = SystemClock.uptimeMillis();
             if (nowMs < current.nextRemotePollAt) return;
-            current.nextRemotePollAt = nowMs + (nowMs < current.fastUntil ? 50 : 100);
+            // A live scroll wants frames, not just state: poll near 30 Hz until
+            // the gesture settles, then fall back.
+            long cadence = nowMs < current.fastUntil ? (scrollSeeking ? 33 : 50) : 100;
+            current.nextRemotePollAt = nowMs + cadence;
             String rawState = RemoteNative.poll(current.remoteHandle, current.remoteRevision, false);
             if (rawState == null || rawState.length() > 1024 * 1024) throw new IOException("Oversized remote state");
             JSONObject state = new JSONObject(rawState);
