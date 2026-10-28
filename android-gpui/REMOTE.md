@@ -154,9 +154,10 @@ being noise.
 
 The rail is open by default at every width and its hidden/shown choice persists;
 **Hosts** brings it back and **Hide** closes it, and the rail also answers to
-gestures: swipe right anywhere in the left third of the terminal to open it, and
-swipe left on the rail itself to close it. Screen edges belong to Android's own
-Back gesture, so the open swipe starts inside the content rather than at x=0; the closed state is labelled in
+gestures: swipe right anywhere in the left half of the terminal to open it, and
+swipe left on the rail itself to close it. Android's Back gesture owns the screen
+edges and ignores exclusion requests on this version, so the open swipe starts
+inside the content rather than at x=0; the closed state is labelled in
 the host colour so an empty terminal is never mistaken for a missing rail. It lists every saved host above the session tree. Choosing one
 opens a new SSH connection with the saved device key, focuses the pane this phone
 last used there - or an agent pane that is not idle - and bumps the connection

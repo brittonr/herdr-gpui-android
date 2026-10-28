@@ -260,6 +260,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         surface.setSaveEnabled(false);
         surface.getHolder().addCallback(this);
         surface.setOnTouchListener((view, event) -> forwardTouch(event));
+        // Android's Back gesture owns the screen edges. Excluding a narrow left
+        // strip lets an edge swipe reach the terminal, where it opens the rail.
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -1676,7 +1678,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             // The system owns the screen edges for Back, so the open gesture starts
             // inside the left third rather than at the very edge.
             int width = terminalSurface == null ? 0 : terminalSurface.getWidth();
-            if (!edgeClaimed && !sidebarOpen && width > 0 && touchDownX < width / 3f) {
+            if (!edgeClaimed && !sidebarOpen && width > 0 && touchDownX < width / 2f) {
                 float dx = event.getX() - edgeStartX;
                 float dy = Math.abs(event.getY() - touchDownY);
                 if (dx > dp(60) && dx > dy * 1.5f) {
