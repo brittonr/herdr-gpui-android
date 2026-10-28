@@ -30,6 +30,21 @@ inferred from code. Update it when a behaviour changes.
 | Privacy | Dialogs and the terminal are `FLAG_SECURE`; nothing is backed up on Android 12+ (`data_extraction_rules`) |
 | Cost | Cold start 167–177 ms; idle CPU 0 % per thread |
 
+## Verification receipt
+
+Recorded at commit `5e228b0`, Pixel 9 Pro Fold, install over USB:
+
+| Evidence | Value |
+|---|---|
+| `cargo test` (android-gpui) | 24 passed, 0 failed |
+| `:app:testDebugUnitTest`, `:app:lintDebug` | pass; lint reports 0 warnings |
+| Debug APK sha256 (first 16) | `dd490b9cfd23d172` |
+| Device launch | `am start -W` → ok, 167–177 ms |
+| Positions checked on screen | terminal, rail, bar, four sheets, failure banner, cover width, cover landscape |
+
+Re-run the gates and compare the digest before trusting this file after further
+changes.
+
 ## Measurement traps (each cost real time)
 
 - **`FLAG_SECURE` masquerades as a black screen.** `screencap` returns black for
