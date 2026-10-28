@@ -326,7 +326,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         keys.setOnClickListener(view -> {
             Connection target;
             synchronized (stateLock) { target = connection; }
-            if (target != null) nativeRequestKeyboard(target.generation);
+            if (target != null) nativeShowKeyboard(target.generation);
         });
         synchronousTouch(keys);
         bar.addView(keys, new LinearLayout.LayoutParams(dp(56), dp(48)));
@@ -2447,7 +2447,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             String shortcutsJson, String surfaceJson);
     private static native void nativeSetActive(long generation, boolean active);
     private static native void nativeSetFollow(long generation, boolean follow);
-    private static native void nativeRequestKeyboard(long generation);
+    private static native void nativeShowKeyboard(long generation);
     private static native String nativeTakeCommand(long generation);
     private static native boolean nativeSendCommand(long generation, String commandJson);
     private static native boolean nativeSendKey(long generation, String key);

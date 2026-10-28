@@ -340,6 +340,20 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeRequest
 
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeShowKeyboard(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+) {
+    // Grant first, then ask the platform to raise the IME: the grant alone only
+    // records intent and never shows a keyboard.
+    if request_keyboard(generation as i64) {
+        gpui_mobile::show_keyboard();
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetFollow(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
