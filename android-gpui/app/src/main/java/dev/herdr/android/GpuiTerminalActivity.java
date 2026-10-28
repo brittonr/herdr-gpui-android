@@ -147,13 +147,35 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean scrolling;
     /** Locally accumulated scrollback target; polls only resync it while idle. */
     private long desiredScroll, lastSentScroll = -1;
-    private static final long SCROLL_DRIP_MS = 20;
+    private static final long SCROLL_DRIP_MS = 10;
     private boolean scrollDripping;
     private boolean scrollDrain;
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
     private boolean lastFollowSent = true;
     private float previewRowsSent;
+    private boolean previewPumping;
+    private final android.view.Choreographer.FrameCallback previewFrame =
+            new android.view.Choreographer.FrameCallback() {
+        @Override public void doFrame(long frameTimeNanos) {
+            if (!previewPumping) return;
+            Connection target;
+            synchronized (stateLock) { target = connection; }
+            updateScrollPreview(target);
+            if (previewPumping) android.view.Choreographer.getInstance().postFrameCallback(this);
+        }
+    };
+
+    private void startPreviewPump() {
+        if (previewPumping) return;
+        previewPumping = true;
+        android.view.Choreographer.getInstance().postFrameCallback(previewFrame);
+    }
+
+    private void stopPreviewPump() {
+        previewPumping = false;
+        android.view.Choreographer.getInstance().removeFrameCallback(previewFrame);
+    }
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
     /** Index into the renderer's built-in palettes. */
@@ -412,6 +434,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // the gesture settles, so each daemon frame lands in the next poll.
         target.fastUntil = SystemClock.uptimeMillis() + 1200;
         startScrollDrip();
+        startPreviewPump();
         updateScrollPreview(target);
         return true;
     }
@@ -428,7 +451,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             long outstanding = desiredScroll - target.renderedScroll;
             rows = (float) Math.max(-4, Math.min(4, outstanding));
         }
-        if (Math.abs(rows - previewRowsSent) < 0.05f) return;
+        if (Math.abs(rows - previewRowsSent) < 0.02f) return;
         previewRowsSent = rows;
         nativeSetScrollPreview(target.generation, rows);
     }
@@ -465,7 +488,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             }
             // A row per tick; a long flick may take up to a third of the backlog.
             long direction = remaining > 0 ? 1 : -1;
-            long step = Math.abs(remaining) > 6 ? direction * (Math.abs(remaining) / 3) : direction;
+            long backlog = Math.abs(remaining);
+            // One row keeps the preview small; a real backlog may take two.
+            long step = direction * (backlog > 6 ? Math.min(3, backlog / 3) : backlog > 2 ? 2 : 1);
             sendScroll(target, lastSentScroll + step);
             if (terminalSurface != null) terminalSurface.postDelayed(this, SCROLL_DRIP_MS);
         }
@@ -498,6 +523,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         lastSentScroll = -1;
         scrollSeeking = true;
         previewRowsSent = 0f;
+        stopPreviewPump();
         nativeSetScrollPreview(target.generation, 0f);
         if (!lastFollowSent) {
             lastFollowSent = true;
@@ -2335,7 +2361,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     if (scrollSeeking) {
                         // The daemon answers with the last offset it applied; do not
                         // drag the user back while a newer target is still in flight.
-                        if (current.scrollOffset == desiredScroll) scrollSeeking = false;
+                        // Convergence is what the daemon has drawn, not what we asked for.
+                        if (current.renderedScroll == desiredScroll) {
+                            scrollSeeking = false;
+                            stopPreviewPump();
+                        }
                         updateScrollPreview(current);
                     } else {
                         desiredScroll = current.scrollOffset;
