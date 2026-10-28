@@ -91,10 +91,19 @@ final class QuickCommandPalette {
         List<Integer> indices = new ArrayList<>();
         for (int i = 0; i < source.size(); i++) indices.add(i);
         Collections.sort(indices, Comparator.comparing((Integer i) -> !source.get(i).isPinned()));
-        String[] labels = new String[indices.size()];
+        CharSequence[] labels = new CharSequence[indices.size()];
         for (int i = 0; i < labels.length; i++) {
             QuickCommand command = source.get(indices.get(i));
-            labels[i] = (command.isPinned() ? "★ " : "") + command.getLabel() + "\n" + summary(command.getText());
+            // The command is a caption, not a second title: same list pattern as
+            // everywhere else, and a constant leading marker keeps labels aligned.
+            String name = (command.isPinned() ? "★ " : "  ") + command.getLabel();
+            String text = name + "\n" + summary(command.getText());
+            android.text.SpannableString styled = new android.text.SpannableString(text);
+            styled.setSpan(new android.text.style.RelativeSizeSpan(0.8f), name.length() + 1, text.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            styled.setSpan(new android.text.style.ForegroundColorSpan(0xff9fb0c6), name.length() + 1,
+                    text.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            labels[i] = styled;
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(activity)
                 .setTitle(presets ? "OMP presets · " + OmpQuickCommands.REFERENCE_VERSION : "Quick commands")
