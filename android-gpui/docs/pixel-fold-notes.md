@@ -52,9 +52,12 @@ inferred from code. Update it when a behaviour changes.
 
 ## Open items
 
-- Two-finger horizontal drag is not mapped to the pan offset. A single-finger
-  horizontal drag is testable with `adb shell input swipe`; multi-touch is not,
-  so any gesture change needs a harness or manual verification.
+- Horizontal drag is not mapped to the pan offset. The GPUI fork's momentum
+  module computes 2D velocity (`VelocityTracker::velocity() -> (vx, vy)`) and
+  emits `ScrollWheelEvent` deltas, so a horizontal drag does carry an x delta;
+  what remains is intercepting it above the vertical list without breaking
+  vertical scrolling. A single-finger horizontal drag is testable with
+  `adb shell input swipe x1 y1 x2 y2 <ms>`; multi-touch is not.
 - Frame cadence was never measured: `dumpsys SurfaceFlinger --latency` on the
   GPUI SurfaceView returns an empty buffer while idle, so sample during
   interaction.
