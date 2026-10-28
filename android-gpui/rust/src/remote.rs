@@ -183,8 +183,6 @@ pub struct View {
     local_offset: i64,
     /// Number of rows the buffer can serve beyond the tail window.
     buffered_rows: i64,
-    /// Rows a window holds, which may exceed the daemon's viewport.
-    visible_rows: i64,
 }
 impl Default for View {
     fn default() -> Self {
@@ -209,7 +207,6 @@ impl Default for View {
             rendered_scroll: 0,
             local_offset: 0,
             buffered_rows: 0,
-            visible_rows: 0,
         }
     }
 }
@@ -240,7 +237,6 @@ struct State {
     anchor: Option<i64>,
     /// Hyperlink table shared by the buffered rows.
     history_links: serde_json::Value,
-
 }
 struct Session {
     state: Mutex<State>,
@@ -375,9 +371,6 @@ pub fn poll(id: u64, since: u64, mirror: bool) -> Result<String> {
     let json = {
         let owner = session(id)?;
         let mut state = lock(&owner.state);
-        // The renderer updates its capacity independently of frames, so report it
-        // on every poll rather than only when a projection runs.
-        state.view.visible_rows = state.window_rows();
         let pending = state.view.clipboard.is_some()
             || !state.view.notifications.is_empty()
             || state.view.bell > 0;
@@ -906,13 +899,6 @@ struct StoredRow {
 const HISTORY_ROWS: i64 = 512;
 
 impl State {
-    /// Rows a window holds: the surface's when the client reported one, else the
-    /// daemon's own viewport.
-    fn window_rows(&self) -> i64 {
-        let capacity = model::mailbox().state().viewport_rows as i64;
-        (self.view.scroll.rows as i64).max(capacity).max(1)
-    }
-
     /// Stores one frame's rows under an absolute id that does not move when the
     /// pane grows: `max_offset - distance_from_bottom`.
     fn remember_rows(&mut self, offset: i64, max: i64, text: &str, style: &str) {
@@ -1032,8 +1018,8 @@ fn project(state: &mut State) {
                 rows: metrics.viewport_rows,
             })
             .unwrap_or_default();
+        let rows = state.view.scroll.rows.max(1) as usize;
         let max = state.view.scroll.max as i64;
-        let rows = state.window_rows() as usize;
         state.remember_rows(state.view.scroll.offset as i64, max, &text, &surface);
         state.view.revision = revision;
         if state.anchor.is_none() {
@@ -1307,7 +1293,7 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
     if state.view.state == "closed" || owner.cancel.is_cancelled() {
         return Err(Error::Closed);
     }
-    let rows = state.window_rows();
+    let rows = state.view.scroll.rows.max(1) as i64;
     let max = state.view.scroll.max as i64;
     let oldest = state.history.keys().next().copied().unwrap_or(0);
     let tail_top = (max - rows + 1).max(oldest);

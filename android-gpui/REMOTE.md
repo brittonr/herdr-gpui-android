@@ -128,10 +128,6 @@ target would look like a jump), requests are coalesced instead of dropped, the n
 delivered when the finger lifts, a flick keeps travelling under momentum, and a
 poll never overwrites the target with the last offset the daemon applied.
 
-The surface reports how many rows it can show; when that exceeds the daemon's
-viewport the session fills the extra height from buffered history and keeps
-prefetching to stay ahead, so a pane never leaves a dead band under its last row.
-
 A snapshot and its matching surface arrive as separate messages, so their
 revisions disagree for a frame or two; the client keeps the last drawn pane
 instead of blanking it during that skew.

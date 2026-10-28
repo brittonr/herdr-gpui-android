@@ -449,15 +449,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
      * arrive one per request, so this walks backwards one row at a time and the
      * buffer stays contiguous.
      */
-    /** Keeps buffered history deep enough to fill the surface. */
-    private void fillHistory(Connection target) {
-        if (target == null || target.isClosed()) return;
-        // The renderer reports how many rows it can show; keep history deep enough.
-        long needed = Math.max(0, target.visibleRows - target.scrollRows);
-        if (target.bufferedRows >= needed + 2) return;
-        prefetchHistory(target);
-    }
-
     private void prefetchHistory(Connection target) {
         // Keep a window of rows in flight so the buffer runs ahead of the finger;
         // the daemon answers each request with one frame at that offset.
@@ -2272,8 +2263,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                         ? current.hostName
                         : paneName + " · " + current.hostName;
                 current.renderedScroll = state.optLong("rendered_scroll", current.renderedScroll);
-                current.bufferedRows = state.optLong("buffered_rows", current.bufferedRows);
-                current.visibleRows = state.optLong("visible_rows", current.visibleRows);
                 JSONObject scroll = state.optJSONObject("scroll");
                 if (scroll != null) {
                     current.scrollOffset = scroll.optLong("offset", 0);
@@ -2319,7 +2308,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 publish(current, selected ? "SSH connected" : "Waiting for selected remote pane…");
                 nativeSetActive(current.generation, selected);
             }
-            fillHistory(current);
             main.post(() -> refreshSidebar(false));
         } catch (IOException | JSONException | RuntimeException failure) {
             fail(current, mutation
@@ -2371,8 +2359,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile long fastUntil;
         volatile long renderedScroll;
         volatile long desiredHistory;
-        volatile long visibleRows;
-        volatile long bufferedRows;
         long nextRemotePollAt;
         volatile String title = launch.title;
         volatile String hostName = launch.name();

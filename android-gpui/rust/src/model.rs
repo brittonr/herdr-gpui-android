@@ -729,7 +729,6 @@ pub struct Mailbox {
     preedit: Arc<str>,
     display_preferences: DisplayPreferences,
     pub follow: bool,
-    pub viewport_rows: usize,
 }
 
 #[derive(Clone)]
@@ -742,7 +741,6 @@ pub struct ViewState {
     pub display_preferences: DisplayPreferences,
     /// Whether new output should pull the viewport to the newest line.
     pub follow: bool,
-    pub viewport_rows: usize,
 }
 
 impl Default for Mailbox {
@@ -758,7 +756,6 @@ impl Default for Mailbox {
             display_preferences: DisplayPreferences::default(),
             // A fresh session tails its pane until the user scrolls back.
             follow: true,
-            viewport_rows: 0,
         }
     }
 }
@@ -802,18 +799,6 @@ impl Mailbox {
         Ok(true)
     }
 
-    /// Rows the renderer can show; the client fills spare height with history.
-    pub fn set_viewport_rows(&mut self, rows: usize) -> bool {
-        if rows == 0 || rows == self.viewport_rows {
-            return false;
-        }
-        self.viewport_rows = rows;
-        self.revision = self.revision.wrapping_add(1);
-        #[cfg(feature = "android-ui")]
-        signal_change();
-        true
-    }
-
     /// The Android side owns whether the pane is tailing or reading scrollback.
     pub fn set_follow(&mut self, generation: i64, follow: bool) -> bool {
         if generation <= 0 || generation < self.generation || follow == self.follow {
@@ -848,7 +833,6 @@ impl Mailbox {
             preedit: self.preedit.clone(),
             display_preferences: self.display_preferences,
             follow: self.follow,
-            viewport_rows: self.viewport_rows,
         }
     }
 

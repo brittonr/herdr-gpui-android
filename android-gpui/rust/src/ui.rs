@@ -223,16 +223,6 @@ impl Render for TerminalView {
             .unwrap_or_else(|| snapshot.status.clone());
         let viewport = window.viewport_size();
         let metrics = DisplayMetrics::new(self.state.display_preferences, viewport.width.into());
-        let status = self
-            .error
-            .clone()
-            .unwrap_or_else(|| snapshot.status.clone());
-        // The renderer is the only side that knows how many rows fit; the client
-        // fills spare height with buffered history to match.
-        let capacity = (f64::from(viewport.height) / f64::from(metrics.row_height))
-            .floor()
-            .max(1.) as usize;
-        model::mailbox().set_viewport_rows(capacity);
         if viewport != self.viewport {
             self.viewport = viewport;
             if self.follow && !snapshot.lines.is_empty() {
