@@ -264,6 +264,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // strip lets an edge swipe reach the terminal, where it opens the rail.
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
+        terminalContent = content;
         content.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
         content.addView(createShortcutBar(), new LinearLayout.LayoutParams(-1, dp(48)));
         // The sidebar rail mirrors the desktop's list of workspaces and agents.
@@ -326,6 +327,95 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         int rows = Math.min(200, Math.max(5, (dm.heightPixels - dp(48) * 3) / cellH));
         return cols + "," + rows + "," + cellW + "," + cellH;
     }
+
+
+    private LinearLayout terminalContent;
+    private LinearLayout banner;
+    private TextView bannerText;
+
+    /** Explains a dead connection and offers the one action that can fix it. */
+    private void showReconnectBanner(String message) {
+        if (terminalRoot == null) return;
+        if (banner == null) {
+            banner = new LinearLayout(this);
+            banner.setOrientation(LinearLayout.HORIZONTAL);
+            banner.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            banner.setBackgroundColor(0xff2a2024);
+            banner.setPadding(dp(16), dp(4), dp(8), dp(4));
+            bannerText = new TextView(this);
+            bannerText.setTextColor(0xffe0a0a0);
+            bannerText.setTextSize(13);
+            LinearLayout.LayoutParams textParams =
+                    new LinearLayout.LayoutParams(0, -2, 1f);
+            banner.addView(bannerText, textParams);
+            Button retry = new Button(this);
+            retry.setText("Reconnect");
+            retry.setAllCaps(false);
+            retry.setTextSize(13);
+            retry.setTextColor(0xffdce5ef);
+            retry.setBackgroundTintList(ColorStateList.valueOf(0xff303744));
+            retry.setMinHeight(dp(48));
+            retry.setStateListAnimator(null);
+            retry.setOnClickListener(view -> reconnectCurrentHost());
+            banner.addView(retry, new LinearLayout.LayoutParams(-2, dp(48)));
+            banner.setVisibility(View.GONE);
+            // Directly above the toolbar: closest to the surface it explains.
+            int barIndex = terminalContent.getChildCount() - 1;
+            terminalContent.addView(banner, barIndex);
+        }
+        bannerText.setText(message);
+        banner.setVisibility(View.VISIBLE);
+    }
+
+    private void hideReconnectBanner() {
+        if (banner != null) banner.setVisibility(View.GONE);
+    }
+
+    /** Reuses the saved host for this session; no credential is kept in memory. */
+    private void reconnectCurrentHost() {
+        final SavedRemoteHost host;
+        String id = currentHostId;
+        SavedRemoteHost found = null;
+        for (SavedRemoteHost candidate : savedHosts) {
+            if (candidate.id.equals(id)) found = candidate;
+        }
+        host = found;
+        if (host == null) {
+            Toast.makeText(this, "Open the host list to reconnect", Toast.LENGTH_LONG).show();
+            return;
+        }
+        hideReconnectBanner();
+        publishCurrent("Reconnecting to " + host.name + "…");
+        worker.execute(() -> {
+            long handle = 0;
+            try {
+                char[] key = new RemoteIdentityStore(this).read();
+                String credential;
+                try {
+                    credential = new JSONObject().put("private_key", new String(key)).toString();
+                } finally {
+                    java.util.Arrays.fill(key, '\0');
+                }
+                handle = RemoteNative.connectGrid(host.connectionJson(), credential, terminalGrid());
+                if (handle <= 0) throw new IllegalStateException("connection refused");
+                String chosen = awaitHostPane(handle, host.id, null);
+                final long readyHandle = handle;
+                final String readyPane = chosen;
+                runOnUiThread(() -> { hideReconnectBanner(); adoptHost(host, readyHandle, readyPane); });
+                handle = 0;
+            } catch (Exception | LinkageError failure) {
+                if (handle != 0) RemoteNative.close(handle);
+                runOnUiThread(() -> showReconnectBanner("Reconnect failed. Check the host and network."));
+            }
+        });
+    }
+
+    private void publishCurrent(String status) {
+        Connection target;
+        synchronized (stateLock) { target = connection; }
+        if (target != null && !target.isClosed()) publish(target, status);
+    }
+
 
     private View createShortcutBar() {
         LinearLayout bar = new LinearLayout(this);
@@ -2375,6 +2465,17 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 fail(current, GpuiTerminalProtocol.title(state.optString("status", "Remote session closed")));
                 return;
             }
+            // A transport that stops answering leaves the session "connecting"
+            // forever; bound that state so the user gets a reason and an action.
+            String health = state.optString("status", "");
+            boolean degraded = phase.equals("connecting") || health.startsWith("endpoint health check");
+            if (degraded) {
+                if (current.degradedSince == 0) current.degradedSince = SystemClock.uptimeMillis();
+                else if (SystemClock.uptimeMillis() - current.degradedSince > 15_000) {
+                    fail(current, health.isEmpty() ? "The host stopped responding" : health);
+                    return;
+                }
+            } else current.degradedSince = 0;
             if (!"ready".equals(phase) && !"connecting".equals(phase)) throw new IOException("Invalid remote state");
             String pane = state.optString("pane_id", "");
             String boot = state.optString("boot_id", "");
@@ -2464,6 +2565,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (failed.poll != null) failed.poll.cancel(false);
             nativeSetActive(failed.generation, false);
             publish(failed, message);
+            showReconnectBanner(message);
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             Thread cleanup = new Thread(failed::close, "herdr-gpui-disconnect");
@@ -2488,6 +2590,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     private final class Connection {
+        long degradedSince;
         final long generation;
         final CompanionClient client;
         final long remoteHandle;
