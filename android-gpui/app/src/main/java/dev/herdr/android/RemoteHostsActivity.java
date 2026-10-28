@@ -101,7 +101,6 @@ public final class RemoteHostsActivity extends Activity {
         root.setPadding(dp(16), dp(12), dp(16), dp(12));
         root.setFitsSystemWindows(true);
         privateView(root);
-        root.addView(label("Remote Herdr", 24, TEXT));
         status = label("", 14, MUTED);
         root.addView(status);
         ScrollView scroll = new ScrollView(this);
@@ -268,8 +267,7 @@ public final class RemoteHostsActivity extends Activity {
 
     private void renderProfiles(List<SavedRemoteHost> hosts) {
         content.removeAllViews();
-        setStatus("SSH · passwords and passphrases are one-use; a private key may be saved encrypted on this device");
-        content.addView(label("Connect to an existing Herdr daemon through SSH. Verify its host key before entering credentials.", 15, MUTED));
+        setStatus("SSH · credentials are used once and cleared on close or pause");
         content.addView(button(identityPresent ? "Replace device-wide saved SSH key" : "Save device-wide SSH key", this::editIdentity));
         if (identityPresent) {
             content.addView(label("An encrypted SSH identity is saved in Android Keystore-backed storage on this device.", 13, MUTED));
