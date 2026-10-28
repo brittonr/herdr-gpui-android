@@ -235,15 +235,10 @@ impl Render for TerminalView {
         // surface. Spreading its rows over the surface removes the dead band
         // without depending on row identity the daemon does not provide, and
         // without shrinking the number of readable columns.
-        let base_row = f64::from(metrics.row_height).max(1.);
-        let surface_rows = (f64::from(viewport.height) / base_row).floor().max(1.);
-        let lines = snapshot.lines.len().max(1) as f64;
-        let fit = if lines < surface_rows {
-            (surface_rows / lines).clamp(1., 2.2) as f32
-        } else {
-            1.
-        };
-        let row_height = px(metrics.row_height * fit);
+        // Natural leading: a terminal's rhythm is information. Spare height goes
+        // above the block, never into the line spacing.
+        let fit = 1.0f32;
+        let row_height = px(metrics.row_height);
         let font_size = px(metrics.font_size);
         // A pane whose grid is shorter than the surface used to paint from the
         // top, leaving a dead band under the last row. Anchor those rows to the
