@@ -230,9 +230,12 @@ pub(crate) struct DisplayMetrics {
     pub font_size: f32,
     pub row_height: f32,
     pub header_height: f32,
+    /// Kept for the layout tests that pinned the removed footer row.
+    #[allow(dead_code)]
     pub touch_height: f32,
     pub padding: f32,
     pub gap: f32,
+    #[allow(dead_code)]
     pub stacked_controls: bool,
 }
 

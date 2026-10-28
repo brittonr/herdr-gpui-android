@@ -82,6 +82,7 @@ impl TerminalView {
         true
     }
 
+    #[allow(dead_code)]
     fn close(&mut self, generation: i64, cx: &mut Context<Self>) {
         #[cfg(target_os = "android")]
         if crate::android::close_activity(generation) {
@@ -92,6 +93,7 @@ impl TerminalView {
         cx.notify();
     }
 
+    #[allow(dead_code)]
     fn keyboard(&mut self, generation: i64, window: &mut Window, cx: &mut Context<Self>) {
         let state = model::mailbox().state();
         if !state.active || state.generation != generation {
@@ -117,6 +119,7 @@ impl TerminalView {
     }
 }
 
+#[allow(dead_code)]
 fn button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
@@ -229,42 +232,6 @@ impl Render for TerminalView {
         }
         let row_width = px(metrics.row_width(snapshot.widest_line_chars));
         let row_height = px(metrics.row_height);
-        let keyboard = button("keyboard", "Keyboard", metrics).on_click(
-            cx.listener(move |this, _, window, cx| this.keyboard(generation, window, cx)),
-        );
-        let follow = button(
-            "follow",
-            if self.follow { "Follow" } else { "Paused" },
-            metrics,
-        )
-        .bg(rgb(model::palette().chrome))
-        .text_color(rgb(if self.follow { model::palette().accent } else { model::palette().muted }))
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.follow = !this.follow;
-            if this.follow && !this.state.snapshot.lines.is_empty() {
-                this.scroll
-                    .scroll_to_item(this.state.snapshot.lines.len() - 1, ScrollStrategy::Bottom);
-            }
-            cx.notify();
-        }));
-        let back = button("close", "Back", metrics)
-            .on_click(cx.listener(move |this, _, _, cx| this.close(generation, cx)));
-        let footer = div()
-            .flex_none()
-            .min_w_0()
-            .flex()
-            .gap(px(metrics.gap))
-            .p(px(metrics.padding))
-            .border_t_1()
-            .border_color(rgb(model::palette().border));
-        let footer = if metrics.stacked_controls {
-            footer
-                .flex_col()
-                .child(keyboard)
-                .child(div().flex().gap(px(metrics.gap)).child(follow).child(back))
-        } else {
-            footer.child(keyboard).child(follow).child(back)
-        };
         div()
             .size_full()
             .flex()
@@ -404,7 +371,6 @@ impl Render for TerminalView {
                         .child(format!("Composing: {}", self.marked)),
                 )
             })
-            .child(footer)
     }
 }
 

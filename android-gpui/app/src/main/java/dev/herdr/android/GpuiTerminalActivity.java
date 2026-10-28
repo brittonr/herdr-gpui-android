@@ -303,6 +303,20 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setBackgroundColor(0xff1e222a);
+        Button keys = localButton("Keys");
+        keys.setContentDescription("Show the on-screen keyboard");
+        keys.setOnClickListener(view -> {
+            Connection target;
+            synchronized (stateLock) { target = connection; }
+            if (target != null) nativeRequestKeyboard(target.generation);
+        });
+        synchronousTouch(keys);
+        bar.addView(keys, new LinearLayout.LayoutParams(dp(56), dp(48)));
+        Button back = localButton("Back");
+        back.setContentDescription("Close this terminal and return to the host list");
+        back.setOnClickListener(view -> finish());
+        synchronousTouch(back);
+        bar.addView(back, new LinearLayout.LayoutParams(dp(56), dp(48)));
         Button options = localButton("View");
         options.setContentDescription("Terminal display and keyboard options");
         options.setOnClickListener(view -> showDisplayOptions());
@@ -655,15 +669,18 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
     /** Mirrors every saved host's workspace tree without disturbing the terminal. */
     private void startHostSampling() {
-        if (sampler != null) return;
-        sampler = java.util.concurrent.Executors.newScheduledThreadPool(3, runnable -> {
-            Thread thread = new Thread(runnable, "herdr-host-sample");
-            thread.setDaemon(true);
-            return thread;
-        });
+        if (sampler == null) {
+            sampler = java.util.concurrent.Executors.newScheduledThreadPool(3, runnable -> {
+                Thread thread = new Thread(runnable, "herdr-host-sample");
+                thread.setDaemon(true);
+                return thread;
+            });
+        }
         for (SavedRemoteHost host : savedHosts) {
             final String hostId = host.id;
-            hostSamples.computeIfAbsent(hostId, key -> new HostSample());
+            // Hosts loaded after the sampler started still need a mirror; the
+            // old early return left them showing "no session" forever.
+            if (hostSamples.putIfAbsent(hostId, new HostSample()) != null) continue;
             sampler.scheduleWithFixedDelay(() -> sampleHost(hostId), 0, 3, TimeUnit.SECONDS);
         }
     }
@@ -2288,7 +2305,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                         main.post(() -> applyRemoteClipboard(owner, copy));
                     }
                 }
-                publish(current, selected ? "SSH connected · " + current.title : "Waiting for selected remote pane…");
+                publish(current, selected ? "SSH connected" : "Waiting for selected remote pane…");
                 nativeSetActive(current.generation, selected);
             }
             main.post(() -> refreshSidebar(false));
@@ -2384,6 +2401,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             String shortcutsJson, String surfaceJson);
     private static native void nativeSetActive(long generation, boolean active);
     private static native void nativeSetFollow(long generation, boolean follow);
+    private static native void nativeRequestKeyboard(long generation);
     private static native String nativeTakeCommand(long generation);
     private static native boolean nativeSendCommand(long generation, String commandJson);
     private static native boolean nativeSendKey(long generation, String key);

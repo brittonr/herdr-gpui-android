@@ -330,6 +330,16 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetActi
 
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeRequestKeyboard(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+) {
+    request_keyboard(generation as i64);
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetFollow(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
