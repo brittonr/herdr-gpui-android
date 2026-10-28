@@ -632,23 +632,24 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         refreshSidebar(true);
     }
 
-    /** Persisted rail choice, defaulting to visible only where it fits. */
+    /** The rail starts open everywhere so hosts are visible, not hidden behind a button. */
     private void applySidebarDefault() {
-        boolean wide = getResources().getConfiguration().screenWidthDp >= 700;
-        sidebarOpen = wide;
+        sidebarOpen = getSharedPreferences("terminal-display", MODE_PRIVATE).getBoolean("list", true);
         applySidebarWidth();
     }
 
     private void toggleSidebar() {
         sidebarOpen = !sidebarOpen;
+        getSharedPreferences("terminal-display", MODE_PRIVATE).edit()
+                .putBoolean("list", sidebarOpen).apply();
         applySidebarWidth();
         if (sidebarOpen) refreshSidebar(true);
     }
 
     private void applySidebarWidth() {
         if (sidebar == null) return;
-        int width = sidebarOpen ? Math.min(dp(240), Math.max(dp(160),
-                terminalRoot == null ? dp(200) : terminalRoot.getWidth() / 3)) : 0;
+        int width = sidebarOpen ? Math.min(dp(240), Math.max(dp(140),
+                terminalRoot == null ? dp(180) : terminalRoot.getWidth() / 3)) : 0;
         LinearLayout.LayoutParams layout = (LinearLayout.LayoutParams) sidebar.getLayoutParams();
         if (layout != null && layout.width != width) {
             layout.width = width;
