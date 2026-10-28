@@ -532,6 +532,41 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         dialog.show();
     }
 
+    private void rememberHostPane(String paneId) {
+        rememberHostPane(currentHostId, paneId);
+    }
+
+    private void rememberHostPane(String hostId, String paneId) {
+        if (hostId == null || paneId == null || paneId.isEmpty()) return;
+        getSharedPreferences("terminal-host-panes", MODE_PRIVATE).edit()
+                .putString(hostId, paneId).apply();
+    }
+
+    private String rememberedHostPane(String hostId) {
+        if (hostId == null) return "";
+        return getSharedPreferences("terminal-host-panes", MODE_PRIVATE).getString(hostId, "");
+    }
+
+    /** Pane title for the header, from the last chrome the host reported. */
+    private String paneTitle(JSONArray panes, String paneId) {
+        if (panes == null) return "";
+        for (int i = 0; i < panes.length(); i++) {
+            JSONObject pane = panes.optJSONObject(i);
+            if (pane != null && paneId.equals(pane.optString("id", ""))) {
+                return chromeTitle(pane.optString("title", ""), paneId);
+            }
+        }
+        return "";
+    }
+
+    private static boolean hasPane(JSONArray panes, String paneId) {
+        for (int i = 0; i < panes.length(); i++) {
+            JSONObject pane = panes.optJSONObject(i);
+            if (pane != null && paneId.equals(pane.optString("id", ""))) return true;
+        }
+        return false;
+    }
+
     /**
      * Connects to another saved host with the stored device key and keeps the
      * GPUI surface: only the connection and its generation change.
@@ -560,7 +595,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 }
                 handle = RemoteNative.connect(host.connectionJson(), credential);
                 if (handle <= 0) throw new IllegalStateException("connection refused");
-                String pane = awaitHostPane(handle);
+                String pane = awaitHostPane(handle, host.id);
                 final long readyHandle = handle;
                 final String readyPane = pane;
                 runOnUiThread(() -> adoptHost(host, readyHandle, readyPane));
@@ -576,7 +611,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     /** Waits for the new session, focuses its first pane and returns that id. */
-    private String awaitHostPane(long handle) throws Exception {
+    private String awaitHostPane(long handle, String hostId) throws Exception {
         long until = SystemClock.uptimeMillis() + 45_000;
         JSONObject state = null;
         while (SystemClock.uptimeMillis() < until) {
@@ -591,7 +626,31 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         }
         JSONArray panes = state == null ? null : state.optJSONArray("panes");
         if (panes == null || panes.length() == 0) throw new IllegalStateException("no panes");
-        String pane = panes.getJSONObject(0).optString("id", "");
+        // The pane this phone last used on that host wins: the daemon's own
+        // focus is often an idle shell that looks blank.
+        String pane = rememberedHostPane(hostId);
+        // Then a pane that is actually doing something: an idle shell reads as
+        // a blank terminal even though it is rendering.
+        if (pane.isEmpty() || !hasPane(panes, pane)) {
+            for (int i = 0; i < panes.length() && pane.isEmpty(); i++) {
+                String status = panes.getJSONObject(i).optString("status", "");
+                if (!"unknown".equals(status) && !"idle".equals(status)) {
+                    pane = panes.getJSONObject(i).optString("id", "");
+                }
+            }
+        }
+        if (pane.isEmpty() || !hasPane(panes, pane)) {
+            for (int i = 0; i < panes.length() && pane.isEmpty(); i++) {
+                if (!"unknown".equals(panes.getJSONObject(i).optString("status", ""))) {
+                    pane = panes.getJSONObject(i).optString("id", "");
+                }
+            }
+        }
+        if (pane.isEmpty() || !hasPane(panes, pane)) {
+            pane = state.optString("focused_pane", "");
+        }
+        if (pane.isEmpty() || !hasPane(panes, pane)) pane = panes.getJSONObject(0).optString("id", "");
+        rememberHostPane(hostId, pane);
         if (pane.isEmpty()) throw new IllegalStateException("no pane id");
         RemoteNative.focus(handle, pane);
         until = SystemClock.uptimeMillis() + 20_000;
@@ -616,6 +675,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (previous != null) previous.close();
             next = new Connection(GENERATIONS.incrementAndGet(), handle);
             next.paneId = pane;
+            next.hostName = host.name;
             next.title = host.name;
             next.remoteBoot = null;
             connection = next;
@@ -820,6 +880,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         try {
             JSONObject result = new JSONObject(RemoteNative.focus(target.remoteHandle, paneId));
             if (!result.optBoolean("queued", false)) throw new IllegalStateException("Pane focus was not queued");
+            rememberHostPane(paneId);
             synchronized (stateLock) {
                 if (!current(target)) return;
                 target.paneId = paneId;
@@ -1505,6 +1566,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 current.tabs = state.optJSONArray("tabs");
                 current.panes = state.optJSONArray("panes");
                 current.chromePane = pane;
+                String paneName = paneTitle(current.panes, current.paneId);
+                current.title = paneName.isEmpty()
+                        ? current.hostName
+                        : paneName + " · " + current.hostName;
                 JSONObject scroll = state.optJSONObject("scroll");
                 if (scroll != null) {
                     current.scrollOffset = scroll.optLong("offset", 0);
@@ -1590,6 +1655,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         String remoteBoot;
         volatile String paneId = launch.paneId;
         volatile String title = launch.title;
+        volatile String hostName = launch.name();
         String text = "";
         String surface = "";
         JSONArray workspaces, tabs, panes;

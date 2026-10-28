@@ -98,7 +98,9 @@ schemes. The rail opens by default on both displays (narrower on the cover) and 
 whether you hid it. It starts with **Hosts**: every saved SSH host, with the current
 one marked. Tapping another host reconnects in place with the saved device key
 and the rail switches to that host's workspaces and agents; the GPUI surface and
-your scroll position stay in the app.
+your scroll position stay in the app. The terminal opens the pane you last used
+on that host, otherwise an agent that is doing something, so a switch never
+lands on an idle shell and looks blank. The header names the pane and host.
 
 Swipe down on the terminal to read scrollback and up to return; **Tab > Jump to
 live output** returns to the newest line. The activity converts a drag into

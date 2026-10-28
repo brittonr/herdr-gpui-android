@@ -101,8 +101,9 @@ file, `intent:` or custom scheme is reachable this way.
 
 The rail is open by default at every width and its hidden/shown choice persists;
 **List** / **Hide** toggles it. It lists every saved host above the session tree. Choosing one
-opens a new SSH connection with the saved device key, focuses that host's first
-pane and bumps the connection generation, so the old handle is closed before
+opens a new SSH connection with the saved device key, focuses the pane this phone
+last used there - or an agent pane that is not idle - and bumps the connection
+generation, so the old handle is closed before
 anything from it can reach the new surface. A host without a pinned fingerprint
 or without a saved key is refused with a message rather than guessed at.
 

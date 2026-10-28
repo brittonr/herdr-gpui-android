@@ -160,6 +160,9 @@ pub struct View {
     workspaces: Vec<Workspace>,
     tabs: Vec<Tab>,
     pane_id: String,
+    /// The daemon's own focused pane, used when adopting a host whose first
+    /// listed pane is rarely the interesting one.
+    focused_pane: String,
     text: String,
     surface: String,
     /// One pending OSC 52 write, delivered once by `poll`.
@@ -181,6 +184,7 @@ impl Default for View {
             workspaces: Vec::new(),
             tabs: Vec::new(),
             pane_id: String::new(),
+            focused_pane: String::new(),
             text: String::new(),
             surface: String::new(),
             clipboard: None,
@@ -635,6 +639,11 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                     status: agent_status(&tab.agent_status),
                 })
                 .collect();
+            state.view.focused_pane = snapshot
+                .focused_pane_id
+                .clone()
+                .filter(|pane| valid_pane_id(pane))
+                .unwrap_or_default();
             state.view.panes = snapshot
                 .panes
                 .iter()
