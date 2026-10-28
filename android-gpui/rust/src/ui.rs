@@ -326,15 +326,27 @@ impl Render for TerminalView {
                             .child(status),
                     ),
             )
-            .child(
-                div()
+            .child({
+                let mut body = div()
                     .flex_1()
                     .min_h_0()
                     .min_w_0()
                     .relative()
                     .overflow_hidden()
                     .flex()
-                    .flex_col()
+                    .flex_col();
+                // A horizontal drag pans the pane; vertical deltas stay with the
+                // list so scrolling keeps working exactly as before.
+                body = body.on_scroll_wheel(move |event, _, _| {
+                    let (dx, dy) = match event.delta {
+                        ScrollDelta::Pixels(point) => (f32::from(point.x), f32::from(point.y)),
+                        ScrollDelta::Lines(point) => (point.x, point.y),
+                    };
+                    if dx.abs() > 2. && dx.abs() > dy.abs() {
+                        model::mailbox().pan(-dx);
+                    }
+                });
+                body
                     .when(snapshot.lines.is_empty(), |body| {
                         body.items_center().justify_center()
                     })
@@ -429,8 +441,9 @@ impl Render for TerminalView {
                         )
                         .absolute()
                         .size_full(),
-                    ),
-            )
+                    )
+                    .into_any_element()
+            })
             .when(snapshot.truncated, |root| {
                 root.child(
                     div()

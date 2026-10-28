@@ -52,23 +52,15 @@ inferred from code. Update it when a behaviour changes.
 
 ## Open items
 
-- Horizontal drag is not mapped to the pan offset. The GPUI fork's momentum
-  module computes 2D velocity (`VelocityTracker::velocity() -> (vx, vy)`) and
-  emits `ScrollWheelEvent` deltas, so a horizontal drag does carry an x delta;
-  what remains is intercepting it above the vertical list without breaking
-  vertical scrolling. A single-finger horizontal drag is testable with
-  `adb shell input swipe x1 y1 x2 y2 <ms>`; multi-touch is not.
-
-  The interception point in `gpui-pre` 0.3.6 is `Div::on_scroll_wheel`, whose
-  listener receives `ScrollWheelEvent { delta: ScrollDelta::{Pixels(Point),
-  Lines(Point)}, .. }` and is dispatched on the **bubble** phase only when
-  `hitbox.should_handle_scroll(window)`. Because it takes `&mut self`, the
-  render chain that currently builds the pane body inline has to be restructured
-  into a binding before the listener can be attached. Two gestures must be
-  checked after any change: a horizontal swipe moves the pan offset, and a
-  vertical swipe still scrolls the pane.
+- A single-finger horizontal drag pans the pane: the body's `on_scroll_wheel`
+  listener takes the x delta and leaves vertical deltas to the list. Verified by
+  `adb shell input swipe 1200 900 700 900 250` moving the pane 448 px, with a
+  vertical swipe producing 0 px of horizontal drift. Multi-touch (two-finger
+  pan or pinch zoom) is still unverified, because `adb shell input` cannot inject
+  multiple pointers.
 - Frame cadence was never measured: `dumpsys SurfaceFlinger --latency` on the
   GPUI SurfaceView returns an empty buffer while idle, so sample during
   interaction.
 - The cover panel is exercised by resizing the display (`wm size 1080x2152`,
   then `wm size reset`), not by folding hardware.
+
