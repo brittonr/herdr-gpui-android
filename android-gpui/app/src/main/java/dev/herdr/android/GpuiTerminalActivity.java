@@ -153,6 +153,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
     private boolean lastFollowSent = true;
+    private float previewRowsSent;
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
     /** Index into the renderer's built-in palettes. */
@@ -411,7 +412,25 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // the gesture settles, so each daemon frame lands in the next poll.
         target.fastUntil = SystemClock.uptimeMillis() + 1200;
         startScrollDrip();
+        updateScrollPreview(target);
         return true;
+    }
+
+    /**
+     * The daemon answers a scroll with one frame, tens of milliseconds later.
+     * Shifting the current frame by the outstanding distance keeps motion smooth
+     * in between; the shift is bounded so the gap never grows past a few rows.
+     */
+    private void updateScrollPreview(Connection target) {
+        if (target == null || target.isClosed()) return;
+        float rows = 0f;
+        if (scrollSeeking) {
+            long outstanding = desiredScroll - target.renderedScroll;
+            rows = (float) Math.max(-4, Math.min(4, outstanding));
+        }
+        if (Math.abs(rows - previewRowsSent) < 0.05f) return;
+        previewRowsSent = rows;
+        nativeSetScrollPreview(target.generation, rows);
     }
 
     /**
@@ -478,6 +497,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         desiredScroll = 0;
         lastSentScroll = -1;
         scrollSeeking = true;
+        previewRowsSent = 0f;
+        nativeSetScrollPreview(target.generation, 0f);
         if (!lastFollowSent) {
             lastFollowSent = true;
             nativeSetFollow(target.generation, true);
@@ -918,6 +939,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             next.hostName = host.name;
             scrollSeeking = false;
             lastFollowSent = true;
+            previewRowsSent = 0f;
             next.title = host.name;
             next.remoteBoot = null;
             connection = next;
@@ -2304,6 +2326,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 current.title = paneName.isEmpty()
                         ? current.hostName
                         : paneName + " · " + current.hostName;
+                current.renderedScroll = state.optLong("rendered_scroll", current.renderedScroll);
                 JSONObject scroll = state.optJSONObject("scroll");
                 if (scroll != null) {
                     current.scrollOffset = scroll.optLong("offset", 0);
@@ -2313,6 +2336,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                         // The daemon answers with the last offset it applied; do not
                         // drag the user back while a newer target is still in flight.
                         if (current.scrollOffset == desiredScroll) scrollSeeking = false;
+                        updateScrollPreview(current);
                     } else {
                         desiredScroll = current.scrollOffset;
                         lastSentScroll = current.scrollOffset;
@@ -2395,6 +2419,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile long remoteRevision;
         volatile String remotePhase = "";
         volatile long fastUntil;
+        volatile long renderedScroll;
         long nextRemotePollAt;
         volatile String title = launch.title;
         volatile String hostName = launch.name();
@@ -2437,6 +2462,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             String shortcutsJson, String surfaceJson);
     private static native void nativeSetActive(long generation, boolean active);
     private static native void nativeSetFollow(long generation, boolean follow);
+    private static native void nativeSetScrollPreview(long generation, float rows);
     private static native String nativeTakeCommand(long generation);
     private static native boolean nativeSendCommand(long generation, String commandJson);
     private static native boolean nativeSendKey(long generation, String key);

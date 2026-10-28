@@ -177,6 +177,8 @@ pub struct View {
     revision: u64,
     /// Content hash the client mirrors back in `poll`; not part of the hash.
     token: i64,
+    /// Scroll offset the delivered frame was rendered at.
+    rendered_scroll: i64,
 }
 impl Default for View {
     fn default() -> Self {
@@ -198,6 +200,7 @@ impl Default for View {
             scroll: Scroll::default(),
             revision: 0,
             token: 0,
+            rendered_scroll: 0,
         }
     }
 }
@@ -217,6 +220,8 @@ struct State {
     /// Set by our own tab or workspace switch; the next projection adopts the
     /// daemon's focused pane. Another client's focus move is never adopted.
     follow_focus: bool,
+    /// Scroll offsets requested but not yet answered by a frame, oldest first.
+    pending_offsets: std::collections::VecDeque<i64>,
 }
 struct Session {
     state: Mutex<State>,
@@ -803,6 +808,10 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                 return Some("Invalid terminal surface".into());
             }
             state.surface = Some(surface);
+            // The frame answers the oldest outstanding scroll request.
+            if let Some(offset) = state.pending_offsets.pop_front() {
+                state.view.rendered_scroll = offset;
+            }
         }
         ClientEvent::Response {
             request_id,
@@ -1163,6 +1172,9 @@ pub fn scroll_to(id: u64, offset: i64) -> Result<String> {
         json!({"pane_id": pane, "offset_from_bottom": target}),
     )?;
     state.view.scroll.offset = target;
+    if state.pending_offsets.len() < 8 {
+        state.pending_offsets.push_back(target as i64);
+    }
     Ok(json!({"queued": true, "offset": target, "max": scroll.max}).to_string())
 }
 

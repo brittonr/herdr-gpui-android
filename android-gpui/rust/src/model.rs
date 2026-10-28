@@ -726,6 +726,7 @@ pub struct Mailbox {
     preedit: Arc<str>,
     display_preferences: DisplayPreferences,
     pub follow: bool,
+    pub preview_rows: f32,
 }
 
 #[derive(Clone)]
@@ -738,6 +739,8 @@ pub struct ViewState {
     pub display_preferences: DisplayPreferences,
     /// Whether new output should pull the viewport to the newest line.
     pub follow: bool,
+    /// Rows the rendered frame is shifted by while a scroll is in flight.
+    pub preview_rows: f32,
 }
 
 impl Default for Mailbox {
@@ -753,6 +756,7 @@ impl Default for Mailbox {
             display_preferences: DisplayPreferences::default(),
             // A fresh session tails its pane until the user scrolls back.
             follow: true,
+            preview_rows: 0.0,
         }
     }
 }
@@ -796,6 +800,22 @@ impl Mailbox {
         Ok(true)
     }
 
+    /// The Android side predicts motion the daemon has not rendered yet.
+    pub fn set_scroll_preview(&mut self, generation: i64, rows: f32) -> bool {
+        if generation <= 0 || generation != self.generation || !rows.is_finite() {
+            return false;
+        }
+        let rows = rows.clamp(-4.0, 4.0);
+        if (self.preview_rows - rows).abs() < 0.05 {
+            return false;
+        }
+        self.preview_rows = rows;
+        self.revision = self.revision.wrapping_add(1);
+        #[cfg(feature = "android-ui")]
+        signal_change();
+        true
+    }
+
     /// The Android side owns whether the pane is tailing or reading scrollback.
     pub fn set_follow(&mut self, generation: i64, follow: bool) -> bool {
         if generation <= 0 || generation < self.generation || follow == self.follow {
@@ -830,6 +850,7 @@ impl Mailbox {
             preedit: self.preedit.clone(),
             display_preferences: self.display_preferences,
             follow: self.follow,
+            preview_rows: self.preview_rows,
         }
     }
 

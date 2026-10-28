@@ -232,6 +232,8 @@ impl Render for TerminalView {
         }
         let row_width = px(metrics.row_width(snapshot.widest_line_chars));
         let row_height = px(metrics.row_height);
+        // Motion the finger has asked for but the daemon has not rendered yet.
+        let preview_shift = row_height * self.state.preview_rows;
         let keyboard = button("keyboard", "Keyboard", metrics).on_click(
             cx.listener(move |this, _, window, cx| this.keyboard(generation, window, cx)),
         );
@@ -352,6 +354,7 @@ impl Render for TerminalView {
                             },
                         )
                         .size_full()
+                        .top(preview_shift)
                         .with_horizontal_sizing_behavior(
                             ListHorizontalSizingBehavior::Unconstrained,
                         )

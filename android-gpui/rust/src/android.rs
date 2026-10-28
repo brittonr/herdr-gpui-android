@@ -4,7 +4,7 @@ use gpui::{App, AppContext, WindowOptions};
 use jni::{
     JNIEnv,
     objects::{JClass, JString},
-    sys::{jboolean, jlong, jstring},
+    sys::{jboolean, jfloat, jlong, jstring},
 };
 
 // The transitive android-activity crate references this symbol. The actual host
@@ -59,7 +59,7 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSurface
     env: JNIEnv<'_>,
     _class: JClass<'_>,
     surface: jni::objects::JObject<'_>,
-    scale: jni::sys::jfloat,
+    scale: jfloat,
 ) {
     if surface.is_null() || !scale.is_finite() || scale <= 0.0 {
         return;
@@ -341,10 +341,21 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetFoll
 
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetScrollPreview(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    rows: jfloat,
+) {
+    model::mailbox().set_scroll_preview(generation, rows);
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetDisplayPreferences(
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,
-    font_size: jni::sys::jfloat,
+    font_size: jfloat,
     compact: jboolean,
 ) {
     let result = model::mailbox().set_display_preferences(font_size, compact != 0);
