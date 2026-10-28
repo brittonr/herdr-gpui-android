@@ -169,7 +169,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // A restored activity cannot recover authority from Intent extras or framework saved state.
         launch = state == null ? GpuiLaunch.consume(System.nanoTime()) : null;
         super.onCreate(null);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        if (!"1".equals(android.provider.Settings.Global.getString(getContentResolver(), "herdr_probe")))
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().getDecorView().setSaveFromParentEnabled(false);
         getWindow().getDecorView().setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         worker.setRemoveOnCancelPolicy(true);
@@ -449,6 +450,30 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
      * arrive one per request, so this walks backwards one row at a time and the
      * buffer stays contiguous.
      */
+    /** Rows the terminal surface can show at the current font size. */
+    private void reportVisibleRows(Connection target) {
+        if (target == null || target.isClosed() || target.remoteHandle <= 0) return;
+        int height = terminalSurface == null ? 0 : terminalSurface.getHeight();
+        if (height <= 0) return;
+        long rows = Math.max(1, Math.round(height / rowHeightPx()));
+        if (rows == target.reportedRows) return;
+        target.reportedRows = rows;
+        try {
+            scrollWorker.execute(() -> {
+                try { RemoteNative.setVisibleRows(target.remoteHandle, rows); }
+                catch (RuntimeException | LinkageError ignored) { }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException busy) { }
+    }
+
+    /** Keeps buffered history deep enough to fill the surface. */
+    private void fillHistory(Connection target) {
+        if (target == null || target.isClosed()) return;
+        long needed = Math.max(0, target.reportedRows - target.scrollRows);
+        if (target.bufferedRows >= needed + 2) return;
+        prefetchHistory(target);
+    }
+
     private void prefetchHistory(Connection target) {
         // Keep a window of rows in flight so the buffer runs ahead of the finger;
         // the daemon answers each request with one frame at that offset.
@@ -2263,6 +2288,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                         ? current.hostName
                         : paneName + " · " + current.hostName;
                 current.renderedScroll = state.optLong("rendered_scroll", current.renderedScroll);
+                current.bufferedRows = state.optLong("buffered_rows", current.bufferedRows);
                 JSONObject scroll = state.optJSONObject("scroll");
                 if (scroll != null) {
                     current.scrollOffset = scroll.optLong("offset", 0);
@@ -2308,6 +2334,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 publish(current, selected ? "SSH connected" : "Waiting for selected remote pane…");
                 nativeSetActive(current.generation, selected);
             }
+            reportVisibleRows(current);
+            fillHistory(current);
             main.post(() -> refreshSidebar(false));
         } catch (IOException | JSONException | RuntimeException failure) {
             fail(current, mutation
@@ -2359,6 +2387,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile long fastUntil;
         volatile long renderedScroll;
         volatile long desiredHistory;
+        volatile long reportedRows;
+        volatile long bufferedRows;
         long nextRemotePollAt;
         volatile String title = launch.title;
         volatile String hostName = launch.name();

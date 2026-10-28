@@ -258,6 +258,16 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_scrollLocal(
 }
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_setVisibleRows(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    rows: jlong,
+) -> jstring {
+    result_string(&mut env, remote::set_visible_rows(handle as u64, rows))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_RemoteNative_scrollTo(
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,

@@ -237,6 +237,8 @@ struct State {
     anchor: Option<i64>,
     /// Hyperlink table shared by the buffered rows.
     history_links: serde_json::Value,
+    /// Rows the phone surface can show, which may exceed the daemon viewport.
+    visible_rows: i64,
 }
 struct Session {
     state: Mutex<State>,
@@ -899,6 +901,12 @@ struct StoredRow {
 const HISTORY_ROWS: i64 = 512;
 
 impl State {
+    /// Rows a window holds: the surface's when the client reported one, else the
+    /// daemon's own viewport.
+    fn window_rows(&self) -> i64 {
+        (self.view.scroll.rows as i64).max(self.visible_rows).max(1)
+    }
+
     /// Stores one frame's rows under an absolute id that does not move when the
     /// pane grows: `max_offset - distance_from_bottom`.
     fn remember_rows(&mut self, offset: i64, max: i64, text: &str, style: &str) {
@@ -1018,8 +1026,8 @@ fn project(state: &mut State) {
                 rows: metrics.viewport_rows,
             })
             .unwrap_or_default();
-        let rows = state.view.scroll.rows.max(1) as usize;
         let max = state.view.scroll.max as i64;
+        let rows = state.window_rows() as usize;
         state.remember_rows(state.view.scroll.offset as i64, max, &text, &surface);
         state.view.revision = revision;
         if state.anchor.is_none() {
@@ -1293,7 +1301,7 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
     if state.view.state == "closed" || owner.cancel.is_cancelled() {
         return Err(Error::Closed);
     }
-    let rows = state.view.scroll.rows.max(1) as i64;
+    let rows = state.window_rows();
     let max = state.view.scroll.max as i64;
     let oldest = state.history.keys().next().copied().unwrap_or(0);
     let tail_top = (max - rows + 1).max(oldest);
@@ -1328,6 +1336,19 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
         "at_edge": offset == limit && delta > 0,
     })
     .to_string())
+}
+
+/// Tells the session how many rows the phone can show, so spare height is filled
+/// with buffered history instead of background.
+pub fn set_visible_rows(id: u64, rows: i64) -> Result<String> {
+    let owner = session(id)?;
+    let mut state = lock(&owner.state);
+    let rows = rows.clamp(1, 512);
+    if state.visible_rows != rows {
+        state.visible_rows = rows;
+        project(&mut state);
+    }
+    Ok(json!({ "rows": state.visible_rows }).to_string())
 }
 
 pub fn scroll_to(id: u64, offset: i64) -> Result<String> {
