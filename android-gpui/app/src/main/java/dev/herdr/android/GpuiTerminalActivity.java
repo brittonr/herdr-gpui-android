@@ -391,6 +391,17 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
 
     /** Transport wording is for logs; the banner says what happened and what to do. */
+
+    /** One description for a host row: name, workspace count, then its state. */
+    private String hostDescription(RailHostRow holder) {
+        StringBuilder text = new StringBuilder("Connect to ").append(holder.host.name);
+        if (holder.counted > 0) text.append(", ").append(holder.counted).append(" workspaces");
+        if (holder.hostState != null && !holder.hostState.isEmpty()) {
+            text.append(", ").append(holder.hostState);
+        }
+        return text.toString();
+    }
+
     private String humanReason(String raw) {
         if (raw == null || raw.isEmpty()) return "Connection lost";
         String lower = raw.toLowerCase(java.util.Locale.ROOT);
@@ -1481,8 +1492,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             boolean pulse = holder.status != null;
             holder.status = status;
             // Colour alone cannot say it, so the dot is paired with its word.
-            holder.state.setText("connected".equals(status) ? "live"
-                    : "connecting".equals(status) ? "dialling" : "");
+            String word = "connected".equals(status) ? "live"
+                    : "connecting".equals(status) ? "dialling" : "";
+            holder.state.setText(word);
+            holder.hostState = word;
+            holder.row.setContentDescription(hostDescription(holder));
             holder.dot.setBackground("connected".equals(status)
                     ? roundedDrawable(0xff76d3b2, 4)
                     : ringDrawable("connecting".equals(status) ? 0xfff0b778 : 0xff5c6779));
@@ -1496,11 +1510,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (!host.name.contentEquals(holder.name.getText())) holder.name.setText(host.name);
         int count = workspaces == null ? 0 : workspaces.length();
         if (count != holder.counted) {
-            holder.counted = count;
             // Workspaces are enumerated below; keep the count for screen readers.
-            holder.row.setContentDescription(count == 0
-                    ? "Connect to " + host.name
-                    : "Connect to " + host.name + ", " + count + " workspaces");
+            holder.counted = count;
+            holder.row.setContentDescription(hostDescription(holder));
         }
     }
 
@@ -1599,6 +1611,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         String state = status == null || status.isEmpty() || "unknown".equals(status)
                 ? "" : status;
         if (!state.contentEquals(holder.state.getText())) holder.state.setText(state);
+        // A row description overrides its children, so the state has to be said here.
+        String described = state.isEmpty() ? "Focus pane " + title
+                : "Focus pane " + title + ", " + state;
+        if (!described.contentEquals(holder.row.getContentDescription() == null
+                ? "" : holder.row.getContentDescription())) {
+            holder.row.setContentDescription(described);
+        }
     }
 
     private View railRule(String hostId, java.util.Set<String> keep) {
@@ -1623,6 +1642,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         View dot;
         TextView name;
         TextView state;
+        String hostState = "";
         SavedRemoteHost host;
         String status;
         boolean live;
