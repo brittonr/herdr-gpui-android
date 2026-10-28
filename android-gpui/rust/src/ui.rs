@@ -338,7 +338,9 @@ impl Render for TerminalView {
                         body.items_center().justify_center()
                     })
                     .when(!snapshot.lines.is_empty(), |body| {
-                        body.when(short_pane, |body| body.justify_end())
+                        // A pane shorter than the surface gets even margins above
+                        // and below; one tall band over the text reads as a fault.
+                        body.when(short_pane, |body| body.justify_center())
                     .child(
                         div()
                             .min_w_0()
