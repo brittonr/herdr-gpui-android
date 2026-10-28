@@ -58,6 +58,15 @@ inferred from code. Update it when a behaviour changes.
   what remains is intercepting it above the vertical list without breaking
   vertical scrolling. A single-finger horizontal drag is testable with
   `adb shell input swipe x1 y1 x2 y2 <ms>`; multi-touch is not.
+
+  The interception point in `gpui-pre` 0.3.6 is `Div::on_scroll_wheel`, whose
+  listener receives `ScrollWheelEvent { delta: ScrollDelta::{Pixels(Point),
+  Lines(Point)}, .. }` and is dispatched on the **bubble** phase only when
+  `hitbox.should_handle_scroll(window)`. Because it takes `&mut self`, the
+  render chain that currently builds the pane body inline has to be restructured
+  into a binding before the listener can be attached. Two gestures must be
+  checked after any change: a horizontal swipe moves the pan offset, and a
+  vertical swipe still scrolls the pane.
 - Frame cadence was never measured: `dumpsys SurfaceFlinger --latency` on the
   GPUI SurfaceView returns an empty buffer while idle, so sample during
   interaction.
