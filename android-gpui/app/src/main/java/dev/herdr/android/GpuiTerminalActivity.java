@@ -1444,6 +1444,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1);
         nameParams.leftMargin = dp(1);
         holder.row.addView(holder.name, nameParams);
+        holder.state = railText("", 10, 0xff8c9bb0);
+        holder.state.setSingleLine(true);
+        holder.state.setGravity(android.view.Gravity.END);
+        LinearLayout.LayoutParams hostStateParams = new LinearLayout.LayoutParams(-2, -2);
+        hostStateParams.leftMargin = dp(6);
+        holder.row.addView(holder.state, hostStateParams);
         holder.host = host;
         holder.row.setContentDescription("Connect to " + host.name);
         holder.row.setOnClickListener(view -> {
@@ -1462,6 +1468,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (!status.equals(holder.status)) {
             boolean pulse = holder.status != null;
             holder.status = status;
+            // Colour alone cannot say it, so the dot is paired with its word.
+            holder.state.setText("connected".equals(status) ? "live"
+                    : "connecting".equals(status) ? "dialling" : "");
             holder.dot.setBackground("connected".equals(status)
                     ? roundedDrawable(0xff76d3b2, 4)
                     : ringDrawable("connecting".equals(status) ? 0xfff0b778 : 0xff5c6779));
@@ -1601,6 +1610,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout row;
         View dot;
         TextView name;
+        TextView state;
         SavedRemoteHost host;
         String status;
         boolean live;
