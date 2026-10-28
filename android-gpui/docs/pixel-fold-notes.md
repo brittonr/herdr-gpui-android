@@ -67,12 +67,15 @@ changes.
 
 ## Open items
 
-- A single-finger horizontal drag pans the pane: the body's `on_scroll_wheel`
-  listener takes the x delta and leaves vertical deltas to the list. Verified by
-  `adb shell input swipe 1200 900 700 900 250` moving the pane 448 px, with a
-  vertical swipe producing 0 px of horizontal drift. Multi-touch (two-finger
-  pan or pinch zoom) is still unverified, because `adb shell input` cannot inject
-  multiple pointers.
+- Both drag axes work and are measured: a horizontal swipe
+  (`1200 900 → 700 900`) pans the pane 448 px with 0 px of vertical drift, and a
+  vertical swipe (`900 800 → 900 1500`) scrolls it 370 px with no pan. The
+  horizontal delta is handled by the body's `on_scroll_wheel`; the vertical one
+  goes to the list exactly as before. A zero result means the pane was already at
+  that end of its scrollback, not that the gesture failed — check the end before
+  concluding a regression.
+- Multi-touch (two-finger pan or pinch zoom) is still unverified: `adb shell
+  input` cannot inject multiple pointers.
 - Frame cadence was never measured: `dumpsys SurfaceFlinger --latency` on the
   GPUI SurfaceView returns an empty buffer while idle, so sample during
   interaction.
