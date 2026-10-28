@@ -652,10 +652,10 @@ fn project(state: &mut State) {
     }
     .into();
     let pane_id = state.view.pane_id.clone();
-    let projection = matching_surface(state, &pane_id).map(|(surface, pane)| {
+    let projection = matching_surface(state, &pane_id).map(|(surface, _pane)| {
         (
-            surface_text(surface, pane),
-            surface_style(surface, pane),
+            surface_text(surface),
+            surface_style(surface),
             surface.surface_revision,
         )
     });
@@ -711,7 +711,15 @@ const PALETTE: [u32; 16] = [
 ];
 const DEFAULT_FG: u32 = 0xdce5ef;
 const DEFAULT_BG: u32 = 0x10151d;
+const FOCUS_ACCENT: u32 = 0x76d3b2;
 const SURFACE_LIMIT: usize = 300_000;
+
+fn inside(rect: SurfaceRect, x: u16, y: u16) -> bool {
+    u32::from(x) >= u32::from(rect.x)
+        && u32::from(x) < u32::from(rect.x) + u32::from(rect.width)
+        && u32::from(y) >= u32::from(rect.y)
+        && u32::from(y) < u32::from(rect.y) + u32::from(rect.height)
+}
 
 fn resolve_color(value: u32, default: u32) -> u32 {
     match value >> 24 {
@@ -761,23 +769,19 @@ fn cell_style(cell: &CellData, cursor: bool) -> (u32, u32, u16) {
     (fg, bg, modifier)
 }
 
-/// Builds the bounded row/run projection the renderer paints. Returns an empty
-/// string when the surface cannot be represented within the payload budget, so
-/// the plain text path stays authoritative.
-fn surface_style(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> String {
-    let rect = pane.inner_rect;
+/// Builds the bounded row/run projection the renderer paints for the whole
+/// surface frame, so splits and their borders are painted together. Returns an
+/// empty string when the frame cannot be represented within the payload budget,
+/// leaving the plain text path authoritative.
+fn surface_style(surface: &PaneSurfaceFrame) -> String {
     let frame = &surface.frame;
-    if u32::from(rect.x) + u32::from(rect.width) > u32::from(frame.width)
-        || u32::from(rect.y) + u32::from(rect.height) > u32::from(frame.height)
-    {
-        return String::new();
-    }
     let cursor = frame.cursor.as_ref().filter(|cursor| cursor.visible);
+    let focused = surface.panes.iter().find(|pane| pane.focused);
     let mut rows = Vec::new();
-    for y in rect.y..rect.y.saturating_add(rect.height) {
+    for y in 0..frame.height.min(model::MAX_LINES as u16) {
         let mut text = String::new();
         let mut runs: Vec<(usize, usize, u32, u32, u16)> = Vec::new();
-        for x in rect.x..rect.x.saturating_add(rect.width) {
+        for x in 0..frame.width {
             let Some(cell) = frame
                 .cells
                 .get(usize::from(y) * usize::from(frame.width) + usize::from(x))
@@ -799,6 +803,16 @@ fn surface_style(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> String {
             }
             let on_cursor = cursor.is_some_and(|cursor| cursor.x == x && cursor.y == y);
             let (fg, bg, modifier) = cell_style(cell, on_cursor);
+            // The focused pane's border cells carry the accent so the ring is
+            // visible beside every split.
+            let (fg, modifier) = match focused {
+                Some(pane)
+                    if inside(pane.rect, x, y) && !inside(pane.inner_rect, x, y) =>
+                {
+                    (FOCUS_ACCENT, modifier)
+                }
+                _ => (fg, modifier),
+            };
             let full = runs.len() >= model::MAX_RUNS_PER_LINE;
             match runs.last_mut() {
                 Some(run) if run.2 == fg && run.3 == bg && run.4 == modifier => {
@@ -831,28 +845,19 @@ fn surface_style(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> String {
     }
 }
 
-fn surface_text(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> String {
-    let rect = pane.inner_rect;
+/// Plain-text fallback for the same frame the styled projection paints, so the
+/// two agree on row count and content.
+fn surface_text(surface: &PaneSurfaceFrame) -> String {
     let frame = &surface.frame;
-    if u32::from(rect.x) + u32::from(rect.width) > u32::from(frame.width)
-        || u32::from(rect.y) + u32::from(rect.height) > u32::from(frame.height)
-    {
-        return String::new();
-    }
     let mut text = String::new();
-    for y in rect.y
-        ..rect
-            .y
-            .saturating_add(rect.height)
-            .min(rect.y.saturating_add(model::MAX_LINES as u16))
-    {
+    for y in 0..frame.height.min(model::MAX_LINES as u16) {
         // Separators belong between rows. A final separator would make the
         // snapshot renderer invent one extra row and scroll the first away.
-        if y != rect.y {
+        if y != 0 {
             text.push('\n');
         }
         let mut columns = 0;
-        for x in rect.x..rect.x.saturating_add(rect.width) {
+        for x in 0..frame.width {
             let Some(cell) = frame
                 .cells
                 .get(usize::from(y) * usize::from(frame.width) + usize::from(x))
@@ -1164,49 +1169,55 @@ mod tests {
             visible: true,
             shape: 0,
         });
-        let style = surface_style(&surface, &surface.panes[0]);
+        let style = surface_style(&surface);
         let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
-        let row = &parsed["rows"][0];
-        assert_eq!(row["t"], "AB");
+        // The whole frame is painted, so all three rows and the focus ring
+        // around the focused pane's border are present.
+        assert_eq!(parsed["rows"].as_array().unwrap().len(), 3);
+        let row = &parsed["rows"][1];
+        assert_eq!(row["t"], "xABx");
         let runs = row["r"].as_array().unwrap();
-        assert_eq!(runs.len(), 2);
+        assert_eq!(runs.len(), 4);
+        assert_eq!(runs[0][2], FOCUS_ACCENT, "left border carries the ring");
         // The cursor cell reverses its colors: indexed red foreground becomes the
         // background and the default background becomes the foreground.
-        assert_eq!(runs[0][2], DEFAULT_BG);
+        assert_eq!(runs[1][2], DEFAULT_BG);
         // 0x01000001 is indexed color 1, which the desktop maps to palette[1].
-        assert_eq!(runs[0][3], PALETTE[1]);
-        assert_ne!(runs[0][4].as_u64().unwrap() & u64::from(model::REVERSED), 0);
-        assert_eq!(runs[1][2], DEFAULT_FG);
-        assert_eq!(runs[1][3], 0x00_0010);
+        assert_eq!(runs[1][3], PALETTE[1]);
+        assert_ne!(runs[1][4].as_u64().unwrap() & u64::from(model::REVERSED), 0);
+        assert_eq!(runs[2][2], DEFAULT_FG);
+        assert_eq!(runs[2][3], 0x00_0010);
         assert_eq!(
-            runs[1][4].as_u64().unwrap(),
+            runs[2][4].as_u64().unwrap(),
             u64::from(model::BOLD | model::UNDERLINE)
         );
         // The model accepts exactly what the projection produces.
-        assert_eq!(model::parse_surface(&style).unwrap().len(), 1);
+        assert_eq!(model::parse_surface(&style).unwrap().len(), 3);
     }
     #[test]
-    fn surface_style_keeps_hidden_text_and_rejects_bad_geometry() {
+    fn surface_style_keeps_hidden_text_and_paints_split_borders() {
         let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
         surface.frame.cells[5].modifier = model::HIDDEN;
-        let style = surface_style(&surface, &surface.panes[0]);
+        let style = surface_style(&surface);
         let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
-        let run = &parsed["rows"][0]["r"][0];
+        // Row 1 run 1 is the hidden inner cell; its foreground collapses to its
+        // background instead of drawing the glyph in a visible color.
+        let run = &parsed["rows"][1]["r"][1];
         assert_eq!(run[2], DEFAULT_BG);
         assert_eq!(run[3], DEFAULT_BG);
+        // Geometry outside the frame is rejected before projection, not by it.
         surface.panes[0].inner_rect.width = u16::MAX;
-        assert_eq!(surface_style(&surface, &surface.panes[0]), "");
+        assert!(!valid_geometry(&surface, &surface.panes[0]));
+        assert_eq!(parsed["rows"].as_array().unwrap().len(), 3);
     }
     #[test]
-    fn surface_rows_do_not_add_a_phantom_renderer_row() {
+    fn surface_rows_follow_the_frame_height_not_one_pane() {
         let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
         surface.panes[0].inner_rect.height = 2;
-        surface.frame.cells[9].symbol = " ".into();
-        surface.frame.cells[10].symbol = " ".into();
-        let text = surface_text(&surface, &surface.panes[0]);
-        assert_eq!(text, "AB\n  ");
+        let text = surface_text(&surface);
+        assert_eq!(text, "xxxx\nxABx\nxxxx");
         let rendered = model::Snapshot::new("title", &text, "ready", "[]").unwrap();
-        assert_eq!(rendered.lines.len(), 2);
+        assert_eq!(rendered.lines.len(), 3);
     }
     #[test]
     fn authentication_policy_diagnostic_survives_client_error_boundary() {
@@ -1258,7 +1269,7 @@ mod tests {
         apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 2, "p2")));
         assert!(state.pending_focus.is_none());
         assert_eq!(state.view.pane_id, "p2");
-        assert_eq!(state.view.text, "AB");
+        assert_eq!(state.view.text, "xxxx\nxABx\nxxxx");
         assert_eq!(state.view.state, "ready");
         apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 3, "p1")));
         assert!(state.view.text.is_empty());
@@ -1312,14 +1323,15 @@ mod tests {
         }
     }
     #[test]
-    fn only_inner_pane_cells_reach_bounded_plain_text() {
+    fn frame_text_filters_escapes_and_skips_continuation_cells() {
         let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
         surface.frame.cells[5].symbol = "\u{1b}A\n".into();
         surface.frame.cells[6].skip = true;
-        assert_eq!(surface_text(&surface, &surface.panes[0]), "A");
+        assert_eq!(surface_text(&surface), "xxxx\nxAx\nxxxx");
+        // Pane geometry no longer decides what the frame projection shows.
         surface.panes[0].inner_rect.width = u16::MAX;
         assert!(!valid_geometry(&surface, &surface.panes[0]));
-        assert_eq!(surface_text(&surface, &surface.panes[0]), "");
+        assert_eq!(surface_text(&surface), "xxxx\nxAx\nxxxx");
     }
     #[test]
     fn submit_is_one_text_and_enter_batch_and_keys_are_semantic() {

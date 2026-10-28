@@ -86,12 +86,13 @@ Leaving the remote terminal closes its connection and discards pending input.
 Reconnect from Remote hosts and enter credentials again. A daemon restart,
 deleted pane or stale launch cannot silently retarget a command.
 
-The remote renderer paints the selected pane's cells: named, indexed and
+The remote renderer paints the validated binary surface frame: named, indexed and
 truecolor foregrounds and backgrounds, bold, dim, italic, underline, reverse,
-strikethrough and hidden attributes, and the block cursor, all derived from the
-validated binary surface. Runs must tile each row exactly or the row falls back
-to plain text, so a malformed surface can never misalign colors. Graphics,
-images, unlimited scrollback and split-pane painting are not rendered yet.
+strikethrough and hidden attributes, the block cursor, and every split pane with
+its borders, the active pane's border carrying the accent ring. Runs must tile
+each row exactly or the row falls back to plain text, so a malformed surface can
+never misalign colors. Graphics, images and unlimited scrollback are not
+rendered yet.
 
 **List** shows a workspace/agent rail and **Panes** the same session tree as a
 sheet, both from the daemon snapshot and each row carrying its agent status.

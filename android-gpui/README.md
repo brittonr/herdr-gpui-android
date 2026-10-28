@@ -87,16 +87,17 @@ renderer, terminal layout and input handling are GPUI/Rust. Remote SSH uses the
 existing binary client, while the optional HTTPS workflow uses companion snapshots.
 It does not move the full desktop application, sidebar or browser to Android.
 
-The SSH workflow paints the selected pane from the daemon's own cells: 16 named
-colors, indexed and truecolor cells, bold, dim, italic, underline, reverse,
+The SSH workflow paints the daemon's whole surface frame from its own cells: 16
+named colors, indexed and truecolor cells, bold, dim, italic, underline, reverse,
 strikethrough, hidden text and a block cursor, with every run bounded and
-validated before it reaches the renderer. A surface whose rows do not tile the
-extracted text exactly falls back to bounded **plain text**, which is also what
-the HTTPS companion workflow shows. Graphics, images, responsive daemon resize,
-full scrollback and split-pane painting are not rendered yet. No terminal escape
-sequence is executed just because it appears in output. GPUI backend lifecycle
-and mobile IME support are experimental upstream; device verification is
-essential.
+validated before it reaches the renderer. Split panes and their borders are
+painted together and the panes' focused border carries the accent ring. A
+surface whose runs do not tile the extracted text exactly falls back to bounded
+**plain text**, which is also what the HTTPS companion workflow shows. Graphics,
+images, responsive daemon resize and full scrollback are not rendered yet. No
+terminal escape sequence is executed just because it appears in output. GPUI
+backend lifecycle and mobile IME support are experimental upstream; device
+verification is essential.
 
 The configurable extra-key strip uses native Android controls so its actions
 share the immediate ordered input path with hardware keys and IME commits.
