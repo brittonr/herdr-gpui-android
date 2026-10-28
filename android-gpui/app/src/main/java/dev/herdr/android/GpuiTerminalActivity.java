@@ -704,6 +704,15 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         showLocalDialog(displayDialog);
     }
 
+
+    /** Same opt-in the activity used at create time. */
+    private boolean capturableSession() {
+        return (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && "1".equals(android.provider.Settings.Global.getString(
+                        getContentResolver(), "herdr_probe"));
+    }
+
     private void showLocalDialog(AlertDialog dialog) {
         if (destroyed || isFinishing()) return;
         AlertDialog previous = displayDialog;
@@ -713,7 +722,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (displayDialog == closedDialog) displayDialog = null;
             clearControl();
         });
-        dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        // Dialogs carry the same private content as the terminal, so they stay
+        // secure unless the same debuggable opt-in applies; otherwise no sheet in
+        // this app could ever be captured or reviewed.
+        if (!capturableSession()) dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         dialog.show();
     }
@@ -1524,6 +1536,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                             13, tab.optBoolean("focused") ? 0xe7eaf0 : 0x8c9bb0, false));
                     // 48 dp is Android's minimum touch target; 40 was below it.
                     row.setMinimumHeight(dp(48));
+                    row.setPadding(dp(16), 0, dp(8), 0);
                     row.setContentDescription("Focus tab " + chromeTitle(tab.optString("label", ""), tab.optString("id", "")));
                     String tabId = tab.optString("id", "");
                     row.setOnClickListener(view -> {
@@ -1544,7 +1557,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         ScrollView scroll = new ScrollView(this);
         scroll.addView(list);
         AlertDialog sheet = new AlertDialog.Builder(this)
-                .setTitle("Panes · " + (connection == null ? launch.name() : connection.title))
+                .setTitle("Panes")
                 .setView(scroll)
                 .setNegativeButton("Close", null)
                 .create();
@@ -1556,6 +1569,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setMinimumHeight(dp(48));
+        row.setPadding(dp(32), 0, dp(8), 0);
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
         row.setFocusable(true);
         row.setSaveEnabled(false);
