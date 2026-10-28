@@ -1263,12 +1263,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
     private RailWorkspaceRow createRailWorkspaceRow() {
         RailWorkspaceRow holder = new RailWorkspaceRow();
-        TextView row = railText("", 10, 0xff8fa0b8);
-        row.setAllCaps(true);
-        row.setLetterSpacing(0.09f);
+        // The desktop lists workspaces in sentence case with the pane title below,
+        // not as shouted section headings; match that reading order.
+        TextView row = railText("", 12, 0xffc2ccda);
         row.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
                 android.graphics.Typeface.NORMAL));
-        row.setPadding(dp(10), dp(11), dp(6), dp(2));
+        row.setPadding(dp(10), dp(9), dp(6), dp(1));
         row.setOnClickListener(view -> {
             if (holder.live) focusChrome(holder.connection, "workspace", holder.workspaceId);
         });
@@ -1286,7 +1286,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             row.setText(label);
             row.setContentDescription("Focus workspace " + label);
         }
-        int color = live ? 0xff8fa0b8 : 0xff6b788c;
+        int color = live ? 0xffc2ccda : 0xff8c9bb0;
         if (row.getCurrentTextColor() != color) row.setTextColor(color);
     }
 
