@@ -35,6 +35,14 @@ android {
         }
     }
     buildTypes { release { minifyEnabled false } }
+    lint {
+        // The UI is English-only by design; every literal is user-facing copy,
+        // not an untranslated resource. Other lint families stay enabled.
+        disable 'SetTextI18n'
+        // The remaining hit is a static final int in the pinned GPUI fork that is
+        // inlined at compile time; the fork guards its own API use.
+        disable 'InlinedApi'
+    }
 }
 
 dependencies {

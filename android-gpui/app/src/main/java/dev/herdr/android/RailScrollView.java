@@ -1,5 +1,7 @@
 package dev.herdr.android;
 
+import android.annotation.SuppressLint;
+
 import android.content.Context;
 import android.view.MotionEvent;
 import android.widget.ScrollView;
@@ -9,6 +11,9 @@ import android.widget.ScrollView;
  * vertical scrolling. The swipe is claimed only once it is clearly horizontal,
  * so scrolling the tree never closes it by accident.
  */
+// Constructed only from code, and it needs its owner's close action, so there is
+// deliberately no XML constructor.
+@SuppressLint("ViewConstructor")
 final class RailScrollView extends ScrollView {
     private static final float CLAIM_DP = 36f;
     private static final float RATIO = 1.5f;
@@ -42,6 +47,9 @@ final class RailScrollView extends ScrollView {
         return super.onInterceptTouchEvent(event);
     }
 
+    // This view is a scroll gesture surface, not a click target; the rows it
+    // contains expose their own click actions.
+    @SuppressLint("ClickableViewAccessibility")
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (!claimed) return super.onTouchEvent(event);
         if (event.getActionMasked() == MotionEvent.ACTION_UP) {

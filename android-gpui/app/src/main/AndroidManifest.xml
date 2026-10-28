@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -9,6 +10,9 @@
     <uses-feature android:name="android.hardware.vulkan.level" android:version="0" android:required="false" />
     <application android:label="Herdr GPUI Remote" android:theme="@style/AppTheme"
         android:icon="@drawable/ic_herdr" android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        tools:ignore="DataExtractionRules"
         android:usesCleartextTraffic="false" android:hardwareAccelerated="true"
         android:supportsRtl="true">
         <activity android:name="dev.herdr.android.RemoteHostsActivity" android:exported="true"

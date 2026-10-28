@@ -1,5 +1,7 @@
 package dev.herdr.android;
 
+import android.annotation.SuppressLint;
+
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
@@ -227,6 +229,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         }
     }
 
+    // The painted grid is a gesture surface, not a click target: a screen reader
+    // reaches this app through the toolbar, the rail and the Keys keyboard.
+    @SuppressLint("ClickableViewAccessibility")
     private void createSurface() {
         getWindow().setStatusBarColor(0xff101216);
         getWindow().setNavigationBarColor(0xff101216);
@@ -574,6 +579,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         return bar;
     }
 
+    // performClick is dispatched from the touch lambda below; lint cannot see it.
+    @SuppressLint("ClickableViewAccessibility")
     private void synchronousTouch(Button button) {
         GpuiShortcutTouch tap = new GpuiShortcutTouch();
         button.setOnTouchListener((view, event) -> {
