@@ -116,6 +116,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private AlertDialog displayDialog;
     private Button controlButton;
     /** Vertical swipe state: a short tap still reaches the terminal. */
+    private float touchDownX, edgeStartX;
+    private boolean edgeClaimed;
     private float touchDownY, lastTouchY, scrollFraction;
     private float scrollVelocity, flingRemainder;
     private long lastMoveAt;
@@ -267,7 +269,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         sidebar.setOrientation(LinearLayout.HORIZONTAL);
         sidebar.setBackgroundColor(0xff12161d);
         sidebar.setSaveFromParentEnabled(false);
-        sidebarScroll = new ScrollView(this);
+        sidebarScroll = new RailScrollView(this, this::hideSidebar);
         sidebarScroll.setBackgroundColor(0xff12161d);
         sidebarScroll.setVerticalScrollBarEnabled(false);
         sidebarRows = new LinearLayout(this);
@@ -999,8 +1001,22 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         Toast.makeText(this, "Screenshot saved", Toast.LENGTH_SHORT).show();
     }
 
+    private void hideSidebar() {
+        if (!sidebarOpen) return;
+        setSidebarOpen(false);
+    }
+
+    private void showSidebar() {
+        if (sidebarOpen) return;
+        setSidebarOpen(true);
+    }
+
     private void toggleSidebar() {
-        sidebarOpen = !sidebarOpen;
+        setSidebarOpen(!sidebarOpen);
+    }
+
+    private void setSidebarOpen(boolean open) {
+        sidebarOpen = open;
         getSharedPreferences("terminal-display", MODE_PRIVATE).edit()
                 .putBoolean("list", sidebarOpen).apply();
         applySidebarWidth();
@@ -1649,12 +1665,27 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         int masked = event.getActionMasked();
         if (masked == MotionEvent.ACTION_DOWN) {
             stopFling();
+            touchDownX = edgeStartX = event.getX();
+            edgeClaimed = false;
             touchDownY = lastTouchY = event.getY();
             lastMoveAt = SystemClock.uptimeMillis();
             scrollVelocity = 0f;
             scrolling = false;
             scrollFraction = 0f;
         } else if (masked == MotionEvent.ACTION_MOVE && count == 1) {
+            // The system owns the screen edges for Back, so the open gesture starts
+            // inside the left third rather than at the very edge.
+            int width = terminalSurface == null ? 0 : terminalSurface.getWidth();
+            if (!edgeClaimed && !sidebarOpen && width > 0 && touchDownX < width / 3f) {
+                float dx = event.getX() - edgeStartX;
+                float dy = Math.abs(event.getY() - touchDownY);
+                if (dx > dp(60) && dx > dy * 1.5f) {
+                    edgeClaimed = true;
+                    showSidebar();
+                    return true;
+                }
+            }
+            if (edgeClaimed) return true;
             if (!scrolling && Math.abs(event.getY() - touchDownY) > dp(8)) scrolling = true;
             if (scrolling) {
                 long now = SystemClock.uptimeMillis();
@@ -1674,6 +1705,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 return true;
             }
         } else if (masked == MotionEvent.ACTION_UP || masked == MotionEvent.ACTION_CANCEL) {
+            if (edgeClaimed) {
+                edgeClaimed = false;
+                return true;
+            }
             if (scrolling) {
                 scrolling = false;
                 flushScroll();
