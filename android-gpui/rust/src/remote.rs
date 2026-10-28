@@ -192,6 +192,9 @@ struct State {
     snapshot: Option<Arc<ClientShellSnapshot>>,
     surface: Option<Arc<PaneSurfaceFrame>>,
     pending_focus: Option<PendingFocus>,
+    /// Set by our own tab or workspace switch; the next projection adopts the
+    /// daemon's focused pane. Another client's focus move is never adopted.
+    follow_focus: bool,
 }
 struct Session {
     state: Mutex<State>,
@@ -628,6 +631,13 @@ fn project(state: &mut State) {
     {
         state.view.pane_id.clone_from(&pending.pane_id);
         state.pending_focus = None;
+    } else if state.pending_focus.is_none() && state.follow_focus {
+        // Our own tab or workspace switch moved the daemon's focused pane;
+        // follow it rather than waiting for a pane this client no longer owns.
+        if let Some(focused) = focused_pane(state) {
+            state.view.pane_id.clone_from(&focused);
+            state.follow_focus = matching_surface(state, &state.view.pane_id).is_none();
+        }
     }
     state.view.text.clear();
     state.view.state = if state.snapshot.is_some() && state.pending_focus.is_none() {
@@ -657,6 +667,17 @@ fn project(state: &mut State) {
         state.view.state = "connecting";
         state.view.status = "Waiting for the selected pane surface".into();
     }
+}
+
+/// The daemon's focused pane from the latest snapshot, when it is still valid.
+fn focused_pane(state: &State) -> Option<String> {
+    let snapshot = state.snapshot.as_ref()?;
+    let focused = snapshot.focused_pane_id.as_deref()?;
+    snapshot
+        .panes
+        .iter()
+        .any(|pane| pane.pane_id == focused)
+        .then(|| focused.to_owned())
 }
 
 fn valid_pane_id(id: &str) -> bool {
@@ -893,6 +914,60 @@ pub fn focus(id: u64, pane_id: &str) -> Result<String> {
     Ok(json!({"queued": true}).to_string())
 }
 
+/// Focus a tab inside the current session. The daemon then moves its focused
+/// pane and the next projection follows it.
+pub fn focus_tab(id: u64, tab_id: &str) -> Result<String> {
+    focus_chrome(id, Method::TabFocus, "tab_id", tab_id, |snapshot| {
+        snapshot.tabs.iter().any(|tab| tab.tab_id == tab_id)
+    })
+}
+
+/// Focus a workspace inside the current session, with the same follow-on
+/// projection as a tab switch.
+pub fn focus_workspace(id: u64, workspace_id: &str) -> Result<String> {
+    focus_chrome(
+        id,
+        Method::WorkspaceFocus,
+        "workspace_id",
+        workspace_id,
+        |snapshot| {
+            snapshot
+                .workspaces
+                .iter()
+                .any(|workspace| workspace.workspace_id == workspace_id)
+        },
+    )
+}
+
+fn focus_chrome(
+    id: u64,
+    method: Method,
+    field: &str,
+    value: &str,
+    known: impl Fn(&ClientShellSnapshot) -> bool,
+) -> Result<String> {
+    let owner = session(id)?;
+    let mut state = lock(&owner.state);
+    if state.view.state == "closed" || owner.cancel.is_cancelled() {
+        return Err(Error::Closed);
+    }
+    if value.is_empty() || value.len() > 1024 || !known(state.snapshot.as_ref().ok_or(Error::StaleTarget)?)
+    {
+        return Err(Error::StaleTarget);
+    }
+    state
+        .client
+        .as_ref()
+        .ok_or(Error::Closed)?
+        .request(&state.view.boot_id, method, json!({ field: value }))?;
+    state.follow_focus = true;
+    state.view.text.clear();
+    state.view.surface.clear();
+    state.view.state = "connecting";
+    state.view.status = "Switching session view".into();
+    Ok(json!({"queued": true}).to_string())
+}
+
 pub fn input(id: u64, pane_id: &str, raw: &str) -> Result<String> {
     let events = command_events(model::parse_command(raw)?)?;
     let owner = session(id)?;
@@ -1049,6 +1124,31 @@ mod tests {
             acknowledged: false,
             started: Instant::now(),
         });
+    }
+    #[test]
+    fn daemon_focus_move_is_followed_without_a_pending_request() {
+        let mut state = State::default();
+        assert!(apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 2, "p1"))).is_none());
+        state.view.pane_id = "p1".into();
+        // A tab or workspace switch delivers a snapshot and surface focused on another pane.
+        state.follow_focus = true;
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 2, "p2")));
+        apply_event(&mut state, ClientEvent::Surface(surface("boot", 2, "p2")));
+        project(&mut state);
+        assert_eq!(state.view.pane_id, "p2");
+        assert_eq!(state.view.state, "ready");
+        assert!(!state.follow_focus, "a matched projection ends the follow");
+        // Without a switch of our own, another client's focus move is ignored.
+        state.follow_focus = false;
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 3, "p1")));
+        apply_event(&mut state, ClientEvent::Surface(surface("boot", 3, "p1")));
+        project(&mut state);
+        assert_eq!(state.view.pane_id, "p2");
+        // An in-flight explicit pane request still wins until acknowledged.
+        pending(&mut state, "p1");
+        apply_event(&mut state, ClientEvent::Surface(surface("boot", 2, "p2")));
+        project(&mut state);
+        assert_eq!(state.view.pane_id, "p2");
     }
     #[test]
     fn surface_style_resolves_colors_attributes_and_cursor() {

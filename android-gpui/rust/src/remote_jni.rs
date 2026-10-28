@@ -188,6 +188,32 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_focus(
 }
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_focusTab(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    tab: JString<'_>,
+) -> jstring {
+    let Some(tab) = read(&mut env, &tab, 1024) else {
+        return std::ptr::null_mut();
+    };
+    result_string(&mut env, remote::focus_tab(handle as u64, &tab))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_focusWorkspace(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    workspace: JString<'_>,
+) -> jstring {
+    let Some(workspace) = read(&mut env, &workspace, 1024) else {
+        return std::ptr::null_mut();
+    };
+    result_string(&mut env, remote::focus_workspace(handle as u64, &workspace))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_RemoteNative_close(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,

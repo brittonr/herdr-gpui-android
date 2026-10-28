@@ -430,8 +430,15 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 JSONObject workspace = workspaces.optJSONObject(w);
                 if (workspace == null) continue;
                 String workspaceId = workspace.optString("id", "");
-                list.addView(chromeLabel(chromeTitle(workspace.optString("label", ""), workspaceId),
-                        15, 0x9fb0c6, true));
+                TextView header = chromeLabel(chromeTitle(workspace.optString("label", ""), workspaceId),
+                        15, 0x9fb0c6, true);
+                header.setMinimumHeight(dp(48));
+                header.setContentDescription("Focus workspace " + chromeTitle(workspace.optString("label", ""), workspaceId));
+                header.setOnClickListener(view -> {
+                    if (displayDialog != null) displayDialog.dismiss();
+                    focusChrome(target, "workspace", workspaceId);
+                });
+                list.addView(header);
                 if (tabs != null) for (int t = 0; t < tabs.length(); t++) {
                     JSONObject tab = tabs.optJSONObject(t);
                     if (tab == null || !workspaceId.equals(tab.optString("workspace_id", ""))) continue;
@@ -440,6 +447,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     row.addView(chromeDot(tab.optString("status", "unknown")));
                     row.addView(chromeLabel(chromeTitle(tab.optString("label", ""), tab.optString("id", "")),
                             13, tab.optBoolean("focused") ? 0xe7eaf0 : 0x8c9bb0, false));
+                    row.setMinimumHeight(dp(40));
+                    row.setContentDescription("Focus tab " + chromeTitle(tab.optString("label", ""), tab.optString("id", "")));
+                    String tabId = tab.optString("id", "");
+                    row.setOnClickListener(view -> {
+                        if (displayDialog != null) displayDialog.dismiss();
+                        focusChrome(target, "tab", tabId);
+                    });
                     list.addView(row);
                 }
                 for (int p = 0; p < panes.length(); p++) {
@@ -497,6 +511,27 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             }
         } catch (Exception | LinkageError failure) {
             Toast.makeText(this, "Could not switch pane; reopen and check the session", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** Tabs and workspaces use the daemon's own switch requests. */
+    private void focusChrome(Connection target, String kind, String id) {
+        if (id.isEmpty() || id.length() > 128
+                || !id.matches("[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)*")) return;
+        if (target.remoteHandle <= 0) {
+            Toast.makeText(this, "Switch workspaces from Remote hosts for this connection", Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            JSONObject result = new JSONObject("tab".equals(kind)
+                    ? RemoteNative.focusTab(target.remoteHandle, id)
+                    : RemoteNative.focusWorkspace(target.remoteHandle, id));
+            if (!result.optBoolean("queued", false)) throw new IllegalStateException("Switch was not queued");
+            synchronized (stateLock) {
+                if (current(target)) publish(target, "Switching " + kind + "…");
+            }
+        } catch (Exception | LinkageError failure) {
+            Toast.makeText(this, "Could not switch; reopen and check the session", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -970,7 +1005,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (!"ready".equals(phase) && !"connecting".equals(phase)) throw new IOException("Invalid remote state");
             String pane = state.optString("pane_id", "");
             String boot = state.optString("boot_id", "");
-            boolean selected = "ready".equals(phase) && current.paneId.equals(pane) && !boot.isEmpty();
+            // The daemon owns the focused pane: a tab, workspace or pane switch
+            // moves it, and the terminal follows instead of waiting forever.
+            if (!pane.isEmpty()) current.paneId = pane;
+            boolean selected = "ready".equals(phase) && !pane.isEmpty() && !boot.isEmpty();
             String text = selected ? state.getString("text") : "";
             synchronized (stateLock) {
                 if (!current(current)) return;

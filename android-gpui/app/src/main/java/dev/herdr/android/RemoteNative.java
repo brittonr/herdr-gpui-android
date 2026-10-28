@@ -20,5 +20,7 @@ final class RemoteNative {
     static native String poll(long handle);
     static native String input(long handle, String paneId, String commandJson);
     static native String focus(long handle, String paneId);
+    static native String focusTab(long handle, String tabId);
+    static native String focusWorkspace(long handle, String workspaceId);
     static native void close(long handle);
 }
