@@ -341,17 +341,6 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetFoll
 
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetScrollPreview(
-    _env: JNIEnv<'_>,
-    _class: JClass<'_>,
-    generation: jlong,
-    rows: jfloat,
-) {
-    model::mailbox().set_scroll_preview(generation, rows);
-}
-
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetDisplayPreferences(
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,

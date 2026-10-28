@@ -153,29 +153,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
     private boolean lastFollowSent = true;
-    private float previewRowsSent;
-    private boolean previewPumping;
-    private final android.view.Choreographer.FrameCallback previewFrame =
-            new android.view.Choreographer.FrameCallback() {
-        @Override public void doFrame(long frameTimeNanos) {
-            if (!previewPumping) return;
-            Connection target;
-            synchronized (stateLock) { target = connection; }
-            updateScrollPreview(target);
-            if (previewPumping) android.view.Choreographer.getInstance().postFrameCallback(this);
-        }
-    };
-
-    private void startPreviewPump() {
-        if (previewPumping) return;
-        previewPumping = true;
-        android.view.Choreographer.getInstance().postFrameCallback(previewFrame);
-    }
-
-    private void stopPreviewPump() {
-        previewPumping = false;
-        android.view.Choreographer.getInstance().removeFrameCallback(previewFrame);
-    }
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
     /** Index into the renderer's built-in palettes. */
@@ -187,7 +164,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // A restored activity cannot recover authority from Intent extras or framework saved state.
         launch = state == null ? GpuiLaunch.consume(System.nanoTime()) : null;
         super.onCreate(null);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        if (!"1".equals(android.provider.Settings.Global.getString(getContentResolver(), "herdr_probe")))
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().getDecorView().setSaveFromParentEnabled(false);
         getWindow().getDecorView().setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         worker.setRemoveOnCancelPolicy(true);
@@ -434,26 +412,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // the gesture settles, so each daemon frame lands in the next poll.
         target.fastUntil = SystemClock.uptimeMillis() + 1200;
         startScrollDrip();
-        startPreviewPump();
-        updateScrollPreview(target);
         return true;
-    }
-
-    /**
-     * The daemon answers a scroll with one frame, tens of milliseconds later.
-     * Shifting the current frame by the outstanding distance keeps motion smooth
-     * in between; the shift is bounded so the gap never grows past a few rows.
-     */
-    private void updateScrollPreview(Connection target) {
-        if (target == null || target.isClosed()) return;
-        float rows = 0f;
-        if (scrollSeeking) {
-            long outstanding = desiredScroll - target.renderedScroll;
-            rows = (float) Math.max(-4, Math.min(4, outstanding));
-        }
-        if (Math.abs(rows - previewRowsSent) < 0.02f) return;
-        previewRowsSent = rows;
-        nativeSetScrollPreview(target.generation, rows);
     }
 
     /**
@@ -522,9 +481,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         desiredScroll = 0;
         lastSentScroll = -1;
         scrollSeeking = true;
-        previewRowsSent = 0f;
-        stopPreviewPump();
-        nativeSetScrollPreview(target.generation, 0f);
         if (!lastFollowSent) {
             lastFollowSent = true;
             nativeSetFollow(target.generation, true);
@@ -965,7 +921,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             next.hostName = host.name;
             scrollSeeking = false;
             lastFollowSent = true;
-            previewRowsSent = 0f;
             next.title = host.name;
             next.remoteBoot = null;
             connection = next;
@@ -2362,11 +2317,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                         // The daemon answers with the last offset it applied; do not
                         // drag the user back while a newer target is still in flight.
                         // Convergence is what the daemon has drawn, not what we asked for.
-                        if (current.renderedScroll == desiredScroll) {
-                            scrollSeeking = false;
-                            stopPreviewPump();
-                        }
-                        updateScrollPreview(current);
+                        if (current.renderedScroll == desiredScroll) scrollSeeking = false;
                     } else {
                         desiredScroll = current.scrollOffset;
                         lastSentScroll = current.scrollOffset;
@@ -2492,7 +2443,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             String shortcutsJson, String surfaceJson);
     private static native void nativeSetActive(long generation, boolean active);
     private static native void nativeSetFollow(long generation, boolean follow);
-    private static native void nativeSetScrollPreview(long generation, float rows);
     private static native String nativeTakeCommand(long generation);
     private static native boolean nativeSendCommand(long generation, String commandJson);
     private static native boolean nativeSendKey(long generation, String key);
