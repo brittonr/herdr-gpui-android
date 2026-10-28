@@ -78,6 +78,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean compactDisplay;
     private FrameLayout terminalRoot;
     private LinearLayout sidebar, sidebarRows;
+    /** Reused rail rows, so a sampler refresh never replaces the view under a finger. */
+    private final java.util.Map<String, RailHostRow> railHostRows = new java.util.HashMap<>();
+    private final java.util.Map<String, RailWorkspaceRow> railWorkspaces = new java.util.HashMap<>();
+    private final java.util.Map<String, RailPaneRow> railPanes = new java.util.HashMap<>();
+    private final java.util.Map<String, TextView> railNotes = new java.util.HashMap<>();
+    private final java.util.Map<String, View> railRules = new java.util.HashMap<>();
     private ScrollView sidebarScroll;
     private Button sidebarButton;
     private volatile boolean sidebarOpen;
@@ -916,11 +922,16 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         signature.append(currentHostId);
         if (!force && signature.toString().equals(sidebarSignature)) return;
         sidebarSignature = signature.toString();
-        sidebarRows.removeAllViews();
         if (savedHosts.isEmpty()) {
+            pruneRailRows(java.util.Collections.emptySet());
+            sidebarRows.removeAllViews();
             sidebarRows.addView(railText("No saved hosts yet", 13, 0xff6f7d90));
             return;
         }
+        // Rows are reused, never rebuilt: the sampler refreshes every three
+        // seconds and replacing a view under a finger cancels its tap.
+        java.util.List<View> order = new java.util.ArrayList<>();
+        java.util.Set<String> keep = new java.util.HashSet<>();
         for (int h = 0; h < savedHosts.size(); h++) {
             SavedRemoteHost host = savedHosts.get(h);
             boolean live = host.id.equals(currentHostId);
@@ -929,109 +940,251 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     : sample == null ? null : sample.workspaces;
             JSONArray panes = live && current != null ? current.panes
                     : sample == null ? null : sample.panes;
-            sidebarRows.addView(railHostHeader(host, live, workspaces));
-            if (workspaces == null || panes == null) {
-                sidebarRows.addView(railNote(sample != null && !sample.connected
-                        ? "connecting…" : "no session"));
-                continue;
+            addHostRows(host, live, workspaces, panes, current, order, keep);
+            if (h + 1 < savedHosts.size()) order.add(railRule(host.id, keep));
+        }
+        pruneRailRows(keep);
+        commitRailOrder(order);
+    }
+
+    private void addHostRows(SavedRemoteHost host, boolean live, JSONArray workspaces, JSONArray panes,
+            Connection current, java.util.List<View> order, java.util.Set<String> keep) {
+        String hostKey = "host:" + host.id;
+        keep.add(hostKey);
+        RailHostRow header = railHostRows.get(hostKey);
+        if (header == null) {
+            header = createRailHostRow(host);
+            railHostRows.put(hostKey, header);
+        }
+        updateRailHostRow(header, host, live, workspaces);
+        order.add(header.row);
+        if (workspaces == null || panes == null) {
+            HostSample sample = hostSamples.get(host.id);
+            String noteKey = "note:" + host.id;
+            keep.add(noteKey);
+            TextView note = railNotes.get(noteKey);
+            if (note == null) {
+                note = new TextView(this);
+                note.setTextSize(11);
+                note.setTextColor(0xff66748a);
+                note.setPadding(dp(10), dp(2), dp(6), dp(6));
+                note.setTypeface(android.graphics.Typeface.create("sans-serif-italic",
+                        android.graphics.Typeface.NORMAL));
+                railNotes.put(noteKey, note);
             }
-            for (int w = 0; w < workspaces.length(); w++) {
-                JSONObject workspace = workspaces.optJSONObject(w);
-                if (workspace == null) continue;
-                String workspaceId = workspace.optString("id", "");
-                String workspaceLabel = chromeTitle(workspace.optString("label", ""), workspaceId);
-                TextView workspaceRow = railWorkspace(workspaceLabel, live);
-                if (live) workspaceRow.setOnClickListener(view -> focusChrome(current, "workspace", workspaceId));
-                sidebarRows.addView(workspaceRow);
-                for (int p = 0; p < panes.length(); p++) {
-                    JSONObject pane = panes.optJSONObject(p);
-                    if (pane == null || !workspaceId.equals(pane.optString("workspace_id", ""))) continue;
-                    String paneId = pane.optString("id", "");
-                    String title = chromeTitle(pane.optString("title", ""), paneId);
-                    boolean selected = live && current != null && paneId.equals(current.paneId);
-                    LinearLayout row = railPaneRow(title, pane.optString("status", "unknown"), selected);
-                    row.setContentDescription("Focus pane " + title + " on " + host.name);
-                    row.setOnClickListener(view -> {
-                        if (live) {
-                            focusRemotePane(current, paneId);
-                        } else {
-                            switchHost(host, paneId);
-                        }
-                    });
-                    sidebarRows.addView(row);
+            String text = sample != null && !sample.connected ? "connecting…" : "no session";
+            if (!text.contentEquals(note.getText())) note.setText(text);
+            order.add(note);
+            return;
+        }
+        for (int w = 0; w < workspaces.length(); w++) {
+            JSONObject workspace = workspaces.optJSONObject(w);
+            if (workspace == null) continue;
+            String workspaceId = workspace.optString("id", "");
+            String workspaceLabel = chromeTitle(workspace.optString("label", ""), workspaceId);
+            String workspaceKey = "ws:" + host.id + "/" + workspaceId;
+            keep.add(workspaceKey);
+            RailWorkspaceRow workspaceRow = railWorkspaces.get(workspaceKey);
+            if (workspaceRow == null) {
+                workspaceRow = createRailWorkspaceRow();
+                railWorkspaces.put(workspaceKey, workspaceRow);
+            }
+            updateRailWorkspaceRow(workspaceRow, workspaceLabel, live, current, workspaceId);
+            order.add(workspaceRow.view);
+            for (int p = 0; p < panes.length(); p++) {
+                JSONObject pane = panes.optJSONObject(p);
+                if (pane == null || !workspaceId.equals(pane.optString("workspace_id", ""))) continue;
+                String paneId = pane.optString("id", "");
+                String title = chromeTitle(pane.optString("title", ""), paneId);
+                boolean selected = live && current != null && paneId.equals(current.paneId);
+                String paneKey = "pane:" + host.id + "/" + paneId;
+                keep.add(paneKey);
+                RailPaneRow row = railPanes.get(paneKey);
+                if (row == null) {
+                    row = createRailPaneRow();
+                    railPanes.put(paneKey, row);
                 }
+                updateRailPaneRow(row, host, live, current, paneId, title,
+                        pane.optString("status", "unknown"), selected);
+                order.add(row.row);
             }
-            if (h + 1 < savedHosts.size()) sidebarRows.addView(railRule());
         }
     }
 
-    /** One saved host: status dot, name, and how many workspaces its session reports. */
-    private View railHostHeader(SavedRemoteHost host, boolean live, JSONArray workspaces) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        row.setMinimumHeight(dp(38));
-        row.setPadding(dp(6), dp(5), dp(6), dp(5));
-        if (live) row.setBackground(roundedDrawable(0x1476d3b2, 9));
-        row.addView(chromeDot(live ? "idle" : "unknown"));
-        TextView name = railText(host.name, 13, live ? 0xff76d3b2 : 0xffd7dee8);
-        name.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-        name.setSingleLine(true);
+    /** Moves reused rows into their new positions without touching rows that already sit there. */
+    private void commitRailOrder(java.util.List<View> order) {
+        for (int i = 0; i < order.size(); i++) {
+            View view = order.get(i);
+            if (view.getParent() != sidebarRows) {
+                sidebarRows.addView(view, Math.min(i, sidebarRows.getChildCount()));
+            } else if (sidebarRows.indexOfChild(view) != i) {
+                sidebarRows.removeView(view);
+                sidebarRows.addView(view, i);
+            }
+        }
+        while (sidebarRows.getChildCount() > order.size()) {
+            sidebarRows.removeViewAt(order.size());
+        }
+    }
+
+    private void pruneRailRows(java.util.Set<String> keep) {
+        prune(railHostRows, keep, holder -> holder.row);
+        prune(railWorkspaces, keep, holder -> holder.view);
+        prune(railPanes, keep, holder -> holder.row);
+        prune(railNotes, keep, view -> view);
+        prune(railRules, keep, view -> view);
+    }
+
+    private <T> void prune(java.util.Map<String, T> rows, java.util.Set<String> keep, java.util.function.Function<T, View> view) {
+        java.util.Iterator<java.util.Map.Entry<String, T>> iterator = rows.entrySet().iterator();
+        while (iterator.hasNext()) {
+            java.util.Map.Entry<String, T> entry = iterator.next();
+            if (keep.contains(entry.getKey())) continue;
+            View stale = view.apply(entry.getValue());
+            if (stale.getParent() == sidebarRows) sidebarRows.removeView(stale);
+            iterator.remove();
+        }
+    }
+
+    private RailHostRow createRailHostRow(SavedRemoteHost host) {
+        RailHostRow holder = new RailHostRow();
+        holder.row = new LinearLayout(this);
+        holder.row.setOrientation(LinearLayout.HORIZONTAL);
+        holder.row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        holder.row.setMinimumHeight(dp(42));
+        holder.row.setPadding(dp(6), dp(6), dp(6), dp(6));
+        holder.row.setSaveFromParentEnabled(false);
+        holder.dot = new View(this);
+        holder.dot.setBackground(roundedDrawable(0xff8892a0, 4));
+        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(8), dp(8));
+        dotParams.setMarginEnd(dp(8));
+        holder.row.addView(holder.dot, dotParams);
+        holder.name = railText(host.name, 13, 0xffd7dee8);
+        holder.name.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
+                android.graphics.Typeface.NORMAL));
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1);
         nameParams.leftMargin = dp(1);
-        row.addView(name, nameParams);
-        if (workspaces != null && workspaces.length() > 0) {
-            TextView count = railText(String.valueOf(workspaces.length()), 11, 0xff6f7d90);
-            count.setContentDescription(workspaces.length() + " workspaces");
-            row.addView(count);
-        }
-        row.setContentDescription("Connect to " + host.name);
-        row.setOnClickListener(view -> switchHost(host));
-        row.setSaveFromParentEnabled(false);
-        return row;
+        holder.row.addView(holder.name, nameParams);
+        holder.count = railText("", 11, 0xff6f7d90);
+        holder.count.setVisibility(View.GONE);
+        holder.row.addView(holder.count);
+        holder.host = host;
+        holder.row.setContentDescription("Connect to " + host.name);
+        holder.row.setOnClickListener(view -> {
+            switchHost(holder.host);
+        });
+        return holder;
     }
 
-    /** A workspace label: quiet, upper case, and clearly above its panes. */
-    private TextView railWorkspace(String label, boolean live) {
-        TextView row = railText(label, 10, live ? 0xff8fa0b8 : 0xff6b788c);
+    private void updateRailHostRow(RailHostRow holder, SavedRemoteHost host, boolean live, JSONArray workspaces) {
+        holder.host = host;
+        String status = live ? "idle" : "unknown";
+        if (!status.equals(holder.status)) {
+            holder.status = status;
+            holder.dot.setBackground(roundedDrawable(0xff000000 | railStatusColor(status), 4));
+        }
+        if (holder.live != live) {
+            holder.live = live;
+            holder.row.setBackground(live ? roundedDrawable(0x1476d3b2, 9) : null);
+            holder.name.setTextColor(live ? 0xff76d3b2 : 0xffd7dee8);
+        }
+        if (!host.name.contentEquals(holder.name.getText())) holder.name.setText(host.name);
+        int count = workspaces == null ? 0 : workspaces.length();
+        if (count != holder.counted) {
+            holder.counted = count;
+            holder.count.setText(count == 0 ? "" : String.valueOf(count));
+            holder.count.setContentDescription(count + " workspaces");
+            holder.count.setVisibility(count == 0 ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private RailWorkspaceRow createRailWorkspaceRow() {
+        RailWorkspaceRow holder = new RailWorkspaceRow();
+        TextView row = railText("", 10, 0xff8fa0b8);
         row.setAllCaps(true);
         row.setLetterSpacing(0.09f);
-        row.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        row.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
+                android.graphics.Typeface.NORMAL));
         row.setPadding(dp(10), dp(11), dp(6), dp(2));
-        row.setContentDescription("Focus workspace " + label);
-        return row;
+        row.setOnClickListener(view -> {
+            if (holder.live) focusChrome(holder.connection, "workspace", holder.workspaceId);
+        });
+        holder.view = row;
+        return holder;
     }
 
-    /** A pane row: status dot, up to two lines of title, and a pill when focused. */
-    private LinearLayout railPaneRow(String title, String status, boolean selected) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        row.setMinimumHeight(dp(32));
-        row.setPadding(dp(10), dp(4), dp(6), dp(4));
-        if (selected) row.setBackground(roundedDrawable(0x3076d3b2, 8));
-        row.addView(chromeDot(status));
-        TextView label = railText(title, 12, selected ? 0xfff2f6fb : 0xffc2ccda);
-        label.setSingleLine(false);
-        label.setMaxLines(2);
-        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        label.setLineSpacing(0, 1.05f);
+    private void updateRailWorkspaceRow(RailWorkspaceRow holder, String label, boolean live,
+            Connection connection, String workspaceId) {
+        holder.live = live;
+        holder.connection = connection;
+        holder.workspaceId = workspaceId;
+        TextView row = holder.view;
+        if (!label.contentEquals(row.getText())) {
+            row.setText(label);
+            row.setContentDescription("Focus workspace " + label);
+        }
+        int color = live ? 0xff8fa0b8 : 0xff6b788c;
+        if (row.getCurrentTextColor() != color) row.setTextColor(color);
+    }
+
+    private RailPaneRow createRailPaneRow() {
+        RailPaneRow holder = new RailPaneRow();
+        holder.row = new LinearLayout(this);
+        holder.row.setOrientation(LinearLayout.HORIZONTAL);
+        holder.row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        holder.row.setMinimumHeight(dp(38));
+        holder.row.setPadding(dp(10), dp(5), dp(6), dp(5));
+        holder.row.setSaveFromParentEnabled(false);
+        holder.dot = new View(this);
+        holder.dot.setBackground(roundedDrawable(0xff8892a0, 4));
+        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(8), dp(8));
+        dotParams.setMarginEnd(dp(8));
+        holder.row.addView(holder.dot, dotParams);
+        holder.title = railText("", 12, 0xffc2ccda);
+        holder.title.setSingleLine(false);
+        holder.title.setMaxLines(2);
+        holder.title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        holder.title.setLineSpacing(0, 1.05f);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
         params.leftMargin = dp(1);
-        row.addView(label, params);
-        row.setSaveFromParentEnabled(false);
-        return row;
+        holder.row.addView(holder.title, params);
+        holder.row.setOnClickListener(view -> {
+            if (holder.live) {
+                focusRemotePane(holder.connection, holder.paneId);
+            } else {
+                switchHost(holder.host, holder.paneId);
+            }
+        });
+        return holder;
     }
 
-    private TextView railNote(String text) {
-        TextView note = railText(text, 11, 0xff66748a);
-        note.setPadding(dp(10), dp(2), dp(6), dp(6));
-        note.setTypeface(android.graphics.Typeface.create("sans-serif-italic", android.graphics.Typeface.NORMAL));
-        return note;
+    private void updateRailPaneRow(RailPaneRow holder, SavedRemoteHost host, boolean live,
+            Connection connection, String paneId, String title, String status, boolean selected) {
+        holder.host = host;
+        holder.live = live;
+        holder.connection = connection;
+        holder.paneId = paneId;
+        if (!status.equals(holder.status)) {
+            holder.status = status;
+            holder.dot.setBackground(roundedDrawable(0xff000000 | railStatusColor(status), 4));
+        }
+        if (holder.selected != selected) {
+            holder.selected = selected;
+            holder.row.setBackground(selected ? roundedDrawable(0x3076d3b2, 8) : null);
+            holder.title.setTextColor(selected ? 0xfff2f6fb : 0xffc2ccda);
+        }
+        if (!title.contentEquals(holder.title.getText())) {
+            holder.title.setText(title);
+            holder.row.setContentDescription("Focus pane " + title);
+        }
     }
 
-    private View railRule() {
-        View rule = new View(this);
+    private View railRule(String hostId, java.util.Set<String> keep) {
+        String key = "rule:" + hostId;
+        keep.add(key);
+        View rule = railRules.get(key);
+        if (rule != null) return rule;
+        rule = new View(this);
         rule.setBackgroundColor(0xff1c222b);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(1));
         params.topMargin = dp(12);
@@ -1039,7 +1192,46 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         params.leftMargin = dp(6);
         params.rightMargin = dp(6);
         rule.setLayoutParams(params);
+        railRules.put(key, rule);
         return rule;
+    }
+
+    private static final class RailHostRow {
+        LinearLayout row;
+        View dot;
+        TextView name;
+        TextView count;
+        SavedRemoteHost host;
+        String status;
+        boolean live;
+        int counted = -1;
+    }
+
+    private static final class RailWorkspaceRow {
+        TextView view;
+        Connection connection;
+        String workspaceId = "";
+        boolean live;
+    }
+
+    private static final class RailPaneRow {
+        LinearLayout row;
+        View dot;
+        TextView title;
+        SavedRemoteHost host;
+        Connection connection;
+        String paneId = "";
+        boolean live;
+        boolean selected;
+        String status;
+    }
+
+    private static int railStatusColor(String status) {
+        if ("working".equals(status)) return 0xf0b778;
+        if ("blocked".equals(status)) return 0xff6b6b;
+        if ("done".equals(status)) return 0x6ab0f3;
+        if ("idle".equals(status)) return 0x76d3b2;
+        return 0x8892a0;
     }
 
     private TextView railText(String text, int size, int color) {
