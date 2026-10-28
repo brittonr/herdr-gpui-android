@@ -375,7 +375,7 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetDisp
     if result.is_err() {
         let _ = env.throw_new(
             "java/lang/IllegalArgumentException",
-            "GPUI display font size must be finite and between 11 and 36 logical pixels",
+            "GPUI display font size must be 0 (auto) or finite and between 11 and 36 logical pixels",
         );
     }
 }

@@ -222,7 +222,11 @@ impl Render for TerminalView {
             .clone()
             .unwrap_or_else(|| snapshot.status.clone());
         let viewport = window.viewport_size();
-        let metrics = DisplayMetrics::new(self.state.display_preferences, viewport.width.into());
+        let metrics = DisplayMetrics::fit(
+            self.state.display_preferences,
+            viewport.width.into(),
+            snapshot.widest_line_chars,
+        );
         if viewport != self.viewport {
             self.viewport = viewport;
             if self.follow && !snapshot.lines.is_empty() {

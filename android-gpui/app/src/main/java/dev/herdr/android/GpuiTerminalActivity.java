@@ -573,8 +573,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         float height = configuration.screenHeightDp;
         if (width <= 0 || height <= 0) return;
         compactDisplay = displayOptions.compact(width, height);
-        nativeSetDisplayPreferences(displayOptions.effectiveFont(compactDisplay,
-                getResources().getConfiguration().fontScale), compactDisplay);
+        // Zero hands type sizing to the renderer, which fits the pane's own
+        // wrapping width; a first run on a fold should not be caption-sized.
+        float chosenFont = displayOptions.fontSize == 0
+                ? 0f
+                : displayOptions.effectiveFont(compactDisplay,
+                        getResources().getConfiguration().fontScale);
+        nativeSetDisplayPreferences(chosenFont, compactDisplay);
     }
 
     private void hideInitialKeyboard() {

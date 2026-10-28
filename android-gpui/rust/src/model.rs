@@ -207,7 +207,9 @@ pub struct DisplayPreferences {
 impl Default for DisplayPreferences {
     fn default() -> Self {
         Self {
-            font_size: 13.,
+            // Zero means "auto": the largest size at which the pane's widest
+            // line still fits the surface width.
+            font_size: 0.,
             compact: false,
         }
     }
@@ -215,7 +217,8 @@ impl Default for DisplayPreferences {
 
 impl DisplayPreferences {
     pub fn new(font_size: f32, compact: bool) -> Result<Self> {
-        if !font_size.is_finite() || !(11.0..=36.0).contains(&font_size) {
+        // 0 is the auto sentinel; everything else is a deliberate user choice.
+        if !font_size.is_finite() || (font_size != 0. && !(11.0..=36.0).contains(&font_size)) {
             return Err(Error::InvalidDisplayPreferences);
         }
         Ok(Self { font_size, compact })
@@ -242,7 +245,20 @@ pub(crate) struct DisplayMetrics {
 #[cfg(any(feature = "android-ui", test))]
 impl DisplayMetrics {
     pub fn new(preferences: DisplayPreferences, viewport_width: f32) -> Self {
-        let font_size = preferences.font_size;
+        Self::fit(preferences, viewport_width, 0)
+    }
+
+    /// `widest_line_chars` is the pane's own wrapping width in cells. Auto type
+    /// takes the largest size whose line fits the surface, so a narrow pane on a
+    /// wide panel grows instead of leaving the right half empty.
+    pub fn fit(preferences: DisplayPreferences, viewport_width: f32, widest_line_chars: usize) -> Self {
+        let font_size = if preferences.font_size > 0. {
+            preferences.font_size
+        } else if widest_line_chars > 0 && viewport_width > 0. {
+            (viewport_width / (widest_line_chars as f32 * 0.6)).clamp(11., 20.)
+        } else {
+            13.
+        };
         let padding = if preferences.compact { 4. } else { 8. };
         let gap = padding;
         // The longest control label is Keyboard. At larger accessibility sizes
@@ -1046,9 +1062,27 @@ mod tests {
         assert!(box_.state().snapshot.lines.is_empty());
     }
     #[test]
+    fn auto_type_fills_a_narrow_pane_and_stays_on_screen_for_a_wide_one() {
+        let auto = DisplayPreferences::default();
+        // A 70-cell pane on a 798 dp panel grows instead of leaving the row half empty.
+        let roomy = DisplayMetrics::fit(auto, 798., 70);
+        assert!(roomy.font_size > 13., "{}", roomy.font_size);
+        assert!(roomy.font_size <= 20., "{}", roomy.font_size);
+        // A 150-cell pane clamps down so the last cell still fits.
+        let dense = DisplayMetrics::fit(auto, 798., 150);
+        assert!((11.0..=13.0).contains(&dense.font_size), "{}", dense.font_size);
+        // An explicit choice always wins over the fit.
+        let chosen = DisplayPreferences::new(17., false).unwrap();
+        assert_eq!(DisplayMetrics::fit(chosen, 798., 70).font_size, 17.);
+        // Before a pane arrives the long-standing default stands.
+        assert_eq!(DisplayMetrics::fit(auto, 798., 0).font_size, 13.);
+    }
+
     fn display_preferences_are_bounded_local_and_generation_independent() {
         let mut box_ = Mailbox::default();
-        assert!(!box_.set_display_preferences(13., false).unwrap());
+        // A fresh session is auto-sized, so 0 changes nothing and 13 is a choice.
+        assert!(!box_.set_display_preferences(0., false).unwrap());
+        assert!(box_.set_display_preferences(13., false).unwrap());
         assert!(box_.set_display_preferences(12., true).unwrap());
         assert_eq!(box_.state().generation, 0);
         assert!(!box_.state().active);
@@ -1059,7 +1093,7 @@ mod tests {
         let before = box_.state();
         assert!(!box_.set_display_preferences(12., true).unwrap());
         assert_eq!(before.revision, box_.state().revision);
-        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0., 10.9, 36.1] {
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 10.9, 36.1] {
             assert!(matches!(
                 box_.set_display_preferences(invalid, false),
                 Err(Error::InvalidDisplayPreferences)
