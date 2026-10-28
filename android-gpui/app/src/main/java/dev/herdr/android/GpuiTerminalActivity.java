@@ -354,6 +354,17 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             LinearLayout.LayoutParams textParams =
                     new LinearLayout.LayoutParams(0, -2, 1f);
             banner.addView(bannerText, textParams);
+            Button hosts = new Button(this);
+            hosts.setText("Hosts");
+            hosts.setAllCaps(false);
+            hosts.setTextSize(13);
+            hosts.setTextColor(0xffdce5ef);
+            hosts.setBackgroundTintList(ColorStateList.valueOf(0xff303744));
+            hosts.setMinHeight(dp(48));
+            hosts.setStateListAnimator(null);
+            hosts.setOnClickListener(view -> startActivity(new android.content.Intent(this,
+                    RemoteHostsActivity.class).putExtra("skip_reopen", true)));
+            banner.addView(hosts, new LinearLayout.LayoutParams(-2, dp(48)));
             Button retry = new Button(this);
             retry.setText("Reconnect");
             retry.setAllCaps(false);
@@ -369,8 +380,21 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             int barIndex = terminalContent.getChildCount() - 1;
             terminalContent.addView(banner, barIndex);
         }
-        bannerText.setText(message);
+        bannerText.setText(humanReason(message));
         banner.setVisibility(View.VISIBLE);
+    }
+
+
+    /** Transport wording is for logs; the banner says what happened and what to do. */
+    private String humanReason(String raw) {
+        if (raw == null || raw.isEmpty()) return "Connection lost";
+        String lower = raw.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("health check")) return "Connection lost · the host stopped answering";
+        if (lower.contains("timed out")) return "Connection lost · the host timed out";
+        if (lower.contains("closed") || lower.contains("ended") || lower.contains("disconnected")) {
+            return "Connection lost";
+        }
+        return "Connection lost · " + raw;
     }
 
     private void hideReconnectBanner() {
