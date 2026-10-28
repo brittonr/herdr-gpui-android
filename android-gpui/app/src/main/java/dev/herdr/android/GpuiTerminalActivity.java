@@ -502,6 +502,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         session.setOnClickListener(view -> showSessionActions());
         synchronousTouch(session);
         bar.addView(session, new LinearLayout.LayoutParams(dp(50), dp(48)));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        int gap = Math.round(4 * getResources().getDisplayMetrics().density);
+        row.setPadding(0, 0, gap, 0);
         // Panning is client-side: it is how a wide pane stays readable at a type
         // size that actually fits this display.
         for (float panStep : new float[]{-96f, 96f}) {
@@ -522,15 +526,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             LinearLayout.LayoutParams panParams = new LinearLayout.LayoutParams(dp(44), dp(48));
             int panGap = Math.round(4 * getResources().getDisplayMetrics().density);
             panParams.setMargins(panGap, 0, panGap, 0);
-            bar.addView(pan, panParams);
+            row.addView(pan, panParams);
         }
-        HorizontalScrollView scroll = new HorizontalScrollView(this);
-        scroll.setHorizontalScrollBarEnabled(false);
-        scroll.setBackgroundColor(0xff1e222a);
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        int gap = Math.round(4 * getResources().getDisplayMetrics().density);
-        row.setPadding(0, 0, gap, 0);
         controlButton = localButton("Ctrl");
         controlButton.setContentDescription("Control modifier for the next letter");
         controlButton.setOnClickListener(view -> {
@@ -560,23 +557,14 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             layout.setMargins(gap, 0, gap, 0);
             row.addView(button, layout);
         }
-        scroll.addView(row);
         // The key strip scrolls sideways; an edge fade says so instead of showing
         // a button sliced in half at the boundary.
-        FrameLayout strip = new FrameLayout(this);
-        strip.addView(scroll, new FrameLayout.LayoutParams(-1, dp(48)));
-        View fade = new View(this);
-        android.graphics.drawable.GradientDrawable gradient =
-                new android.graphics.drawable.GradientDrawable(
-                        android.graphics.drawable.GradientDrawable.Orientation.RIGHT_LEFT,
-                        new int[]{0xff1e222a, 0x001e222a});
-        fade.setBackground(gradient);
-        fade.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        FrameLayout.LayoutParams fadeParams = new FrameLayout.LayoutParams(dp(20), dp(48));
-        fadeParams.gravity = android.view.Gravity.END;
-        strip.addView(fade, fadeParams);
-        bar.addView(strip, new LinearLayout.LayoutParams(0, dp(48), 1));
-        return bar;
+        bar.addView(row, new LinearLayout.LayoutParams(-2, dp(48)));
+        HorizontalScrollView outer = new HorizontalScrollView(this);
+        outer.setHorizontalScrollBarEnabled(false);
+        outer.setBackgroundColor(0xff1e222a);
+        outer.addView(bar, new FrameLayout.LayoutParams(-2, dp(48)));
+        return outer;
     }
 
     // performClick is dispatched from the touch lambda below; lint cannot see it.
