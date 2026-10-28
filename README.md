@@ -29,7 +29,7 @@ The application closes remote connections on leaving/backgrounding. It does not 
 
 ## Build
 
-Start with [Android GPUI setup](android-gpui/README.md), [remote connection requirements](android-gpui/REMOTE.md), [script documentation](android-gpui/scripts/README.md), and the [Pixel 9 Pro Fold notes](android-gpui/docs/pixel-fold-notes.md) for what is verified on hardware, how it is measured, and which traps cost time.
+Start with [Android GPUI setup](android-gpui/README.md), [remote connection requirements](android-gpui/REMOTE.md), [script documentation](android-gpui/scripts/README.md), and the [Pixel 9 Pro Fold notes](android-gpui/docs/pixel-fold-notes.md) for what is verified on hardware, how it is measured, and which traps cost time. The fixed pane grid a client cannot change is described, with the experiments that prove it, in the [upstream grid proposal](docs/upstream/herdr-client-grid-proposal.md).
 
 Prerequisites: Rust 1.96.1, `aarch64-linux-android` target, Android SDK API 35/Build Tools 35.0.0, compatible Android NDK (r30 was used in recorded builds), JDK 17+, Python 3, and the SDK/NDK licenses accepted by the developer. SDK/NDK paths are supplied through `ANDROID_HOME` and `ANDROID_NDK_HOME`.
 
