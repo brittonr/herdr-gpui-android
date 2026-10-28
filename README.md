@@ -18,7 +18,7 @@ This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Tita
 
 ## Current limits
 
-The terminal displays **bounded plain text extracted from validated binary surfaces**. Full VT colors/cursor fidelity, graphics, responsive terminal sizing, unlimited scrollback and split-pane editing are not implemented.
+The terminal paints the selected pane from validated binary surfaces: named, indexed and truecolor cells, bold/dim/italic/underline/reverse/strikethrough attributes and a block cursor, bounded per row. Graphics, responsive terminal sizing, unlimited scrollback and split-pane editing are not implemented.
 
 The passing terminal runtime evidence uses actual JNI, SSH and GPUI with a **synthetic generation-1 protocol peer**, not a real Herdr daemon or shell. Physical ARM64/Titan execution, real deployed Iroh receiver/public relay traversal, and device network transitions are unverified. Local diagnostics have a separate [contract and verification scope](docs/android-control-agent.md); they do not prove terminal or remote-control behavior. Whole-desktop-workspace verification remains incomplete. Existing validation records distinguish passed, failed and unrun checks.
 

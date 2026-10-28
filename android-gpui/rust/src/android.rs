@@ -317,6 +317,7 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnap
     text: JString<'_>,
     status: JString<'_>,
     shortcuts: JString<'_>,
+    surface: JString<'_>,
 ) {
     if model::mailbox().state().generation != generation {
         return;
@@ -335,7 +336,16 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnap
         else {
             return Ok(None);
         };
-        Ok(Snapshot::new(&title, &text, &status, &shortcuts).ok())
+        // An absent or oversized surface leaves the bounded plain text in place.
+        let styled = bounded_string(&mut env, &surface, model::MAX_SNAPSHOT_BYTES)?.unwrap_or_default();
+        Ok(Snapshot::with_surface(
+            &title,
+            &text,
+            &status,
+            &shortcuts,
+            Some(styled.as_str()),
+        )
+        .ok())
     })();
     match snapshot {
         Ok(Some(snapshot)) => {

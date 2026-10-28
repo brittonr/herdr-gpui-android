@@ -86,9 +86,12 @@ Leaving the remote terminal closes its connection and discards pending input.
 Reconnect from Remote hosts and enter credentials again. A daemon restart,
 deleted pane or stale launch cannot silently retarget a command.
 
-The first remote renderer continues to show bounded plain text extracted from
-the selected, validated binary surface. Exact VT colors, cursor, graphics and
-unlimited scrollback are not implied by the new transport.
+The remote renderer paints the selected pane's cells: named, indexed and
+truecolor foregrounds and backgrounds, bold, dim, italic, underline, reverse,
+strikethrough and hidden attributes, and the block cursor, all derived from the
+validated binary surface. Runs must tile each row exactly or the row falls back
+to plain text, so a malformed surface can never misalign colors. Graphics,
+images, unlimited scrollback and split-pane painting are not rendered yet.
 
 **Panes** in the terminal lists the session's workspaces, tabs and panes from
 the daemon snapshot, each with its agent status. Choosing a pane sends one

@@ -14,6 +14,35 @@ pub const MAX_SNAPSHOT_BYTES: usize = 524_288;
 pub const MAX_SHORTCUT_JSON: usize = 2_097_152;
 pub const MAX_LINES: usize = 4_000;
 pub const MAX_LINE_CHARS: usize = 4_096;
+/// Styled rows carry at most this many spans; extra spans merge into the last.
+pub const MAX_RUNS_PER_LINE: usize = 256;
+/// Cell attribute bits shared with the desktop painter.
+pub const BOLD: u16 = 1;
+pub const DIM: u16 = 1 << 1;
+pub const ITALIC: u16 = 1 << 2;
+pub const UNDERLINE: u16 = 1 << 3;
+pub const REVERSED: u16 = 1 << 6;
+pub const HIDDEN: u16 = 1 << 7;
+pub const STRIKETHROUGH: u16 = 1 << 8;
+
+/// One contiguous span of cells that share fg, bg and attribute bits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StyledRun {
+    /// Byte offset into the row text.
+    pub start: usize,
+    /// Length in bytes.
+    pub len: usize,
+    /// Resolved 0xRRGGBB; named and indexed colors are already mapped.
+    pub fg: u32,
+    pub bg: u32,
+    pub modifier: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct StyledRow {
+    pub text: String,
+    pub runs: Vec<StyledRun>,
+}
 
 /// Local display settings only: no terminal generation or remote resize is
 /// implied. Java applies the user's 11–18 dp choice and bounded system font
@@ -266,6 +295,8 @@ pub struct Snapshot {
     pub title: String,
     pub status: String,
     pub lines: Vec<Arc<str>>,
+    /// Present when the daemon surface styles tile the plain lines exactly.
+    pub styled: Option<Arc<Vec<StyledRow>>>,
     pub shortcuts: Vec<Shortcut>,
     pub truncated: bool,
     pub widest_line_chars: usize,
@@ -277,6 +308,7 @@ impl Default for Snapshot {
             title: "Herdr · GPUI".into(),
             status: "Connecting…".into(),
             lines: Vec::new(),
+            styled: None,
             shortcuts: Vec::new(),
             truncated: false,
             widest_line_chars: 1,
@@ -311,11 +343,115 @@ impl Snapshot {
             title,
             status,
             lines: lines.into(),
+            styled: None,
             shortcuts,
             truncated,
             widest_line_chars,
         })
     }
+
+    /// Parses the optional styled surface. A surface whose rows do not tile the
+    /// plain text exactly is dropped rather than misaligned; the renderer then
+    /// falls back to plain lines.
+    pub fn with_surface(
+        title: &str,
+        text: &str,
+        status: &str,
+        shortcuts: &str,
+        surface: Option<&str>,
+    ) -> Result<Self> {
+        let mut snapshot = Self::new(title, text, status, shortcuts)?;
+        if let Some(raw) = surface.filter(|raw| !raw.is_empty()) {
+            let rows = parse_surface(raw)?;
+            if rows.len() == snapshot.lines.len() {
+                snapshot.styled = Some(Arc::new(rows));
+            } else {
+                snapshot.truncated = true;
+            }
+        }
+        Ok(snapshot)
+    }
+}
+
+/// Parses `{"rows":[{"t":text,"r":[[start,len,fg,bg,modifier],…]},…]}`. Runs must
+/// tile every row exactly, so the renderer can index bytes without guessing.
+pub fn parse_surface(raw: &str) -> Result<Vec<StyledRow>> {
+    if raw.len() > MAX_SNAPSHOT_BYTES {
+        return Err(Error::InvalidText);
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(raw).map_err(|_| Error::InvalidText)?;
+    let rows = value
+        .get("rows")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(Error::InvalidText)?;
+    if rows.len() > MAX_LINES {
+        return Err(Error::InvalidText);
+    }
+    let mut styled = Vec::with_capacity(rows.len());
+    let mut bytes = 0usize;
+    for row in rows {
+        let text = row
+            .get("t")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(Error::InvalidText)?;
+        if text.chars().count() > MAX_LINE_CHARS {
+            return Err(Error::InvalidText);
+        }
+        bytes += text.len();
+        if bytes > MAX_SNAPSHOT_BYTES {
+            return Err(Error::InvalidText);
+        }
+        let spans = row
+            .get("r")
+            .and_then(serde_json::Value::as_array)
+            .ok_or(Error::InvalidText)?;
+        if spans.len() > MAX_RUNS_PER_LINE {
+            return Err(Error::InvalidText);
+        }
+        let mut runs = Vec::with_capacity(spans.len());
+        let mut offset = 0usize;
+        for span in spans {
+            let fields = span.as_array().ok_or(Error::InvalidText)?;
+            if fields.len() != 5 {
+                return Err(Error::InvalidText);
+            }
+            let number = |index: usize| -> Result<u32> {
+                fields[index]
+                    .as_u64()
+                    .and_then(|value| u32::try_from(value).ok())
+                    .ok_or(Error::InvalidText)
+            };
+            let start = number(0)? as usize;
+            let len = number(1)? as usize;
+            if start != offset || len == 0 {
+                return Err(Error::InvalidText);
+            }
+            let end = start.checked_add(len).ok_or(Error::InvalidText)?;
+            if end > text.len() || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
+                return Err(Error::InvalidText);
+            }
+            if number(4)? > u16::MAX.into() {
+                return Err(Error::InvalidText);
+            }
+            runs.push(StyledRun {
+                start,
+                len,
+                fg: number(2)?,
+                bg: number(3)?,
+                modifier: number(4)? as u16,
+            });
+            offset = end;
+        }
+        if offset != text.len() {
+            return Err(Error::InvalidText);
+        }
+        styled.push(StyledRow {
+            text: text.to_owned(),
+            runs,
+        });
+    }
+    Ok(styled)
 }
 
 fn plain_label(value: &str, max: usize) -> String {

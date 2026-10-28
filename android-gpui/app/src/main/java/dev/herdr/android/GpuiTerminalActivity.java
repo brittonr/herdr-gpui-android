@@ -82,7 +82,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
     private long lastSnapshotGeneration = Long.MIN_VALUE;
-    private String lastSnapshotTitle, lastSnapshotText, lastSnapshotStatus, lastSnapshotShortcuts;
+    private String lastSnapshotTitle, lastSnapshotText, lastSnapshotStatus, lastSnapshotShortcuts, lastSnapshotSurface;
 
     @Override protected void onCreate(Bundle state) {
         // A restored activity cannot recover authority from Intent extras or framework saved state.
@@ -659,7 +659,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         shortcuts = Collections.emptyList();
         if (commandPalette != null) commandPalette.close();
         commandPalette = null;
-        lastSnapshotTitle = lastSnapshotText = lastSnapshotStatus = lastSnapshotShortcuts = null;
+        lastSnapshotTitle = lastSnapshotText = lastSnapshotStatus = lastSnapshotShortcuts = lastSnapshotSurface = null;
         terminalRoot = null;
         super.onDestroy();
     }
@@ -981,6 +981,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 if (selected) current.remoteBoot = boot;
                 current.text = text;
                 current.ready = selected;
+                current.surface = selected ? state.optString("surface", "") : "";
                 current.workspaces = state.optJSONArray("workspaces");
                 current.tabs = state.optJSONArray("tabs");
                 current.panes = state.optJSONArray("panes");
@@ -1014,13 +1015,14 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private void publish(Connection target, String status) {
         if (target.generation == lastSnapshotGeneration && target.title.equals(lastSnapshotTitle)
                 && target.text.equals(lastSnapshotText) && status.equals(lastSnapshotStatus)
-                && shortcutJson.equals(lastSnapshotShortcuts)) return;
-        nativeSetSnapshot(target.generation, target.title, target.text, status, shortcutJson);
+                && shortcutJson.equals(lastSnapshotShortcuts) && target.surface.equals(lastSnapshotSurface)) return;
+        nativeSetSnapshot(target.generation, target.title, target.text, status, shortcutJson, target.surface);
         lastSnapshotGeneration = target.generation;
         lastSnapshotTitle = target.title;
         lastSnapshotText = target.text;
         lastSnapshotStatus = status;
         lastSnapshotShortcuts = shortcutJson;
+        lastSnapshotSurface = target.surface;
     }
 
     private final class Connection {
@@ -1032,6 +1034,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile String paneId = launch.paneId;
         final String title = launch.title;
         String text = "";
+        String surface = "";
         JSONArray workspaces, tabs, panes;
         String chromePane = "";
         long nextScreenAt;
@@ -1062,7 +1065,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     private static native void nativeSetDisplayPreferences(float fontSize, boolean compact);
-    private static native void nativeSetSnapshot(long generation, String title, String text, String status, String shortcutsJson);
+    private static native void nativeSetSnapshot(long generation, String title, String text, String status,
+            String shortcutsJson, String surfaceJson);
     private static native void nativeSetActive(long generation, boolean active);
     private static native String nativeTakeCommand(long generation);
     private static native boolean nativeSendCommand(long generation, String commandJson);

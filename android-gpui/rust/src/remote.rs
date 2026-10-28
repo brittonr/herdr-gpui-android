@@ -160,6 +160,7 @@ pub struct View {
     tabs: Vec<Tab>,
     pane_id: String,
     text: String,
+    surface: String,
     revision: u64,
 }
 impl Default for View {
@@ -173,6 +174,7 @@ impl Default for View {
             tabs: Vec::new(),
             pane_id: String::new(),
             text: String::new(),
+            surface: String::new(),
             revision: 0,
         }
     }
@@ -306,6 +308,7 @@ fn finish(session: &Session, status: &str) {
     state.view.state = "closed";
     state.view.status = clean(status, 1024);
     state.view.text.clear();
+    state.view.surface.clear();
     state.pending_focus = None;
     state.surface = None;
     state.snapshot = None;
@@ -638,10 +641,17 @@ fn project(state: &mut State) {
         "Connected over SSH"
     }
     .into();
-    if let Some((surface, pane)) = matching_surface(state, &state.view.pane_id) {
-        let text = surface_text(surface, pane);
-        let revision = surface.surface_revision;
+    let pane_id = state.view.pane_id.clone();
+    let projection = matching_surface(state, &pane_id).map(|(surface, pane)| {
+        (
+            surface_text(surface, pane),
+            surface_style(surface, pane),
+            surface.surface_revision,
+        )
+    });
+    if let Some((text, surface, revision)) = projection {
         state.view.text = text;
+        state.view.surface = surface;
         state.view.revision = revision;
     } else if !state.view.pane_id.is_empty() {
         state.view.state = "connecting";
@@ -671,6 +681,135 @@ fn valid_geometry(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> bool {
     u32::from(rect.x) + u32::from(rect.width) <= u32::from(surface.frame.width)
         && u32::from(rect.y) + u32::from(rect.height) <= u32::from(surface.frame.height)
 }
+
+/// Colors the desktop client would paint for this app's dark surface. Named
+/// and indexed cells resolve here so the renderer only deals in 0xRRGGBB.
+const PALETTE: [u32; 16] = [
+    0x1c1f26, 0xcc6b6b, 0x8fc98a, 0xd8b06a, 0x7aa2d6, 0xb08ad6, 0x6fc0c6, 0xc9d1dc, 0x566274,
+    0xe08a8a, 0xa6dc9f, 0xeed092, 0x94b8e8, 0xc9a6e8, 0x8ad6dc, 0xf2f5f9,
+];
+const DEFAULT_FG: u32 = 0xdce5ef;
+const DEFAULT_BG: u32 = 0x10151d;
+const SURFACE_LIMIT: usize = 300_000;
+
+fn resolve_color(value: u32, default: u32) -> u32 {
+    match value >> 24 {
+        0 => match value & 0xff {
+            1..=16 => PALETTE[((value & 0xff) - 1) as usize],
+            _ => default,
+        },
+        1 => {
+            let index = (value & 0xff) as usize;
+            match index {
+                0..=15 => PALETTE[index],
+                16..=231 => {
+                    let cube = index - 16;
+                    let step = |value: usize| {
+                        let level = (value % 6) as u32;
+                        if level == 0 { 0 } else { 55 + level * 40 }
+                    };
+                    (step(cube / 36) << 16) | (step(cube / 6 % 6) << 8) | step(cube % 6)
+                }
+                _ => {
+                    let level = 8 + (index as u32 - 232) * 10;
+                    (level << 16) | (level << 8) | level
+                }
+            }
+        }
+        2 => value & 0xff_ffff,
+        _ => default,
+    }
+}
+
+fn cell_style(cell: &CellData, cursor: bool) -> (u32, u32, u16) {
+    let mut fg = resolve_color(cell.fg, DEFAULT_FG);
+    let mut bg = resolve_color(cell.bg, DEFAULT_BG);
+    let mut modifier = cell.modifier;
+    if cursor {
+        modifier |= model::REVERSED;
+    }
+    if modifier & model::REVERSED != 0 {
+        std::mem::swap(&mut fg, &mut bg);
+    }
+    if modifier & model::DIM != 0 {
+        fg = ((fg & 0xfe_fefe) >> 1) + ((bg & 0xfe_fefe) >> 1);
+    }
+    if modifier & model::HIDDEN != 0 {
+        fg = bg;
+    }
+    (fg, bg, modifier)
+}
+
+/// Builds the bounded row/run projection the renderer paints. Returns an empty
+/// string when the surface cannot be represented within the payload budget, so
+/// the plain text path stays authoritative.
+fn surface_style(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> String {
+    let rect = pane.inner_rect;
+    let frame = &surface.frame;
+    if u32::from(rect.x) + u32::from(rect.width) > u32::from(frame.width)
+        || u32::from(rect.y) + u32::from(rect.height) > u32::from(frame.height)
+    {
+        return String::new();
+    }
+    let cursor = frame.cursor.as_ref().filter(|cursor| cursor.visible);
+    let mut rows = Vec::new();
+    for y in rect.y..rect.y.saturating_add(rect.height) {
+        let mut text = String::new();
+        let mut runs: Vec<(usize, usize, u32, u32, u16)> = Vec::new();
+        for x in rect.x..rect.x.saturating_add(rect.width) {
+            let Some(cell) = frame
+                .cells
+                .get(usize::from(y) * usize::from(frame.width) + usize::from(x))
+            else {
+                return String::new();
+            };
+            if cell.skip {
+                continue;
+            }
+            let start = text.len();
+            for ch in cell.symbol.chars().filter(|ch| !ch.is_control()) {
+                if text.len() + ch.len_utf8() > model::MAX_LINE_CHARS * 4 {
+                    break;
+                }
+                text.push(ch);
+            }
+            if text.len() == start {
+                continue;
+            }
+            let on_cursor = cursor.is_some_and(|cursor| cursor.x == x && cursor.y == y);
+            let (fg, bg, modifier) = cell_style(cell, on_cursor);
+            let full = runs.len() >= model::MAX_RUNS_PER_LINE;
+            match runs.last_mut() {
+                Some(run) if run.2 == fg && run.3 == bg && run.4 == modifier => {
+                    run.1 = text.len() - run.0;
+                }
+                _ if full => {
+                    if let Some(run) = runs.last_mut() {
+                        run.1 = text.len() - run.0;
+                    }
+                }
+                _ => runs.push((start, text.len() - start, fg, bg, modifier)),
+            }
+        }
+        rows.push((text, runs));
+    }
+    let json = json!({
+        "rows": rows
+            .iter()
+            .map(|(text, runs)| json!({
+                "t": text,
+                "r": runs.iter().map(|run| json!([run.0, run.1, run.2, run.3, run.4])).collect::<Vec<_>>(),
+            }))
+            .collect::<Vec<_>>(),
+    })
+    .to_string();
+    if json.len() > SURFACE_LIMIT {
+        String::new()
+    } else {
+        json
+    }
+}
+
 fn surface_text(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> String {
     let rect = pane.inner_rect;
     let frame = &surface.frame;
@@ -912,6 +1051,64 @@ mod tests {
         });
     }
     #[test]
+    fn surface_style_resolves_colors_attributes_and_cursor() {
+        let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
+        // Indexed red fg (0x01000001) on the default background.
+        surface.frame.cells[5].fg = 0x0100_0001;
+        // Truecolor blue background with a bold, underlined foreground.
+        surface.frame.cells[6].bg = 0x0200_0010;
+        surface.frame.cells[6].modifier = model::BOLD | model::UNDERLINE;
+        surface.frame.cursor = Some(CursorState {
+            x: 1,
+            y: 1,
+            visible: true,
+            shape: 0,
+        });
+        let style = surface_style(&surface, &surface.panes[0]);
+        let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
+        let row = &parsed["rows"][0];
+        assert_eq!(row["t"], "AB");
+        let runs = row["r"].as_array().unwrap();
+        assert_eq!(runs.len(), 2);
+        // The cursor cell reverses its colors: indexed red foreground becomes the
+        // background and the default background becomes the foreground.
+        assert_eq!(runs[0][2], DEFAULT_BG);
+        // 0x01000001 is indexed color 1, which the desktop maps to palette[1].
+        assert_eq!(runs[0][3], PALETTE[1]);
+        assert_ne!(runs[0][4].as_u64().unwrap() & u64::from(model::REVERSED), 0);
+        assert_eq!(runs[1][2], DEFAULT_FG);
+        assert_eq!(runs[1][3], 0x00_0010);
+        assert_eq!(
+            runs[1][4].as_u64().unwrap(),
+            u64::from(model::BOLD | model::UNDERLINE)
+        );
+        // The model accepts exactly what the projection produces.
+        assert_eq!(model::parse_surface(&style).unwrap().len(), 1);
+    }
+    #[test]
+    fn surface_style_keeps_hidden_text_and_rejects_bad_geometry() {
+        let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
+        surface.frame.cells[5].modifier = model::HIDDEN;
+        let style = surface_style(&surface, &surface.panes[0]);
+        let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
+        let run = &parsed["rows"][0]["r"][0];
+        assert_eq!(run[2], DEFAULT_BG);
+        assert_eq!(run[3], DEFAULT_BG);
+        surface.panes[0].inner_rect.width = u16::MAX;
+        assert_eq!(surface_style(&surface, &surface.panes[0]), "");
+    }
+    #[test]
+    fn surface_rows_do_not_add_a_phantom_renderer_row() {
+        let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
+        surface.panes[0].inner_rect.height = 2;
+        surface.frame.cells[9].symbol = " ".into();
+        surface.frame.cells[10].symbol = " ".into();
+        let text = surface_text(&surface, &surface.panes[0]);
+        assert_eq!(text, "AB\n  ");
+        let rendered = model::Snapshot::new("title", &text, "ready", "[]").unwrap();
+        assert_eq!(rendered.lines.len(), 2);
+    }
+    #[test]
     fn authentication_policy_diagnostic_survives_client_error_boundary() {
         for transport in [
             herdr_remote_transport::Error::AuthenticationIncomplete,
@@ -1023,17 +1220,6 @@ mod tests {
         surface.panes[0].inner_rect.width = u16::MAX;
         assert!(!valid_geometry(&surface, &surface.panes[0]));
         assert_eq!(surface_text(&surface, &surface.panes[0]), "");
-    }
-    #[test]
-    fn surface_rows_do_not_add_a_phantom_renderer_row() {
-        let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
-        surface.panes[0].inner_rect.height = 2;
-        surface.frame.cells[9].symbol = " ".into();
-        surface.frame.cells[10].symbol = " ".into();
-        let text = surface_text(&surface, &surface.panes[0]);
-        assert_eq!(text, "AB\n  ");
-        let rendered = model::Snapshot::new("title", &text, "ready", "[]").unwrap();
-        assert_eq!(rendered.lines.len(), 2);
     }
     #[test]
     fn submit_is_one_text_and_enter_batch_and_keys_are_semantic() {

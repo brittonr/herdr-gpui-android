@@ -135,6 +135,46 @@ fn button(
         .child(div().min_w_0().truncate().child(label.into()))
 }
 
+/// One terminal row painted from the daemon's cells: colors, attributes and the
+/// block cursor arrive already resolved, so this only maps them to GPUI runs.
+fn styled_row(row: &model::StyledRow, metrics: DisplayMetrics) -> StyledText {
+    let base = Font {
+        family: crate::fonts::MONO_FAMILY.into(),
+        features: Default::default(),
+        fallbacks: None,
+        weight: FontWeight::NORMAL,
+        style: FontStyle::Normal,
+    };
+    let mut runs = Vec::with_capacity(row.runs.len());
+    for run in &row.runs {
+        let mut font = base.clone();
+        if run.modifier & model::BOLD != 0 {
+            font.weight = FontWeight::BOLD;
+        }
+        if run.modifier & model::ITALIC != 0 {
+            font.style = FontStyle::Italic;
+        }
+        let color = rgb(run.fg).into();
+        runs.push(TextRun {
+            len: run.len,
+            font,
+            color,
+            background_color: (run.bg != 0x10151d).then(|| rgb(run.bg).into()),
+            underline: (run.modifier & model::UNDERLINE != 0).then(|| UnderlineStyle {
+                thickness: px(1.),
+                color: Some(color),
+                wavy: false,
+            }),
+            strikethrough: (run.modifier & model::STRIKETHROUGH != 0).then(|| StrikethroughStyle {
+                thickness: px(1.),
+                color: Some(color),
+            }),
+        });
+    }
+    let _ = metrics;
+    StyledText::new(row.text.clone()).with_runs(runs)
+}
+
 impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // A recreated surface may paint before the queued notification runs.
@@ -254,15 +294,20 @@ impl Render for TerminalView {
                             move |range, _, _| {
                                 range
                                     .map(|index| {
-                                        div()
+                                        let line = div()
                                             .h(row_height)
                                             .w(row_width)
                                             .px_2()
                                             .font_family(crate::fonts::MONO_FAMILY)
                                             .text_size(px(metrics.font_size))
                                             .line_height(row_height)
-                                            .whitespace_nowrap()
-                                            .child(SharedString::from(rows.lines[index].clone()))
+                                            .whitespace_nowrap();
+                                        // Painted cells win when their runs tile the
+                                        // plain line; otherwise keep the plain text.
+                                        match rows.styled.as_ref().and_then(|styled| styled.get(index)) {
+                                            Some(styled_line) => line.child(styled_row(styled_line, metrics)),
+                                            None => line.child(SharedString::from(rows.lines[index].clone())),
+                                        }
                                     })
                                     .collect::<Vec<_>>()
                             },
