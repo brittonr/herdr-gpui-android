@@ -1326,7 +1326,18 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 workspaceRow = createRailWorkspaceRow();
                 railWorkspaces.put(workspaceKey, workspaceRow);
             }
-            updateRailWorkspaceRow(workspaceRow, workspaceLabel, live, current, workspaceId);
+            // Orientation on a long rail: mark the workspace that holds the
+            // focused pane, not just the pane itself.
+            boolean holdsSelection = false;
+            if (live && current != null) {
+                for (int q = 0; q < panes.length(); q++) {
+                    JSONObject pane = panes.optJSONObject(q);
+                    if (pane == null || !workspaceId.equals(pane.optString("workspace_id", ""))) continue;
+                    if (current.paneId.equals(pane.optString("id", ""))) { holdsSelection = true; break; }
+                }
+            }
+            updateRailWorkspaceRow(workspaceRow, workspaceLabel, live, current, workspaceId,
+                    holdsSelection);
             order.add(workspaceRow.view);
             for (int p = 0; p < panes.length(); p++) {
                 JSONObject pane = panes.optJSONObject(p);
@@ -1460,7 +1471,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     private void updateRailWorkspaceRow(RailWorkspaceRow holder, String label, boolean live,
-            Connection connection, String workspaceId) {
+            Connection connection, String workspaceId, boolean holdsSelection) {
         holder.live = live;
         holder.connection = connection;
         holder.workspaceId = workspaceId;
@@ -1469,7 +1480,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             row.setText(label);
             row.setContentDescription("Focus workspace " + label);
         }
-        int color = live ? 0xffc2ccda : 0xff8c9bb0;
+        int color = holdsSelection ? 0xff76d3b2 : live ? 0xffc2ccda : 0xff8c9bb0;
         if (row.getCurrentTextColor() != color) row.setTextColor(color);
     }
 
