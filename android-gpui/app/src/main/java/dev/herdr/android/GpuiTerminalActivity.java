@@ -52,7 +52,8 @@ import org.json.JSONObject;
 /** GPUI paints and routes input; each connection owns either HTTPS or embedded SSH transport. */
 public final class GpuiTerminalActivity extends GpuiInputActivity implements SurfaceHolder.Callback {
     private static final AtomicLong GENERATIONS = new AtomicLong();
-    private static final long COMMAND_POLL_MS = 50;
+    /** Loop period for input commands; the poll gate below decides frame cadence. */
+    private static final long COMMAND_POLL_MS = 16;
     private static final long SCREEN_POLL_MS = 1000;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Object stateLock = new Object();
