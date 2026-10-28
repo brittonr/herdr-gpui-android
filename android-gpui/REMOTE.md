@@ -113,6 +113,11 @@ sessions (terminal plus mirrors plus a transient connection while switching) and
 refuses more. Mirrors exist only while they can be seen: hiding the rail or
 leaving the activity closes them and brings the session count back to one.
 
+Dragging in the terminal scrolls the daemon's scrollback: requests are coalesced
+to one per fifty milliseconds instead of dropped, the newest offset is always
+delivered when the finger lifts, a flick keeps travelling under momentum, and a
+poll never overwrites the target with the last offset the daemon applied.
+
 The terminal polls its session for a delta: the native side hashes everything the
 client renders and answers an idle poll with a few hundred bytes instead of the
 whole tree. A mirror poll omits the surface and pane text it never draws, and the

@@ -110,10 +110,53 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private Button controlButton;
     /** Vertical swipe state: a short tap still reaches the terminal. */
     private float touchDownY, lastTouchY, scrollFraction;
+    private float scrollVelocity, flingRemainder;
+    private long lastMoveAt;
+    private boolean flinging;
+    private SurfaceView terminalSurface;
+    private final Runnable flingStep = new Runnable() {
+        @Override public void run() {
+            if (!flinging || terminalSurface == null) return;
+            long now = SystemClock.uptimeMillis();
+            long dt = Math.max(1, Math.min(48, now - lastMoveAt));
+            lastMoveAt = now;
+            float rowPx = rowHeightPx();
+            float lines = scrollVelocity * dt / rowPx + flingRemainder;
+            int step = (int) lines;
+            flingRemainder = lines - step;
+            // Sub-row frames still count: they carry into the next one.
+            boolean atEdge = step != 0 && !requestScroll(step);
+            scrollVelocity *= (float) Math.pow(0.90, dt / 16.0);
+            if (!atEdge && Math.abs(scrollVelocity) > 0.05f && rowPx > 0f) {
+                terminalSurface.postOnAnimation(this);
+                return;
+            }
+            flinging = false;
+            scrollVelocity = 0f;
+            flingRemainder = 0f;
+            flushScroll();
+        }
+    };
+
+    private void stopFling() {
+        flinging = false;
+        scrollVelocity = 0f;
+        flingRemainder = 0f;
+    }
     private boolean scrolling;
     /** Locally accumulated scrollback target; polls only resync it while idle. */
     private long desiredScroll, lastSentScroll = -1;
     private long lastScrollSentAt;
+    private static final long SEND_SCROLL_MS = 50;
+    private boolean scrollSendScheduled;
+    /** True while the finger, a fling, or an in-flight request owns the offset. */
+    private volatile boolean scrollSeeking;
+    private final Runnable scrollSend = new Runnable() {
+        @Override public void run() {
+            scrollSendScheduled = false;
+            flushScroll();
+        }
+    };
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
     /** Index into the renderer's built-in palettes. */
@@ -201,6 +244,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             return insets;
         });
         SurfaceView surface = new SurfaceView(this);
+        terminalSurface = surface;
         surface.setFocusable(true);
         surface.setFocusableInTouchMode(true);
         surface.setSaveEnabled(false);
@@ -355,18 +399,46 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     /** Drag down reveals older lines: offsets grow toward the pane's scrollback. */
-    private void requestScroll(int lines) {
+    private boolean requestScroll(int lines) {
         final Connection target;
         synchronized (stateLock) { target = connection; }
-        if (target == null || target.isClosed() || target.remoteHandle <= 0) return;
+        if (target == null || target.isClosed() || target.remoteHandle <= 0) return false;
         long next = Math.max(0, Math.min(target.scrollMax, desiredScroll + lines));
-        if (next == desiredScroll) return;
+        if (next == desiredScroll) return false;
         desiredScroll = next;
+        scrollSeeking = true;
         long now = SystemClock.uptimeMillis();
-        // One request per ~100 ms: a fast swipe must not queue a request per pixel.
-        if (now - lastScrollSentAt < 100 && next != 0 && next != target.scrollMax) return;
+        // Scrolling is interactive: keep the terminal polling at full speed until
+        // the gesture settles, so the daemon's answer arrives in the next frame.
+        target.fastUntil = now + 1200;
+        // Requests coalesce instead of dropping: the newest offset is always
+        // delivered, at most once per poll interval.
+        long wait = SEND_SCROLL_MS - (now - lastScrollSentAt);
+        if (wait > 0) {
+            scheduleScrollSend(wait);
+            return true;
+        }
+        sendScroll(target);
+        return true;
+    }
+
+    /** Delivers the newest requested offset once the send window reopens. */
+    private void scheduleScrollSend(long delayMs) {
+        if (scrollSendScheduled || terminalSurface == null) return;
+        scrollSendScheduled = true;
+        terminalSurface.postDelayed(scrollSend, Math.max(1, delayMs));
+    }
+
+    private void flushScroll() {
+        Connection target;
+        synchronized (stateLock) { target = connection; }
+        if (target != null && !target.isClosed() && target.remoteHandle > 0) sendScroll(target);
+    }
+
+    private void sendScroll(Connection target) {
+        long next = desiredScroll;
+        lastScrollSentAt = SystemClock.uptimeMillis();
         if (next == lastSentScroll) return;
-        lastScrollSentAt = now;
         lastSentScroll = next;
         try {
             worker.execute(() -> {
@@ -384,6 +456,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (target == null || target.isClosed() || target.remoteHandle <= 0) return;
         desiredScroll = 0;
         lastSentScroll = -1;
+        scrollSeeking = true;
         try {
             worker.execute(() -> {
                 try { RemoteNative.scrollTo(target.remoteHandle, 0); }
@@ -1581,14 +1654,23 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (!hostStarted || count < 1 || count > 16) return false;
         int masked = event.getActionMasked();
         if (masked == MotionEvent.ACTION_DOWN) {
+            stopFling();
             touchDownY = lastTouchY = event.getY();
+            lastMoveAt = SystemClock.uptimeMillis();
+            scrollVelocity = 0f;
             scrolling = false;
             scrollFraction = 0f;
         } else if (masked == MotionEvent.ACTION_MOVE && count == 1) {
-            if (!scrolling && Math.abs(event.getY() - touchDownY) > dp(18)) scrolling = true;
+            if (!scrolling && Math.abs(event.getY() - touchDownY) > dp(8)) scrolling = true;
             if (scrolling) {
+                long now = SystemClock.uptimeMillis();
+                float dy = event.getY() - lastTouchY;
+                float dt = Math.max(1, now - lastMoveAt);
+                // Smoothed drag velocity in pixels per millisecond.
+                scrollVelocity = 0.6f * scrollVelocity + 0.4f * (dy / dt);
+                lastMoveAt = now;
                 float rowPx = rowHeightPx();
-                scrollFraction += (event.getY() - lastTouchY) / rowPx;
+                scrollFraction += dy / rowPx;
                 lastTouchY = event.getY();
                 int lines = (int) scrollFraction;
                 if (lines != 0) {
@@ -1597,9 +1679,19 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 }
                 return true;
             }
-        } else if ((masked == MotionEvent.ACTION_UP || masked == MotionEvent.ACTION_CANCEL) && scrolling) {
-            scrolling = false;
-            return true;
+        } else if (masked == MotionEvent.ACTION_UP || masked == MotionEvent.ACTION_CANCEL) {
+            if (scrolling) {
+                scrolling = false;
+                flushScroll();
+                if (masked == MotionEvent.ACTION_UP && Math.abs(scrollVelocity) > 0.12f) {
+                    flinging = true;
+                    lastMoveAt = SystemClock.uptimeMillis();
+                    flingRemainder = 0f;
+                    if (terminalSurface != null) terminalSurface.postOnAnimation(flingStep);
+                }
+                return true;
+            }
+            stopFling();
         }
         int[] ids = new int[count];
         float[] xs = new float[count], ys = new float[count];
@@ -2187,7 +2279,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     current.scrollOffset = scroll.optLong("offset", 0);
                     current.scrollMax = scroll.optLong("max", 0);
                     current.scrollRows = scroll.optLong("rows", 0);
-                    if (!scrolling) {
+                    if (scrollSeeking) {
+                        // The daemon answers with the last offset it applied; do not
+                        // drag the user back while a newer target is still in flight.
+                        if (current.scrollOffset == desiredScroll) scrollSeeking = false;
+                    } else {
                         desiredScroll = current.scrollOffset;
                         lastSentScroll = current.scrollOffset;
                     }
