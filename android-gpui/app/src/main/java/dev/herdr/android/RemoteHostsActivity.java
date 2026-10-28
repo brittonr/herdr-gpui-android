@@ -158,47 +158,80 @@ public final class RemoteHostsActivity extends Activity {
                 });
                 return;
             }
-            long handle = 0;
+            // A remembered host can miss a single network hiccup; retry once, then
+            // fall back to another saved host so the app still lands in a terminal.
+            java.util.List<SavedRemoteHost> candidates = new java.util.ArrayList<>();
+            candidates.add(host);
+            candidates.add(host);
             try {
-                RemoteNative.ensureLoaded(this);
-                JSONObject inspection = result(RemoteNative.inspect(host.connectionJson()));
-                String key = SavedRemoteHost.fingerprint(inspection.getString("fingerprint"));
-                if (!host.expectedFingerprint.equals(key)) throw new IllegalStateException("host key changed");
-                char[] secret = identityStore.read();
-                String credential;
-                try {
-                    credential = new JSONObject().put("private_key", new String(secret)).toString();
-                } finally { Arrays.fill(secret, '\0'); }
-                handle = RemoteNative.connect(host.connectionJson(), credential);
-                if (handle <= 0) throw new IllegalStateException("connect refused");
-                String focused = reopenPane(handle, paneId);
-                final long readyHandle = handle;
-                final String readyPane = focused;
-                final SavedRemoteHost readyHost = host;
-                main.post(() -> {
-                    if (!current(token)) { RemoteNative.close(readyHandle); return; }
-                    try {
-                        GpuiLaunch.launchRemote(this, readyHost, readyHandle, readyPane, readyPane);
-                        rememberLastSession(this, readyHost, readyPane);
-                        finish();
-                    } catch (Exception | LinkageError failure) {
-                        RemoteNative.close(readyHandle);
-                        showProfiles();
-                        setStatus("The last session could not be reopened. Pick a host to continue.");
+                for (SavedRemoteHost other : store.read()) {
+                    if (!other.id.equals(host.id) && !other.expectedFingerprint.isEmpty()) {
+                        candidates.add(other);
                     }
-                });
-                handle = 0;
-            } catch (Exception | LinkageError failure) {
-                if (handle != 0) RemoteNative.close(handle);
-                main.post(() -> {
-                    if (!current(token)) return;
-                    pendingStatus = "The last session could not be reopened"
-                            + (failure.getMessage() == null ? "." : ": " + failure.getMessage());
-                    showProfiles();
-                });
+                }
+            } catch (Exception ignored) { }
+            String failureReason = "the host did not answer";
+            for (int attempt = 0; attempt < candidates.size(); attempt++) {
+                if (!current(token)) return;
+                SavedRemoteHost candidate = candidates.get(attempt);
+                String wanted = candidate.id.equals(host.id) ? paneId : "";
+                if (attempt > 0) {
+                    try { Thread.sleep(1200); } catch (InterruptedException stopped) { return; }
+                }
+                String outcome = openCandidate(candidate, wanted, token);
+                if (outcome == null) return;
+                failureReason = outcome;
             }
+            final String reason = failureReason;
+            main.post(() -> {
+                if (!current(token)) return;
+                pendingStatus = "No session could be opened (" + reason + "); pick a host to continue";
+                showProfiles();
+            });
         });
         return true;
+    }
+
+    /** Tries one host. Returns null once the terminal is launched, else the reason. */
+    private String openCandidate(SavedRemoteHost host, String wantedPane, int token) {
+        long handle = 0;
+        try {
+            RemoteNative.ensureLoaded(this);
+            JSONObject inspection = result(RemoteNative.inspect(host.connectionJson()));
+            String key = SavedRemoteHost.fingerprint(inspection.getString("fingerprint"));
+            if (!host.expectedFingerprint.equals(key)) throw new IllegalStateException("host key changed");
+            char[] secret = identityStore.read();
+            String credential;
+            try {
+                credential = new JSONObject().put("private_key", new String(secret)).toString();
+            } finally {
+                Arrays.fill(secret, '\0');
+            }
+            handle = RemoteNative.connect(host.connectionJson(), credential);
+            if (handle <= 0) throw new IllegalStateException("connect refused");
+            String focused = reopenPane(handle, wantedPane);
+            final long readyHandle = handle;
+            final String readyPane = focused;
+            main.post(() -> {
+                if (!current(token)) {
+                    RemoteNative.close(readyHandle);
+                    return;
+                }
+                try {
+                    GpuiLaunch.launchRemote(this, host, readyHandle, readyPane, readyPane);
+                    rememberLastSession(this, host, readyPane);
+                    finish();
+                } catch (Exception | LinkageError failure) {
+                    RemoteNative.close(readyHandle);
+                }
+            });
+            handle = 0;
+            return null;
+        } catch (Exception | LinkageError failure) {
+            if (handle != 0) RemoteNative.close(handle);
+            String message = failure.getMessage();
+            return host.name + ": " + (message == null || message.isEmpty() ? "unreachable" : message);
+        }
     }
 
     /** Waits for the session and focuses the remembered pane, or a live one. */
