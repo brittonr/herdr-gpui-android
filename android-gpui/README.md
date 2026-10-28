@@ -99,6 +99,12 @@ schemes. Launching the app reopens the remembered host and pane directly, skippi
 its **Reopen the last session at launch** checkbox turns the behaviour off. The
 rail opens by default on panels 600 dp and wider (so the inner fold display, not
 the cover) and remembers whether you hid it.
+Measured on the Pixel 9 Pro Fold: cold start is 177 ms to the host list and
+109 ms to the terminal activity (`am start -W`), the process idles at 0.0 % CPU
+per thread once connected, and connecting to the daemon costs a couple of
+seconds of SSH and pane selection. A `dumpsys SurfaceFlinger --latency` read on
+the GPUI SurfaceView layer comes back empty while the surface is idle, so frame
+cadence has to be sampled during interaction rather than at rest.
 Terminal type follows the pane's own wrap width and Android's system font scale;
 pick a fixed size in **View** to override it. A lost transport offers **Hosts**
 and **Reconnect** instead of leaving the surface frozen. It starts with **Hosts** - every saved machine expanded with its own workspaces
