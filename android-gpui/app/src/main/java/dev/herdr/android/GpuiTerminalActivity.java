@@ -1494,6 +1494,14 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
         params.leftMargin = dp(1);
         holder.row.addView(holder.title, params);
+        // A colour alone cannot say what an agent is doing; name the state.
+        holder.state = railText("", 10, 0xff8c9bb0);
+        holder.state.setSingleLine(true);
+        holder.state.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        holder.state.setGravity(android.view.Gravity.END);
+        LinearLayout.LayoutParams stateParams = new LinearLayout.LayoutParams(-2, -2);
+        stateParams.leftMargin = dp(6);
+        holder.row.addView(holder.state, stateParams);
         holder.row.setOnClickListener(view -> {
             if (holder.live) {
                 focusRemotePane(holder.connection, holder.paneId);
@@ -1527,6 +1535,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             holder.title.setText(title);
             holder.row.setContentDescription("Focus pane " + title);
         }
+        String state = status == null || status.isEmpty() || "unknown".equals(status)
+                ? "" : status;
+        if (!state.contentEquals(holder.state.getText())) holder.state.setText(state);
     }
 
     private View railRule(String hostId, java.util.Set<String> keep) {
@@ -1568,6 +1579,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout row;
         View dot;
         TextView title;
+        TextView state;
         SavedRemoteHost host;
         Connection connection;
         String paneId = "";
