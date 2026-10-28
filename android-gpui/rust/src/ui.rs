@@ -338,6 +338,19 @@ impl Render for TerminalView {
                     .when(snapshot.lines.is_empty(), |body| {
                         body.items_center().justify_center()
                     })
+                    .when(pan > 0., |body| {
+                        // A panned pane has no visible left edge; mark it so a cut
+                        // line is never mistaken for a broken render.
+                        body.child(
+                            div()
+                                .absolute()
+                                .left_0()
+                                .top_0()
+                                .bottom_0()
+                                .w(px(2.))
+                                .bg(rgb(model::palette().accent)),
+                        )
+                    })
                     .when(!snapshot.lines.is_empty(), |body| {
                         // A pane shorter than the surface gets even margins above
                         // and below; one tall band over the text reads as a fault.
