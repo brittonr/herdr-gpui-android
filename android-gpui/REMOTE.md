@@ -116,6 +116,14 @@ Rail text, dots and titles are drawn from the same palette as the terminal chrom
 so keep colour literals opaque (a 24-bit literal has a zero alpha channel and
 renders nothing).
 
+Each host prints as a rounded header with a circular status dot, its name, and
+how many workspaces its session reports; the connected host carries a faint
+accent pill. Workspaces print as small upper-case labels, panes below them with
+a dot and up to two lines of title, and the focused pane gets the stronger
+accent pill with white text. A one-pixel rule separates hosts, the rail keeps a
+matching edge line, and a short gradient at the bottom edge shows the list
+continues past the screen.
+
 The rail is open by default at every width and its hidden/shown choice persists;
 **Hosts** brings it back and **Hide** closes it; the closed state is labelled in
 the host colour so an empty terminal is never mistaken for a missing rail. It lists every saved host above the session tree. Choosing one

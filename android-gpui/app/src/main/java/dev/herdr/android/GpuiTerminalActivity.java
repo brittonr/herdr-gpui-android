@@ -203,16 +203,30 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         content.addView(createShortcutBar(), new LinearLayout.LayoutParams(-1, dp(48)));
         // The sidebar rail mirrors the desktop's list of workspaces and agents.
         sidebar = new LinearLayout(this);
-        sidebar.setOrientation(LinearLayout.VERTICAL);
-        sidebar.setBackgroundColor(0xff161a21);
+        sidebar.setOrientation(LinearLayout.HORIZONTAL);
+        sidebar.setBackgroundColor(0xff12161d);
         sidebar.setSaveFromParentEnabled(false);
         sidebarScroll = new ScrollView(this);
-        sidebarScroll.setBackgroundColor(0xff161a21);
+        sidebarScroll.setBackgroundColor(0xff12161d);
+        sidebarScroll.setVerticalScrollBarEnabled(false);
         sidebarRows = new LinearLayout(this);
         sidebarRows.setOrientation(LinearLayout.VERTICAL);
-        sidebarRows.setPadding(dp(10), dp(8), dp(10), dp(8));
-        sidebarScroll.addView(sidebarRows);
-        sidebar.addView(sidebarScroll, new LinearLayout.LayoutParams(-1, -1));
+        sidebarRows.setPadding(dp(8), dp(10), dp(8), dp(20));
+        sidebarScroll.addView(sidebarRows, new android.widget.FrameLayout.LayoutParams(-1, -2));
+        // Hosts and workspaces exceed one screen; the fade says the list keeps going.
+        android.widget.FrameLayout railFrame = new android.widget.FrameLayout(this);
+        railFrame.addView(sidebarScroll, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        View railFade = new View(this);
+        railFade.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {0x0012161d, 0xff12161d}));
+        railFade.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                -1, dp(24), android.view.Gravity.BOTTOM));
+        railFrame.addView(railFade);
+        sidebar.addView(railFrame, new LinearLayout.LayoutParams(0, -1, 1));
+        View railEdge = new View(this);
+        railEdge.setBackgroundColor(0xff1c222b);
+        sidebar.addView(railEdge, new LinearLayout.LayoutParams(dp(1), -1));
         LinearLayout columns = new LinearLayout(this);
         columns.setOrientation(LinearLayout.HORIZONTAL);
         columns.addView(sidebar, new LinearLayout.LayoutParams(0, -1));
@@ -904,29 +918,21 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         sidebarSignature = signature.toString();
         sidebarRows.removeAllViews();
         if (savedHosts.isEmpty()) {
-            sidebarRows.addView(chromeLabel("No saved hosts yet", 12, 0x8c9bb0, false));
+            sidebarRows.addView(railText("No saved hosts yet", 13, 0xff6f7d90));
             return;
         }
-        for (SavedRemoteHost host : savedHosts) {
+        for (int h = 0; h < savedHosts.size(); h++) {
+            SavedRemoteHost host = savedHosts.get(h);
             boolean live = host.id.equals(currentHostId);
-            LinearLayout header = new LinearLayout(this);
-            header.setOrientation(LinearLayout.HORIZONTAL);
-            header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            header.setMinimumHeight(dp(38));
-            header.setSaveFromParentEnabled(false);
-            header.addView(chromeDot(live ? "idle" : "unknown"));
-            header.addView(chromeLabel(host.name, 13, live ? 0x76d3b2 : 0x9fb0c6, false));
-            header.setContentDescription("Connect to " + host.name);
-            header.setOnClickListener(view -> switchHost(host));
-            sidebarRows.addView(header);
             HostSample sample = hostSamples.get(host.id);
             JSONArray workspaces = live && current != null ? current.workspaces
                     : sample == null ? null : sample.workspaces;
             JSONArray panes = live && current != null ? current.panes
                     : sample == null ? null : sample.panes;
+            sidebarRows.addView(railHostHeader(host, live, workspaces));
             if (workspaces == null || panes == null) {
-                sidebarRows.addView(chromeLabel(sample != null && !sample.connected
-                        ? "  connecting…" : "  …", 11, 0x6a7686, false));
+                sidebarRows.addView(railNote(sample != null && !sample.connected
+                        ? "connecting…" : "no session"));
                 continue;
             }
             for (int w = 0; w < workspaces.length(); w++) {
@@ -934,9 +940,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 if (workspace == null) continue;
                 String workspaceId = workspace.optString("id", "");
                 String workspaceLabel = chromeTitle(workspace.optString("label", ""), workspaceId);
-                TextView workspaceRow = chromeLabel("  " + workspaceLabel, 12, 0x8c9bb0, false);
-                workspaceRow.setMinimumHeight(dp(30));
-                workspaceRow.setContentDescription("Focus workspace " + workspaceLabel);
+                TextView workspaceRow = railWorkspace(workspaceLabel, live);
                 if (live) workspaceRow.setOnClickListener(view -> focusChrome(current, "workspace", workspaceId));
                 sidebarRows.addView(workspaceRow);
                 for (int p = 0; p < panes.length(); p++) {
@@ -944,15 +948,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     if (pane == null || !workspaceId.equals(pane.optString("workspace_id", ""))) continue;
                     String paneId = pane.optString("id", "");
                     String title = chromeTitle(pane.optString("title", ""), paneId);
-                    LinearLayout row = new LinearLayout(this);
-                    row.setOrientation(LinearLayout.HORIZONTAL);
-                    row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-                    row.setMinimumHeight(dp(40));
-                    row.setSaveFromParentEnabled(false);
-                    row.setPadding(dp(10), 0, 0, 0);
-                    row.addView(chromeDot(pane.optString("status", "unknown")));
                     boolean selected = live && current != null && paneId.equals(current.paneId);
-                    row.addView(chromeLabel(title, 12, selected ? 0x76d3b2 : 0xc9d3df, false));
+                    LinearLayout row = railPaneRow(title, pane.optString("status", "unknown"), selected);
                     row.setContentDescription("Focus pane " + title + " on " + host.name);
                     row.setOnClickListener(view -> {
                         if (live) {
@@ -964,7 +961,103 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     sidebarRows.addView(row);
                 }
             }
+            if (h + 1 < savedHosts.size()) sidebarRows.addView(railRule());
         }
+    }
+
+    /** One saved host: status dot, name, and how many workspaces its session reports. */
+    private View railHostHeader(SavedRemoteHost host, boolean live, JSONArray workspaces) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(dp(38));
+        row.setPadding(dp(6), dp(5), dp(6), dp(5));
+        if (live) row.setBackground(roundedDrawable(0x1476d3b2, 9));
+        row.addView(chromeDot(live ? "idle" : "unknown"));
+        TextView name = railText(host.name, 13, live ? 0xff76d3b2 : 0xffd7dee8);
+        name.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        name.setSingleLine(true);
+        LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1);
+        nameParams.leftMargin = dp(1);
+        row.addView(name, nameParams);
+        if (workspaces != null && workspaces.length() > 0) {
+            TextView count = railText(String.valueOf(workspaces.length()), 11, 0xff6f7d90);
+            count.setContentDescription(workspaces.length() + " workspaces");
+            row.addView(count);
+        }
+        row.setContentDescription("Connect to " + host.name);
+        row.setOnClickListener(view -> switchHost(host));
+        row.setSaveFromParentEnabled(false);
+        return row;
+    }
+
+    /** A workspace label: quiet, upper case, and clearly above its panes. */
+    private TextView railWorkspace(String label, boolean live) {
+        TextView row = railText(label, 10, live ? 0xff8fa0b8 : 0xff6b788c);
+        row.setAllCaps(true);
+        row.setLetterSpacing(0.09f);
+        row.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        row.setPadding(dp(10), dp(11), dp(6), dp(2));
+        row.setContentDescription("Focus workspace " + label);
+        return row;
+    }
+
+    /** A pane row: status dot, up to two lines of title, and a pill when focused. */
+    private LinearLayout railPaneRow(String title, String status, boolean selected) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(dp(32));
+        row.setPadding(dp(10), dp(4), dp(6), dp(4));
+        if (selected) row.setBackground(roundedDrawable(0x3076d3b2, 8));
+        row.addView(chromeDot(status));
+        TextView label = railText(title, 12, selected ? 0xfff2f6fb : 0xffc2ccda);
+        label.setSingleLine(false);
+        label.setMaxLines(2);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        label.setLineSpacing(0, 1.05f);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+        params.leftMargin = dp(1);
+        row.addView(label, params);
+        row.setSaveFromParentEnabled(false);
+        return row;
+    }
+
+    private TextView railNote(String text) {
+        TextView note = railText(text, 11, 0xff66748a);
+        note.setPadding(dp(10), dp(2), dp(6), dp(6));
+        note.setTypeface(android.graphics.Typeface.create("sans-serif-italic", android.graphics.Typeface.NORMAL));
+        return note;
+    }
+
+    private View railRule() {
+        View rule = new View(this);
+        rule.setBackgroundColor(0xff1c222b);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(1));
+        params.topMargin = dp(12);
+        params.bottomMargin = dp(6);
+        params.leftMargin = dp(6);
+        params.rightMargin = dp(6);
+        rule.setLayoutParams(params);
+        return rule;
+    }
+
+    private TextView railText(String text, int size, int color) {
+        TextView label = new TextView(this);
+        label.setText(text);
+        label.setTextSize(size);
+        label.setTextColor(color);
+        label.setSingleLine(true);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        label.setSaveEnabled(false);
+        return label;
+    }
+
+    private android.graphics.drawable.GradientDrawable roundedDrawable(int color, int radiusDp) {
+        android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
+        shape.setColor(color);
+        shape.setCornerRadius(dp(radiusDp));
+        return shape;
     }
 
     private void showPanes() {
@@ -1107,9 +1200,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         else if ("idle".equals(status)) color = 0x76d3b2;
         // Rail colors are sized without an alpha channel; a raw int would be
         // fully transparent.
-        dot.setBackgroundColor(0xff000000 | color);
+        dot.setBackground(roundedDrawable(0xff000000 | color, 4));
         LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(dp(8), dp(8));
-        layout.setMarginEnd(dp(10));
+        layout.setMarginEnd(dp(8));
         dot.setLayoutParams(layout);
         return dot;
     }
