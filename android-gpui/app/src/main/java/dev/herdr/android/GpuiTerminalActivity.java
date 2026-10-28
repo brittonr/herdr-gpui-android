@@ -219,6 +219,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         panes.setOnClickListener(view -> showPanes());
         synchronousTouch(panes);
         bar.addView(panes, new LinearLayout.LayoutParams(dp(64), dp(48)));
+        Button session = localButton("Tab");
+        session.setContentDescription("New tab, split, zoom or close this session's pane");
+        session.setOnClickListener(view -> showSessionActions());
+        synchronousTouch(session);
+        bar.addView(session, new LinearLayout.LayoutParams(dp(56), dp(48)));
         sidebarButton = localButton("List");
         sidebarButton.setContentDescription("Show or hide the workspace and agent sidebar");
         sidebarButton.setOnClickListener(view -> toggleSidebar());
@@ -809,6 +814,67 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         lastSnapshotTitle = lastSnapshotText = lastSnapshotStatus = lastSnapshotShortcuts = lastSnapshotSurface = null;
         terminalRoot = null;
         super.onDestroy();
+    }
+
+    /** Desktop-style session control for the focused tab and pane. */
+    private void showSessionActions() {
+        final Connection target;
+        synchronized (stateLock) { target = connection; }
+        if (target == null || target.isClosed()) return;
+        if (target.remoteHandle <= 0) {
+            Toast.makeText(this, "Session controls need the SSH workflow", Toast.LENGTH_LONG).show();
+            return;
+        }
+        String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab"};
+        String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close"};
+        new AlertDialog.Builder(this)
+                .setTitle("Session · " + launch.name())
+                .setItems(labels, (dialog, which) -> {
+                    String action = actions[which];
+                    if ("pane.close".equals(action) || "tab.close".equals(action)) {
+                        confirmSessionAction(target, action, labels[which]);
+                    } else if ("pane.zoom.on".equals(action)) {
+                        // One control toggles: the daemon reports the current zoom state.
+                        runSessionAction(target, zoomed(target) ? "pane.zoom.off" : "pane.zoom.on", "Zoom");
+                    } else {
+                        runSessionAction(target, action, labels[which]);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private boolean zoomed(Connection target) {
+        JSONArray tabs = target.tabs;
+        if (tabs == null) return false;
+        for (int i = 0; i < tabs.length(); i++) {
+            JSONObject tab = tabs.optJSONObject(i);
+            if (tab != null && tab.optBoolean("focused") && tab.optBoolean("zoomed")) return true;
+        }
+        return false;
+    }
+
+    private void confirmSessionAction(Connection target, String action, String label) {
+        new AlertDialog.Builder(this)
+                .setTitle(label + "?")
+                .setMessage("pane.close".equals(action)
+                        ? "Closing the pane terminates its processes. This cannot be undone."
+                        : "Closing the tab terminates its panes and processes. This cannot be undone.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton(label, (dialog, which) -> runSessionAction(target, action, label))
+                .show();
+    }
+
+    private void runSessionAction(Connection target, String action, String label) {
+        try {
+            JSONObject result = new JSONObject(RemoteNative.sessionAction(target.remoteHandle, action));
+            if (!result.optBoolean("queued", false)) throw new IllegalStateException("not queued");
+            synchronized (stateLock) {
+                if (current(target)) publish(target, label + "…");
+            }
+        } catch (Exception | LinkageError failure) {
+            Toast.makeText(this, "Could not apply " + label + "; reopen and check the session", Toast.LENGTH_LONG).show();
+        }
     }
 
     /** A terminal bell: a short vibration, never a sound that overrides the ring mode. */

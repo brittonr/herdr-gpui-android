@@ -99,6 +99,11 @@ client forwards only `http` and `https` targets, at most 2 KiB without control
 characters, and the activity rechecks the scheme before starting the intent; no
 file, `intent:` or custom scheme is reachable this way.
 
+**Tab** sends only allowlisted methods - `tab.create`, `tab.close`,
+`pane.split`, `pane.close`, `pane.zoom` - against the daemon's focused
+workspace, tab and pane. Close requests are confirmed first, and nothing else
+can be invoked from the renderer.
+
 Daemon notifications (for example an agent waiting on you) are posted on the
 `herdr-agent-alerts` channel: at most eight pending, one per pane, newest wins,
 with the pane as the notification id so a newer alert replaces the older one on

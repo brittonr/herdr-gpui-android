@@ -214,6 +214,19 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_focusWorkspace(
 }
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_sessionAction(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    action: JString<'_>,
+) -> jstring {
+    let Some(action) = read(&mut env, &action, 64) else {
+        return std::ptr::null_mut();
+    };
+    result_string(&mut env, remote::session_action(handle as u64, &action))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_RemoteNative_close(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,

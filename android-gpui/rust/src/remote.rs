@@ -148,6 +148,7 @@ pub struct Tab {
     workspace_id: String,
     label: String,
     focused: bool,
+    zoomed: bool,
     status: &'static str,
 }
 #[derive(Clone, Serialize)]
@@ -615,6 +616,7 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                     workspace_id: tab.workspace_id.clone(),
                     label: clean(&tab.label, 80),
                     focused: tab.focused,
+                    zoomed: tab.zoomed,
                     status: agent_status(&tab.agent_status),
                 })
                 .collect();
@@ -1026,6 +1028,74 @@ pub fn focus(id: u64, pane_id: &str) -> Result<String> {
     Ok(json!({"queued": true}).to_string())
 }
 
+/// Session actions the phone may request. Anything else is refused, so the
+/// renderer cannot send arbitrary daemon methods.
+const SESSION_ACTIONS: [&str; 7] = [
+    "tab.new",
+    "tab.close",
+    "pane.split.right",
+    "pane.split.down",
+    "pane.close",
+    "pane.zoom.on",
+    "pane.zoom.off",
+];
+
+/// Runs one allowlisted session action against the daemon's focused workspace,
+/// tab and pane, then follows whatever pane the daemon focuses.
+pub fn session_action(id: u64, action: &str) -> Result<String> {
+    if !SESSION_ACTIONS.contains(&action) {
+        return Err(Error::Config);
+    }
+    let owner = session(id)?;
+    let mut state = lock(&owner.state);
+    if state.view.state == "closed" || owner.cancel.is_cancelled() {
+        return Err(Error::Closed);
+    }
+    let snapshot = state.snapshot.as_ref().ok_or(Error::StaleTarget)?;
+    let pane = snapshot
+        .focused_pane_id
+        .clone()
+        .filter(|pane| valid_pane_id(pane))
+        .ok_or(Error::StaleTarget)?;
+    let tab = snapshot
+        .focused_tab_id
+        .clone()
+        .filter(|tab| valid_pane_id(tab))
+        .ok_or(Error::StaleTarget)?;
+    let workspace = snapshot
+        .focused_workspace_id
+        .clone()
+        .filter(|workspace| valid_pane_id(workspace))
+        .ok_or(Error::StaleTarget)?;
+    let (method, args) = match action {
+        "tab.new" => (Method::TabCreate, json!({"workspace_id": workspace, "focus": true})),
+        "tab.close" => (Method::TabClose, json!({"tab_id": tab})),
+        "pane.split.right" => (
+            Method::PaneSplit,
+            json!({"target_pane_id": pane, "direction": "right", "focus": true}),
+        ),
+        "pane.split.down" => (
+            Method::PaneSplit,
+            json!({"target_pane_id": pane, "direction": "down", "focus": true}),
+        ),
+        "pane.close" => (Method::PaneClose, json!({"pane_id": pane})),
+        "pane.zoom.on" => (Method::PaneZoom, json!({"pane_id": pane, "mode": "on"})),
+        _ => (Method::PaneZoom, json!({"pane_id": pane, "mode": "off"})),
+    };
+    state
+        .client
+        .as_ref()
+        .ok_or(Error::Closed)?
+        .request(&state.view.boot_id, method, args)?;
+    // Creation and close move the daemon's focus; follow it on the next frame.
+    state.follow_focus = true;
+    state.view.text.clear();
+    state.view.surface.clear();
+    state.view.state = "connecting";
+    state.view.status = "Applying session change".into();
+    Ok(json!({"queued": true}).to_string())
+}
+
 /// Focus a tab inside the current session. The daemon then moves its focused
 /// pane and the next projection follows it.
 pub fn focus_tab(id: u64, tab_id: &str) -> Result<String> {
@@ -1236,6 +1306,16 @@ mod tests {
             acknowledged: false,
             started: Instant::now(),
         });
+    }
+    #[test]
+    fn session_actions_are_allowlisted() {
+        // The allowlist is checked before any session lookup, so an unknown
+        // method can never reach the daemon.
+        assert!(matches!(session_action(1, "pane.clear"), Err(Error::Config)));
+        assert!(matches!(session_action(1, "command.invoke"), Err(Error::Config)));
+        assert!(matches!(session_action(1, ""), Err(Error::Config)));
+        // A stale handle fails closed for an allowed action.
+        assert!(matches!(session_action(999_999, "tab.new"), Err(Error::Closed)));
     }
     #[test]
     fn notifications_and_bells_are_bounded_and_replaced_per_pane() {
@@ -1678,6 +1758,7 @@ mod tests {
                     workspace_id: "w".repeat(64),
                     label: clean(&"\\".repeat(80), 80),
                     focused: false,
+                    zoomed: false,
                     status: "blocked",
                 })
                 .collect(),

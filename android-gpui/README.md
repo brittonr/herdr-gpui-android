@@ -94,7 +94,11 @@ validated before it reaches the renderer. Split panes and their borders are
 painted together and the panes' focused border carries the accent ring.
 Terminal hyperlinks in the daemon's table become tappable runs; only `http(s)`
 targets are forwarded, to the platform browser, never to files or custom
-schemes. Agent alerts the daemon broadcasts appear as Android notifications on one
+schemes. **Tab** controls the focused session through allowlisted daemon methods: new
+tab, split right or down, zoom toggle, close pane and close tab (both confirmed).
+The client follows whichever pane the daemon focuses afterwards.
+
+Agent alerts the daemon broadcasts appear as Android notifications on one
 bounded channel (newest per pane, at most eight pending), and a terminal bell
 gives a short vibration instead of overriding the ring mode. Notifications need
 the system notification permission; without it the terminal still runs.
