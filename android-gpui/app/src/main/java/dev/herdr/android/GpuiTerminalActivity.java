@@ -58,6 +58,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Object stateLock = new Object();
     private final Set<Integer> capturedKeys = new HashSet<>();
+    /** Scroll requests ride their own thread so a poll parse never delays them. */
+    private final java.util.concurrent.ExecutorService scrollWorker =
+            java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
+                Thread thread = new Thread(task, "herdr-scroll");
+                thread.setDaemon(true);
+                return thread;
+            });
     private final ScheduledThreadPoolExecutor worker = new ScheduledThreadPoolExecutor(1, task -> {
         Thread thread = new Thread(task, "herdr-gpui-https");
         thread.setDaemon(true);
@@ -463,7 +470,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (offset == lastSentScroll) return;
         lastSentScroll = offset;
         try {
-            worker.execute(() -> {
+            scrollWorker.execute(() -> {
                 try { RemoteNative.scrollTo(target.remoteHandle, offset); }
                 catch (RuntimeException | LinkageError ignored) { }
             });

@@ -209,9 +209,6 @@ fn styled_run(text: &str, run: &model::StyledRun, metrics: DisplayMetrics) -> St
 
 impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // A recreated surface may paint before the queued notification runs.
-        // Never reuse the previous pane's cached snapshot on that first frame.
-        self.refresh_snapshot();
         let snapshot = self.state.snapshot.clone();
         let rows = snapshot.clone();
         let entity = cx.entity();
