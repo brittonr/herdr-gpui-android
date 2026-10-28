@@ -232,8 +232,9 @@ struct State {
     text_pane: String,
     /// Rows seen for this pane, keyed by distance from the bottom.
     history: std::collections::BTreeMap<i64, StoredRow>,
-    /// Rows above the tail this client is showing; zero means tailing.
-    local_offset: i64,
+    /// Row shown at the top of the viewport, counted from the bottom. `None`
+    /// follows the tail, so new output keeps scrolling as usual.
+    anchor: Option<i64>,
     /// Hyperlink table shared by the buffered rows.
     history_links: serde_json::Value,
 }
@@ -898,13 +899,15 @@ struct StoredRow {
 const HISTORY_ROWS: i64 = 512;
 
 impl State {
-    /// Stores one frame's rows under the offset the daemon rendered them at.
-    fn remember_rows(&mut self, offset: i64, text: &str, style: &str) {
+    /// Stores one frame's rows under an absolute id that does not move when the
+    /// pane grows: `max_offset - distance_from_bottom`.
+    fn remember_rows(&mut self, offset: i64, max: i64, text: &str, style: &str) {
         let (links, rows) = style_parts(style);
         self.history_links = links;
         let lines: Vec<&str> = text.split('\n').collect();
         for (index, line) in lines.iter().enumerate() {
-            let row = offset + (lines.len() as i64 - 1 - index as i64);
+            let from_bottom = offset + (lines.len() as i64 - 1 - index as i64);
+            let row = max - from_bottom;
             self.history.insert(
                 row,
                 StoredRow {
@@ -913,18 +916,21 @@ impl State {
                 },
             );
         }
-        let newest = offset + lines.len() as i64;
+        let newest = max;
         let oldest = (newest - HISTORY_ROWS).max(0);
         self.history.retain(|row, _| *row >= oldest && *row <= newest);
     }
 
     /// The window shown for the current local offset, clamped to the buffer.
-    fn window_at(&mut self, rows: usize) -> Option<(String, String)> {
-        let newest = *self.history.keys().next_back()?;
+    /// The window shown for the current anchor. A fixed anchor keeps the rows
+    /// under the finger still while output keeps arriving behind them.
+    fn window_at(&mut self, rows: usize, max: i64) -> Option<(String, String)> {
         let oldest = *self.history.keys().next()?;
-        let tail_top = newest - rows as i64 + 1;
-        let top = (tail_top - self.local_offset).clamp(oldest, tail_top);
-        self.local_offset = tail_top - top;
+        // Ids grow with the pane, so the tail window's top is `max - rows + 1`
+        // and scrolling back walks it down towards `oldest`.
+        let tail_top = (max - rows as i64 + 1).max(oldest);
+        let top = self.anchor.unwrap_or(tail_top).clamp(oldest, tail_top);
+        self.anchor = (top != tail_top).then_some(top);
         let mut text = String::new();
         let mut styled: Vec<String> = Vec::with_capacity(rows);
         for (index, row) in (top..top + rows as i64).enumerate() {
@@ -1013,23 +1019,24 @@ fn project(state: &mut State) {
             })
             .unwrap_or_default();
         let rows = state.view.scroll.rows.max(1) as usize;
-        state.remember_rows(state.view.scroll.offset as i64, &text, &surface);
+        let max = state.view.scroll.max as i64;
+        state.remember_rows(state.view.scroll.offset as i64, max, &text, &surface);
         state.view.revision = revision;
-        if state.local_offset == 0 {
+        if state.anchor.is_none() {
             state.view.text = text;
             state.view.surface = surface;
-        } else if let Some((local_text, local_surface)) = state.window_at(rows) {
+        } else if let Some((local_text, local_surface)) = state.window_at(rows, max) {
             state.view.text = local_text;
             state.view.surface = local_surface;
         } else {
-            state.local_offset = 0;
+            state.anchor = None;
             state.view.text = text;
             state.view.surface = surface;
         }
-        let newest = state.history.keys().next_back().copied().unwrap_or(0);
-        let oldest = state.history.keys().next().copied().unwrap_or(0);
-        let tail_top = newest - rows as i64 + 1;
-        state.view.local_offset = state.local_offset;
+        let tail_top = (max - rows as i64 + 1).max(0);
+        let oldest = state.history.keys().next().copied().unwrap_or(max);
+        state.view.local_offset = tail_top - state.anchor.unwrap_or(tail_top);
+        // Rows of history the buffer holds behind the tail window.
         state.view.buffered_rows = (tail_top - oldest).max(0);
     } else if !state.view.pane_id.is_empty() && state.view.text.is_empty() {
         state.view.state = "connecting";
@@ -1287,12 +1294,15 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
         return Err(Error::Closed);
     }
     let rows = state.view.scroll.rows.max(1) as i64;
-    let newest = state.history.keys().next_back().copied().unwrap_or(0);
+    let max = state.view.scroll.max as i64;
     let oldest = state.history.keys().next().copied().unwrap_or(0);
-    let tail_top = newest - rows + 1;
+    let tail_top = (max - rows + 1).max(oldest);
+    let current = state.anchor.unwrap_or(tail_top);
+    // Dragging down (positive delta) reads older rows, i.e. lower ids.
+    let next = (current - delta).clamp(oldest, tail_top);
+    state.anchor = (next != tail_top).then_some(next);
+    let offset = tail_top - next;
     let limit = (tail_top - oldest).max(0);
-    let next = (state.local_offset + delta).clamp(0, limit);
-    state.local_offset = next;
     project(&mut state);
     let text = state.view.text.clone();
     let surface = state.view.surface.clone();
@@ -1312,10 +1322,10 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
         model::mailbox().set_snapshot(paint.generation, snapshot);
     }
     Ok(json!({
-        "offset": next,
+        "offset": offset,
         "limit": limit,
         "rows": rows,
-        "at_edge": next == limit && delta > 0,
+        "at_edge": offset == limit && delta > 0,
     })
     .to_string())
 }
