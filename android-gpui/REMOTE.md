@@ -99,6 +99,12 @@ client forwards only `http` and `https` targets, at most 2 KiB without control
 characters, and the activity rechecks the scheme before starting the intent; no
 file, `intent:` or custom scheme is reachable this way.
 
+A program in a pane can set the phone clipboard through OSC 52. The daemon
+forwards it as base64; the client decodes it strictly and writes plain text
+only, at most 256 KiB of valid UTF-8, once per write. Invalid, oversized or
+non-UTF-8 payloads never reach the pasteboard, and an empty write is ignored
+rather than clearing it.
+
 **View > Theme** switches between the built-in palettes (Default, Nord, Mocha
 and the light Latte). The palette is applied when a frame is painted, so an open
 terminal repaints immediately without reconnecting or waiting for output.

@@ -161,6 +161,9 @@ pub struct View {
     pane_id: String,
     text: String,
     surface: String,
+    /// One pending OSC 52 write, delivered once by `poll`.
+    clipboard: Option<String>,
+    clipboard_serial: u64,
     revision: u64,
 }
 impl Default for View {
@@ -175,6 +178,8 @@ impl Default for View {
             pane_id: String::new(),
             text: String::new(),
             surface: String::new(),
+            clipboard: None,
+            clipboard_serial: 0,
             revision: 0,
         }
     }
@@ -322,7 +327,15 @@ pub fn close(id: u64) {
     }
 }
 pub fn poll(id: u64) -> Result<String> {
-    let json = serde_json::to_string(&lock(&session(id)?.state).view)?;
+    let json = {
+        let owner = session(id)?;
+        let mut state = lock(&owner.state);
+        let json = serde_json::to_string(&state.view)?;
+        // A clipboard write is delivered exactly once, so it never inflates
+        // every later poll with the same bytes.
+        state.view.clipboard = None;
+        json
+    };
     if json.len() > 1_048_576 {
         return Err(Error::StateLimit);
     }
@@ -462,6 +475,79 @@ fn run(owner: &Arc<Session>, config: Config, credentials: Credentials, name: Str
     Ok(())
 }
 
+/// The largest decoded OSC 52 write this client will put on the pasteboard.
+const MAX_CLIPBOARD_TEXT: usize = 256 * 1024;
+
+/// OSC 52 payloads are base64 of the raw bytes. Only bounded, valid UTF-8 text
+/// is accepted; anything else is dropped rather than guessed at.
+fn decode_osc52(data: &str) -> Option<String> {
+    if data.len() > MAX_CLIPBOARD_TEXT.div_ceil(3) * 4 + 4 {
+        return None;
+    }
+    let mut normalised = String::with_capacity(data.len());
+    for ch in data.chars() {
+        match ch {
+            '\n' | '\r' => continue,
+            '-' => normalised.push('+'),
+            '_' => normalised.push('/'),
+            other => normalised.push(other),
+        }
+    }
+    // Padding may only trail; a symbol after it is malformed.
+    let trimmed = normalised.trim_end_matches('=');
+    if trimmed.contains('=') {
+        return None;
+    }
+    let mut padded = trimmed.to_owned();
+    match padded.len() % 4 {
+        0 => {}
+        2 => padded.push_str("=="),
+        3 => padded.push('='),
+        _ => return None,
+    }
+    let bytes = base64_decode(&padded)?;
+    if bytes.len() > MAX_CLIPBOARD_TEXT {
+        return None;
+    }
+    String::from_utf8(bytes).ok()
+}
+
+fn base64_decode(data: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(data.len() / 4 * 3);
+    let mut buffer: u32 = 0;
+    let mut bits: u32 = 0;
+    let mut padding = 0usize;
+    for byte in data.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' if padding < 2 => {
+                padding += 1;
+                continue;
+            }
+            _ => return None,
+        };
+        if padding != 0 {
+            return None;
+        }
+        buffer = (buffer << 6) | u32::from(value);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    // A non-canonical tail carries data no base64 writer would produce.
+    if padding != 0 && buffer != 0 {
+        return None;
+    }
+    Some(out)
+}
+
 fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
     match event {
         ClientEvent::Snapshot(snapshot) => {
@@ -558,6 +644,12 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                 return Some("The requested pane was closed".into());
             }
             state.snapshot = Some(snapshot);
+        }
+        ClientEvent::Message(ServerMessage::Clipboard { data }) => {
+            if let Some(text) = decode_osc52(&data) {
+                state.view.clipboard = Some(text);
+                state.view.clipboard_serial = state.view.clipboard_serial.wrapping_add(1);
+            }
         }
         ClientEvent::Surface(surface) => {
             if !state.view.boot_id.is_empty() && state.view.boot_id != surface.boot_id {
@@ -1098,6 +1190,42 @@ mod tests {
             acknowledged: false,
             started: Instant::now(),
         });
+    }
+    #[test]
+    fn osc52_writes_only_bounded_valid_text() {
+        // "hello" in standard and url-safe base64, with padding optional.
+        assert_eq!(decode_osc52("aGVsbG8=").as_deref(), Some("hello"));
+        assert_eq!(decode_osc52("aGVsbG8").as_deref(), Some("hello"));
+        // The URL-safe alphabet is accepted, not just the standard one.
+        assert!(decode_osc52("aGVsbG8_").is_some());
+        assert_eq!(decode_osc52(""), Some(String::new()));
+        for rejected in ["not base64!", "a", "aGVsbG8=x", "//79"] {
+            assert!(decode_osc52(rejected).is_none(), "{rejected} must be dropped");
+        }
+        // Raw bytes that are not UTF-8 never reach the pasteboard.
+        assert!(decode_osc52("/w==").is_none(), "0xff is not UTF-8");
+        let oversized = "A".repeat(MAX_CLIPBOARD_TEXT.div_ceil(3) * 4 + 8);
+        assert!(decode_osc52(&oversized).is_none(), "oversized payloads are dropped");
+    }
+    #[test]
+    fn clipboard_write_is_delivered_once_and_advances_its_serial() {
+        let mut state = State::default();
+        apply_event(
+            &mut state,
+            ClientEvent::Message(ServerMessage::Clipboard {
+                data: "aGVsbG8=".into(),
+            }),
+        );
+        assert_eq!(state.view.clipboard.as_deref(), Some("hello"));
+        assert_eq!(state.view.clipboard_serial, 1);
+        apply_event(
+            &mut state,
+            ClientEvent::Message(ServerMessage::Clipboard {
+                data: "not base64!".into(),
+            }),
+        );
+        assert_eq!(state.view.clipboard.as_deref(), Some("hello"), "invalid writes keep the pending one");
+        assert_eq!(state.view.clipboard_serial, 1, "invalid writes do not advance");
     }
     #[test]
     fn palette_table_is_bounded() {

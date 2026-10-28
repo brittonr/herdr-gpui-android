@@ -811,6 +811,22 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         super.onDestroy();
     }
 
+    /** OSC 52 text the daemon forwarded: plain text only, never a URI or bytes. */
+    private void applyRemoteClipboard(Connection target, String text) {
+        synchronized (stateLock) {
+            if (!current(target)) return;
+        }
+        android.content.ClipboardManager manager =
+                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (manager == null) return;
+        try {
+            manager.setPrimaryClip(android.content.ClipData.newPlainText("Herdr", text));
+            Toast.makeText(this, "Copied from terminal", Toast.LENGTH_SHORT).show();
+        } catch (RuntimeException rejected) {
+            // A locked device may refuse clipboard writes; the session stays usable.
+        }
+    }
+
     /** Opens a terminal link through the platform browser; never a file or custom scheme. */
     public void gpuiOpenLink(long expectedGeneration, String url) {
         runOnUiThread(() -> {
@@ -1155,6 +1171,16 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 current.tabs = state.optJSONArray("tabs");
                 current.panes = state.optJSONArray("panes");
                 current.chromePane = pane;
+                long serial = state.optLong("clipboard_serial", 0);
+                String copy = state.optString("clipboard", "");
+                if (serial > current.clipboardSerial) {
+                    current.clipboardSerial = serial;
+                    // Only bounded UTF-8 text decoded by the native side reaches the pasteboard.
+                    if (!copy.isEmpty()) {
+                        final Connection owner = current;
+                        main.post(() -> applyRemoteClipboard(owner, copy));
+                    }
+                }
                 publish(current, selected ? "SSH connected · " + launch.name() : "Waiting for selected remote pane…");
                 nativeSetActive(current.generation, selected);
             }
@@ -1206,6 +1232,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         String text = "";
         String surface = "";
         JSONArray workspaces, tabs, panes;
+        volatile long clipboardSerial;
         String chromePane = "";
         long nextScreenAt;
         boolean ready;
