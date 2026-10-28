@@ -128,8 +128,8 @@ fn button(
         .justify_center()
         .px(px(3.))
         .rounded_md()
-        .bg(rgb(0x253242))
-        .text_color(rgb(0xe8edf4))
+        .bg(rgb(model::palette().chrome))
+        .text_color(rgb(model::palette().foreground))
         .text_size(px(metrics.font_size))
         .cursor_pointer()
         .child(div().min_w_0().truncate().child(label.into()))
@@ -145,6 +145,7 @@ fn styled_row(row: &model::StyledRow, metrics: DisplayMetrics) -> StyledText {
         weight: FontWeight::NORMAL,
         style: FontStyle::Normal,
     };
+    let palette = model::palette();
     let mut runs = Vec::with_capacity(row.runs.len());
     for run in &row.runs {
         let mut font = base.clone();
@@ -154,12 +155,13 @@ fn styled_row(row: &model::StyledRow, metrics: DisplayMetrics) -> StyledText {
         if run.modifier & model::ITALIC != 0 {
             font.style = FontStyle::Italic;
         }
-        let color = rgb(run.fg).into();
+        let (fg, bg) = model::styled_colors(run, &palette);
+        let color = rgb(fg).into();
         runs.push(TextRun {
             len: run.len,
             font,
             color,
-            background_color: (run.bg != 0x10151d).then(|| rgb(run.bg).into()),
+            background_color: (bg != palette.background).then(|| rgb(bg).into()),
             underline: (run.modifier & model::UNDERLINE != 0).then(|| UnderlineStyle {
                 thickness: px(1.),
                 color: Some(color),
@@ -208,7 +210,8 @@ impl Render for TerminalView {
             if self.follow { "Follow" } else { "Paused" },
             metrics,
         )
-        .bg(rgb(if self.follow { 0x23463c } else { 0x253242 }))
+        .bg(rgb(model::palette().chrome))
+        .text_color(rgb(if self.follow { model::palette().accent } else { model::palette().muted }))
         .on_click(cx.listener(|this, _, _, cx| {
             this.follow = !this.follow;
             if this.follow && !this.state.snapshot.lines.is_empty() {
@@ -226,7 +229,7 @@ impl Render for TerminalView {
             .gap(px(metrics.gap))
             .p(px(metrics.padding))
             .border_t_1()
-            .border_color(rgb(0x2b3747));
+            .border_color(rgb(model::palette().border));
         let footer = if metrics.stacked_controls {
             footer
                 .flex_col()
@@ -240,7 +243,7 @@ impl Render for TerminalView {
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(rgb(0x10151d))
+            .bg(rgb(model::palette().background))
             .text_color(rgb(0xdce5ef))
             .font_family(crate::fonts::SANS_FAMILY)
             .track_focus(&self.focus)
@@ -254,7 +257,7 @@ impl Render for TerminalView {
                     .gap(px(metrics.gap))
                     .px(px(metrics.padding + 4.))
                     .border_b_1()
-                    .border_color(rgb(0x2b3747))
+                    .border_color(rgb(model::palette().border))
                     .text_size(px(metrics.font_size))
                     .child(
                         div()

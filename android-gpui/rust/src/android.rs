@@ -309,6 +309,19 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetDisp
 
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetTheme(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    index: i32,
+) {
+    // Out-of-range values keep the current palette instead of guessing.
+    if (0..=i32::from(u8::MAX)).contains(&index) {
+        model::apply_palette(index as u8);
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnapshot(
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,

@@ -24,6 +24,155 @@ pub const UNDERLINE: u16 = 1 << 3;
 pub const REVERSED: u16 = 1 << 6;
 pub const HIDDEN: u16 = 1 << 7;
 pub const STRIKETHROUGH: u16 = 1 << 8;
+/// Renderer-only bit: paint this cell with the palette accent (focused pane border).
+pub const FOCUS_RING: u16 = 1 << 15;
+
+/// A terminal palette: the 16 ANSI colors plus the default pair and chrome.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Palette {
+    pub name: &'static str,
+    pub ansi: [u32; 16],
+    pub foreground: u32,
+    pub background: u32,
+    /// Header/footer surface and its border.
+    pub chrome: u32,
+    pub border: u32,
+    pub muted: u32,
+    pub accent: u32,
+}
+
+pub const PALETTES: [Palette; 4] = [
+    Palette {
+        name: "Default",
+        ansi: [
+            0x1c1f26, 0xcc6b6b, 0x8fc98a, 0xd8b06a, 0x7aa2d6, 0xb08ad6, 0x6fc0c6, 0xc9d1dc,
+            0x566274, 0xe08a8a, 0xa6dc9f, 0xeed092, 0x94b8e8, 0xc9a6e8, 0x8ad6dc, 0xf2f5f9,
+        ],
+        foreground: 0xdce5ef,
+        background: 0x10151d,
+        chrome: 0x1e222a,
+        border: 0x2b3747,
+        muted: 0x9fb0c6,
+        accent: 0x76d3b2,
+    },
+    Palette {
+        name: "Nord",
+        ansi: [
+            0x3b4252, 0xbf616a, 0xa3be8c, 0xebcb8b, 0x81a1c1, 0xb48ead, 0x88c0d0, 0xe5e9f0,
+            0x4c566a, 0xbf616a, 0xa3be8c, 0xebcb8b, 0x81a1c1, 0xb48ead, 0x8fbcbb, 0xeceff4,
+        ],
+        foreground: 0xd8dee9,
+        background: 0x2e3440,
+        chrome: 0x3b4252,
+        border: 0x4c566a,
+        muted: 0xaebacd,
+        accent: 0x8fbcbb,
+    },
+    Palette {
+        name: "Mocha",
+        ansi: [
+            0x45475a, 0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa, 0xcba6f7, 0x94e2d5, 0xbac2de,
+            0x585b70, 0xf38ba8, 0xa6e3a1, 0xf9e2af, 0x89b4fa, 0xcba6f7, 0x94e2d5, 0xa6adc8,
+        ],
+        foreground: 0xcdd6f4,
+        background: 0x1e1e2e,
+        chrome: 0x181825,
+        border: 0x313244,
+        muted: 0xa6adc8,
+        accent: 0xa6e3a1,
+    },
+    Palette {
+        name: "Latte",
+        ansi: [
+            0x5c5f77, 0xd20f39, 0x40a02b, 0xdf8e1d, 0x1e66f5, 0x8839ef, 0x179299, 0xacb0be,
+            0x6c6f85, 0xd20f39, 0x40a02b, 0xdf8e1d, 0x1e66f5, 0x8839ef, 0x179299, 0xbcc0cc,
+        ],
+        foreground: 0x4c4f69,
+        background: 0xeff1f5,
+        chrome: 0xe6e9ef,
+        border: 0xccd0da,
+        muted: 0x6c6f85,
+        accent: 0x1e66f5,
+    },
+];
+
+static PALETTE_INDEX: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub fn palette() -> Palette {
+    PALETTES[PALETTE_INDEX.load(std::sync::atomic::Ordering::Relaxed) as usize
+        % PALETTES.len()]
+}
+
+/// Selects a built-in palette. Returns whether the choice changed.
+/// Applies a palette and repaints the current window.
+#[cfg(feature = "android-ui")]
+pub fn apply_palette(index: u8) -> bool {
+    if !set_palette(index) {
+        return false;
+    }
+    let mut mailbox = mailbox();
+    mailbox.revision = mailbox.revision.wrapping_add(1);
+    #[cfg(feature = "android-ui")]
+    signal_change();
+    true
+}
+
+pub fn set_palette(index: u8) -> bool {
+    if usize::from(index) >= PALETTES.len() {
+        return false;
+    }
+    PALETTE_INDEX.swap(index, std::sync::atomic::Ordering::Relaxed) != index
+}
+
+/// Resolves a wire color (named 1..=16, indexed 0x01xxxxxx, RGB 0x02RRGGBB).
+pub fn resolve_color(value: u32, default: u32, palette: &Palette) -> u32 {
+    match value >> 24 {
+        0 => match value & 0xff {
+            1..=16 => palette.ansi[((value & 0xff) - 1) as usize],
+            _ => default,
+        },
+        1 => {
+            let index = (value & 0xff) as usize;
+            match index {
+                0..=15 => palette.ansi[index],
+                16..=231 => {
+                    let cube = index - 16;
+                    let step = |value: usize| {
+                        let level = (value % 6) as u32;
+                        if level == 0 { 0 } else { 55 + level * 40 }
+                    };
+                    (step(cube / 36) << 16) | (step(cube / 6 % 6) << 8) | step(cube % 6)
+                }
+                _ => {
+                    let level = 8 + (index as u32 - 232) * 10;
+                    (level << 16) | (level << 8) | level
+                }
+            }
+        }
+        2 => value & 0xff_ffff,
+        _ => default,
+    }
+}
+
+/// Final foreground and background for one styled run under a palette.
+pub fn styled_colors(run: &StyledRun, palette: &Palette) -> (u32, u32) {
+    let mut fg = if run.modifier & FOCUS_RING != 0 {
+        palette.accent
+    } else {
+        resolve_color(run.fg, palette.foreground, palette)
+    };
+    let mut bg = resolve_color(run.bg, palette.background, palette);
+    if run.modifier & REVERSED != 0 {
+        std::mem::swap(&mut fg, &mut bg);
+    }
+    if run.modifier & DIM != 0 {
+        fg = ((fg & 0xfe_fefe) >> 1) + ((bg & 0xfe_fefe) >> 1);
+    }
+    if run.modifier & HIDDEN != 0 {
+        fg = bg;
+    }
+    (fg, bg)
+}
 
 /// One contiguous span of cells that share fg, bg and attribute bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

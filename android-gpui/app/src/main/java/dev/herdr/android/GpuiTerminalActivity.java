@@ -86,6 +86,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private Button controlButton;
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
+    /** Index into the renderer's built-in palettes. */
+    private int themeIndex;
     private long lastSnapshotGeneration = Long.MIN_VALUE;
     private String lastSnapshotTitle, lastSnapshotText, lastSnapshotStatus, lastSnapshotShortcuts, lastSnapshotSurface;
 
@@ -117,7 +119,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             // Remote-mutating controls live on the Java UI thread, never a deferred GPUI click.
             shortcutJson = "[]";
             loadDisplayOptions();
+            themeIndex = getSharedPreferences("terminal-display", MODE_PRIVATE).getInt("theme", 0);
+            if (themeIndex < 0 || themeIndex > 3) themeIndex = 0;
             nativeStart(this);
+            nativeSetTheme(themeIndex);
             hostStarted = true;
             createSurface();
         } catch (IllegalArgumentException invalid) {
@@ -396,6 +401,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         String[] sizes = {"Automatic", "11", "12", "13", "14", "15", "16", "17", "18"};
         Spinner font = optionSpinner(sizes, displayOptions.fontSize == 0 ? 0 : displayOptions.fontSize - 10);
         options.addView(font);
+        options.addView(optionLabel("Theme"));
+        Spinner theme = optionSpinner(new String[]{"Default", "Nord", "Mocha", "Latte"}, themeIndex);
+        options.addView(theme);
         options.addView(optionLabel("Physical Alt key"));
         Spinner alt = optionSpinner(new String[]{"Default (device symbols)", "Device symbols", "Terminal Alt shortcuts"}, displayOptions.altMode);
         options.addView(alt);
@@ -415,9 +423,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     displayOptions = new GpuiDisplayOptions(mode.getSelectedItemPosition(),
                             font.getSelectedItemPosition() == 0 ? 0 : font.getSelectedItemPosition() + 10,
                             alt.getSelectedItemPosition());
+                    themeIndex = theme.getSelectedItemPosition();
                     getSharedPreferences("terminal-display", MODE_PRIVATE).edit()
                             .putInt("mode", displayOptions.mode).putInt("font", displayOptions.fontSize)
-                            .putInt("alt", displayOptions.altMode).apply();
+                            .putInt("alt", displayOptions.altMode).putInt("theme", themeIndex).apply();
+                    nativeSetTheme(themeIndex);
                     applyDisplayOptions();
                 }).create();
         showLocalDialog(displayDialog);
@@ -1206,6 +1216,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     private static native void nativeSetDisplayPreferences(float fontSize, boolean compact);
+    private static native void nativeSetTheme(int index);
     private static native void nativeSetSnapshot(long generation, String title, String text, String status,
             String shortcutsJson, String surfaceJson);
     private static native void nativeSetActive(long generation, boolean active);

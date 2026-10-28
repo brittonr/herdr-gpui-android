@@ -703,15 +703,6 @@ fn valid_geometry(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> bool {
         && u32::from(rect.y) + u32::from(rect.height) <= u32::from(surface.frame.height)
 }
 
-/// Colors the desktop client would paint for this app's dark surface. Named
-/// and indexed cells resolve here so the renderer only deals in 0xRRGGBB.
-const PALETTE: [u32; 16] = [
-    0x1c1f26, 0xcc6b6b, 0x8fc98a, 0xd8b06a, 0x7aa2d6, 0xb08ad6, 0x6fc0c6, 0xc9d1dc, 0x566274,
-    0xe08a8a, 0xa6dc9f, 0xeed092, 0x94b8e8, 0xc9a6e8, 0x8ad6dc, 0xf2f5f9,
-];
-const DEFAULT_FG: u32 = 0xdce5ef;
-const DEFAULT_BG: u32 = 0x10151d;
-const FOCUS_ACCENT: u32 = 0x76d3b2;
 const SURFACE_LIMIT: usize = 300_000;
 
 fn inside(rect: SurfaceRect, x: u16, y: u16) -> bool {
@@ -721,52 +712,15 @@ fn inside(rect: SurfaceRect, x: u16, y: u16) -> bool {
         && u32::from(y) < u32::from(rect.y) + u32::from(rect.height)
 }
 
-fn resolve_color(value: u32, default: u32) -> u32 {
-    match value >> 24 {
-        0 => match value & 0xff {
-            1..=16 => PALETTE[((value & 0xff) - 1) as usize],
-            _ => default,
-        },
-        1 => {
-            let index = (value & 0xff) as usize;
-            match index {
-                0..=15 => PALETTE[index],
-                16..=231 => {
-                    let cube = index - 16;
-                    let step = |value: usize| {
-                        let level = (value % 6) as u32;
-                        if level == 0 { 0 } else { 55 + level * 40 }
-                    };
-                    (step(cube / 36) << 16) | (step(cube / 6 % 6) << 8) | step(cube % 6)
-                }
-                _ => {
-                    let level = 8 + (index as u32 - 232) * 10;
-                    (level << 16) | (level << 8) | level
-                }
-            }
-        }
-        2 => value & 0xff_ffff,
-        _ => default,
-    }
-}
-
-fn cell_style(cell: &CellData, cursor: bool) -> (u32, u32, u16) {
-    let mut fg = resolve_color(cell.fg, DEFAULT_FG);
-    let mut bg = resolve_color(cell.bg, DEFAULT_BG);
+fn cell_style(cell: &CellData, cursor: bool, focused_border: bool) -> (u32, u32, u16) {
     let mut modifier = cell.modifier;
     if cursor {
         modifier |= model::REVERSED;
     }
-    if modifier & model::REVERSED != 0 {
-        std::mem::swap(&mut fg, &mut bg);
+    if focused_border {
+        modifier |= model::FOCUS_RING;
     }
-    if modifier & model::DIM != 0 {
-        fg = ((fg & 0xfe_fefe) >> 1) + ((bg & 0xfe_fefe) >> 1);
-    }
-    if modifier & model::HIDDEN != 0 {
-        fg = bg;
-    }
-    (fg, bg, modifier)
+    (cell.fg, cell.bg, modifier)
 }
 
 /// Builds the bounded row/run projection the renderer paints for the whole
@@ -802,17 +756,9 @@ fn surface_style(surface: &PaneSurfaceFrame) -> String {
                 continue;
             }
             let on_cursor = cursor.is_some_and(|cursor| cursor.x == x && cursor.y == y);
-            let (fg, bg, modifier) = cell_style(cell, on_cursor);
-            // The focused pane's border cells carry the accent so the ring is
-            // visible beside every split.
-            let (fg, modifier) = match focused {
-                Some(pane)
-                    if inside(pane.rect, x, y) && !inside(pane.inner_rect, x, y) =>
-                {
-                    (FOCUS_ACCENT, modifier)
-                }
-                _ => (fg, modifier),
-            };
+            let focused_border = focused
+                .is_some_and(|pane| inside(pane.rect, x, y) && !inside(pane.inner_rect, x, y));
+            let (fg, bg, modifier) = cell_style(cell, on_cursor, focused_border);
             let full = runs.len() >= model::MAX_RUNS_PER_LINE;
             match runs.last_mut() {
                 Some(run) if run.2 == fg && run.3 == bg && run.4 == modifier => {
@@ -1131,6 +1077,13 @@ mod tests {
         });
     }
     #[test]
+    fn palette_table_is_bounded() {
+        assert_eq!(model::PALETTES.len(), 4);
+        assert!(model::PALETTES.iter().all(|palette| palette.ansi.len() == 16));
+        // An out-of-range theme never changes the active palette.
+        assert!(!model::set_palette(200));
+    }
+    #[test]
     fn daemon_focus_move_is_followed_without_a_pending_request() {
         let mut state = State::default();
         assert!(apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 2, "p1"))).is_none());
@@ -1156,7 +1109,7 @@ mod tests {
         assert_eq!(state.view.pane_id, "p2");
     }
     #[test]
-    fn surface_style_resolves_colors_attributes_and_cursor() {
+    fn surface_style_emits_raw_cells_and_the_ring_bit() {
         let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
         // Indexed red fg (0x01000001) on the default background.
         surface.frame.cells[5].fg = 0x0100_0001;
@@ -1171,41 +1124,50 @@ mod tests {
         });
         let style = surface_style(&surface);
         let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
-        // The whole frame is painted, so all three rows and the focus ring
-        // around the focused pane's border are present.
         assert_eq!(parsed["rows"].as_array().unwrap().len(), 3);
         let row = &parsed["rows"][1];
         assert_eq!(row["t"], "xABx");
         let runs = row["r"].as_array().unwrap();
         assert_eq!(runs.len(), 4);
-        assert_eq!(runs[0][2], FOCUS_ACCENT, "left border carries the ring");
-        // The cursor cell reverses its colors: indexed red foreground becomes the
-        // background and the default background becomes the foreground.
-        assert_eq!(runs[1][2], DEFAULT_BG);
-        // 0x01000001 is indexed color 1, which the desktop maps to palette[1].
-        assert_eq!(runs[1][3], PALETTE[1]);
+        // Border cells carry raw default colors plus the renderer-only ring bit,
+        // so a theme switch repaints without a new surface.
+        assert_eq!(runs[0][2], 0);
+        assert_ne!(runs[0][4].as_u64().unwrap() & u64::from(model::FOCUS_RING), 0);
+        // The cursor cell keeps its raw color and gains the reverse bit.
+        assert_eq!(runs[1][2], 0x0100_0001);
         assert_ne!(runs[1][4].as_u64().unwrap() & u64::from(model::REVERSED), 0);
-        assert_eq!(runs[2][2], DEFAULT_FG);
-        assert_eq!(runs[2][3], 0x00_0010);
+        assert_eq!(runs[2][3], 0x0200_0010);
         assert_eq!(
-            runs[2][4].as_u64().unwrap(),
+            runs[2][4].as_u64().unwrap() & u64::from(model::BOLD | model::UNDERLINE),
             u64::from(model::BOLD | model::UNDERLINE)
         );
         // The model accepts exactly what the projection produces.
-        assert_eq!(model::parse_surface(&style).unwrap().len(), 3);
+        let rows = model::parse_surface(&style).unwrap();
+        assert_eq!(rows.len(), 3);
+        // Resolution is a render-time step, so a palette changes these colors.
+        let default = model::PALETTES[0];
+        let latte = model::PALETTES[3];
+        let cursor = rows[1].runs[1];
+        assert_eq!(model::styled_colors(&cursor, &default).0, default.background);
+        assert_eq!(model::styled_colors(&cursor, &default).1, default.ansi[1]);
+        assert_eq!(model::styled_colors(&cursor, &latte).0, latte.background);
+        let border = rows[1].runs[0];
+        assert_eq!(model::styled_colors(&border, &default).0, default.accent);
+        assert_eq!(model::styled_colors(&border, &latte).0, latte.accent);
     }
     #[test]
-    fn surface_style_keeps_hidden_text_and_paints_split_borders() {
+    fn surface_style_keeps_hidden_text_and_marks_split_borders() {
         let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
         surface.frame.cells[5].modifier = model::HIDDEN;
         let style = surface_style(&surface);
         let parsed: serde_json::Value = serde_json::from_str(&style).unwrap();
-        // Row 1 run 1 is the hidden inner cell; its foreground collapses to its
-        // background instead of drawing the glyph in a visible color.
         let run = &parsed["rows"][1]["r"][1];
-        assert_eq!(run[2], DEFAULT_BG);
-        assert_eq!(run[3], DEFAULT_BG);
-        // Geometry outside the frame is rejected before projection, not by it.
+        assert_ne!(run[4].as_u64().unwrap() & u64::from(model::HIDDEN), 0);
+        let rows = model::parse_surface(&style).unwrap();
+        let hidden = rows[1].runs[1];
+        let (fg, bg) = model::styled_colors(&hidden, &model::PALETTES[0]);
+        assert_eq!(fg, bg, "hidden text never draws a visible glyph");
+        // Pane geometry no longer decides what the frame projection shows.
         surface.panes[0].inner_rect.width = u16::MAX;
         assert!(!valid_geometry(&surface, &surface.panes[0]));
         assert_eq!(parsed["rows"].as_array().unwrap().len(), 3);

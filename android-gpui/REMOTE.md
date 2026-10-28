@@ -94,6 +94,10 @@ each row exactly or the row falls back to plain text, so a malformed surface can
 never misalign colors. Graphics, images and unlimited scrollback are not
 rendered yet.
 
+**View > Theme** switches between the built-in palettes (Default, Nord, Mocha
+and the light Latte). The palette is applied when a frame is painted, so an open
+terminal repaints immediately without reconnecting or waiting for output.
+
 **List** shows a workspace/agent rail and **Panes** the same session tree as a
 sheet, both from the daemon snapshot and each row carrying its agent status.
 Choosing a pane sends one `pane.focus`; choosing a tab or workspace sends

@@ -11,7 +11,7 @@ This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Tita
 - Direct TCP or Iroh `/iroh/ssh` transport to Herdr's binary remote-client bridge
 - GPUI/wgpu terminal surface, ordered keyboard/IME input, and explicit pane selection
 - Per-host OMP quick commands with editable previews and separately confirmed Send + Enter
-- Compact keyboard-first display options intended for the Titan 2 Elite
+- Compact keyboard-first display options intended for the Titan 2 Elite, plus Default, Nord, Mocha and light Latte themes
 - Optional HTTPS phone-companion workflow
 - Opt-in, app-local read-only device diagnostics with a visible foreground
   notification; leaving the screen revokes access
