@@ -202,6 +202,9 @@ pub struct StyledRow {
 pub struct DisplayPreferences {
     pub(crate) font_size: f32,
     pub(crate) compact: bool,
+    /// Android's system font scale. Auto type multiplies the fit by it so an
+    /// accessibility setting still enlarges a terminal that sizes itself.
+    pub(crate) scale: f32,
 }
 
 impl Default for DisplayPreferences {
@@ -211,17 +214,25 @@ impl Default for DisplayPreferences {
             // line still fits the surface width.
             font_size: 0.,
             compact: false,
+            scale: 1.,
         }
     }
 }
 
 impl DisplayPreferences {
     pub fn new(font_size: f32, compact: bool) -> Result<Self> {
+        Self::scaled(font_size, compact, 1.)
+    }
+
+    pub fn scaled(font_size: f32, compact: bool, scale: f32) -> Result<Self> {
         // 0 is the auto sentinel; everything else is a deliberate user choice.
         if !font_size.is_finite() || (font_size != 0. && !(11.0..=36.0).contains(&font_size)) {
             return Err(Error::InvalidDisplayPreferences);
         }
-        Ok(Self { font_size, compact })
+        if !scale.is_finite() || !(1.0..=3.0).contains(&scale) {
+            return Err(Error::InvalidDisplayPreferences);
+        }
+        Ok(Self { font_size, compact, scale })
     }
 }
 
@@ -243,9 +254,9 @@ pub(crate) struct DisplayMetrics {
 }
 
 /// Monospace advance as a fraction of the em. Measured on this device's font:
-/// 0.6 fitted the block but clipped the pane's last column, so the fit keeps a
-/// small margin instead of trusting the glyph metrics exactly.
-const CELL_ADVANCE_EM: f32 = 0.66;
+/// 0.60 and 0.66 both still clipped the pane's last column, so the fit now
+/// reserves visibly more than the nominal advance.
+const CELL_ADVANCE_EM: f32 = 0.70;
 
 #[cfg(any(feature = "android-ui", test))]
 impl DisplayMetrics {
@@ -260,7 +271,8 @@ impl DisplayMetrics {
         let font_size = if preferences.font_size > 0. {
             preferences.font_size
         } else if widest_line_chars > 0 && viewport_width > 0. {
-            (viewport_width / (widest_line_chars as f32 * CELL_ADVANCE_EM)).clamp(11., 20.)
+            (viewport_width / (widest_line_chars as f32 * CELL_ADVANCE_EM) * preferences.scale)
+                .clamp(11., 36.)
         } else {
             13.
         };
@@ -809,7 +821,17 @@ impl Mailbox {
     }
 
     pub fn set_display_preferences(&mut self, font_size: f32, compact: bool) -> Result<bool> {
-        let preferences = DisplayPreferences::new(font_size, compact)?;
+        let scale = self.display_preferences.scale;
+        self.set_display_preferences_scaled(font_size, compact, scale)
+    }
+
+    pub fn set_display_preferences_scaled(
+        &mut self,
+        font_size: f32,
+        compact: bool,
+        scale: f32,
+    ) -> Result<bool> {
+        let preferences = DisplayPreferences::scaled(font_size, compact, scale)?;
         if self.display_preferences == preferences {
             return Ok(false);
         }
@@ -1081,6 +1103,11 @@ mod tests {
         assert_eq!(DisplayMetrics::fit(chosen, 798., 70).font_size, 17.);
         // Before a pane arrives the long-standing default stands.
         assert_eq!(DisplayMetrics::fit(auto, 798., 0).font_size, 13.);
+        // Android's system font scale must still enlarge auto type.
+        let scaled = DisplayPreferences::scaled(0., false, 1.3).unwrap();
+        let big = DisplayMetrics::fit(scaled, 798., 70);
+        assert!(big.font_size > roomy.font_size, "{}", big.font_size);
+        assert!(big.font_size <= 36., "{}", big.font_size);
     }
 
     fn display_preferences_are_bounded_local_and_generation_independent() {

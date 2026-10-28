@@ -370,12 +370,13 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetDisp
     _class: JClass<'_>,
     font_size: jfloat,
     compact: jboolean,
+    scale: jfloat,
 ) {
-    let result = model::mailbox().set_display_preferences(font_size, compact != 0);
+    let result = model::mailbox().set_display_preferences_scaled(font_size, compact != 0, scale);
     if result.is_err() {
         let _ = env.throw_new(
             "java/lang/IllegalArgumentException",
-            "GPUI display font size must be 0 (auto) or finite and between 11 and 36 logical pixels",
+            "GPUI display font size must be 0 (auto) or finite 11-36 logical pixels, with a font scale of 1-3",
         );
     }
 }

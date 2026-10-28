@@ -580,7 +580,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 ? 0f
                 : displayOptions.effectiveFont(compactDisplay,
                         getResources().getConfiguration().fontScale);
-        nativeSetDisplayPreferences(chosenFont, compactDisplay);
+        nativeSetDisplayPreferences(chosenFont, compactDisplay,
+                getResources().getConfiguration().fontScale);
     }
 
     private void hideInitialKeyboard() {
@@ -2475,7 +2476,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         }
     }
 
-    private static native void nativeSetDisplayPreferences(float fontSize, boolean compact);
+    private static native void nativeSetDisplayPreferences(float fontSize, boolean compact,
+            float systemFontScale);
     private static native void nativeSetTheme(int index);
     private static native void nativeSetSnapshot(long generation, String title, String text, String status,
             String shortcutsJson, String surfaceJson);
