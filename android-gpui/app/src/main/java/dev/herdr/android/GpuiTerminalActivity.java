@@ -740,6 +740,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 ? 0f
                 : displayOptions.effectiveFont(compactDisplay,
                         getResources().getConfiguration().fontScale);
+        nativeResetPan();
         nativeSetDisplayPreferences(chosenFont, compactDisplay,
                 getResources().getConfiguration().fontScale);
     }
@@ -1137,6 +1138,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             currentHostId = host.id;
             lastSnapshotTitle = lastSnapshotText = lastSnapshotStatus = lastSnapshotShortcuts = lastSnapshotSurface = null;
             nativeSetActive(next.generation, false);
+            nativeResetPan();
             publish(next, "Connecting to " + host.name + "…");
             next.poll = worker.scheduleWithFixedDelay(() -> pump(next), 0, COMMAND_POLL_MS, TimeUnit.MILLISECONDS);
         }
@@ -2723,6 +2725,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
     /** Moves the terminal horizontally by this many logical pixels. */
     private static native void nativePan(float delta);
+
+    /** Drops the horizontal offset for a new pane or a new type size. */
+    private static native void nativeResetPan();
     private static native void nativeSetTheme(int index);
     private static native void nativeSetSnapshot(long generation, String title, String text, String status,
             String shortcutsJson, String surfaceJson);

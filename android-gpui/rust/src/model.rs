@@ -894,6 +894,18 @@ impl Mailbox {
         true
     }
 
+    /// Drops the horizontal offset, e.g. when the pane or the type size changes,
+    /// so a new pane never opens scrolled into the middle of itself.
+    pub fn reset_pan(&mut self) {
+        if self.pan == 0. {
+            return;
+        }
+        self.pan = 0.;
+        self.revision = self.revision.wrapping_add(1);
+        #[cfg(feature = "android-ui")]
+        signal_change();
+    }
+
     pub fn state(&self) -> ViewState {
         ViewState {
             generation: self.generation,
