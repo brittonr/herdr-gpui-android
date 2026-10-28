@@ -954,9 +954,19 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         refreshSidebar(true);
     }
 
-    /** The rail starts open everywhere so hosts are visible, not hidden behind a button. */
+    /**
+     * The rail opens by default only where it leaves a usable terminal: the
+     * inner panel (798 dp here) has room, the cover panel (about 494 dp) does not,
+     * and opening it there would squeeze the terminal to two thirds of a phone.
+     * An explicit choice always wins.
+     */
     private void applySidebarDefault() {
-        sidebarOpen = getSharedPreferences("terminal-display", MODE_PRIVATE).getBoolean("list", true);
+        boolean chosen = getSharedPreferences("terminal-display", MODE_PRIVATE)
+                .contains("list");
+        int widthDp = getResources().getConfiguration().screenWidthDp;
+        sidebarOpen = getSharedPreferences("terminal-display", MODE_PRIVATE)
+                .getBoolean("list", widthDp >= 600);
+        if (!chosen && widthDp < 600) sidebarSignature = null;
         applySidebarWidth();
     }
 
@@ -1206,8 +1216,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         holder.row = new LinearLayout(this);
         holder.row.setOrientation(LinearLayout.HORIZONTAL);
         holder.row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        holder.row.setMinimumHeight(dp(42));
-        holder.row.setPadding(dp(6), dp(6), dp(6), dp(6));
+        holder.row.setMinimumHeight(dp(48));
+        holder.row.setPadding(dp(6), dp(8), dp(6), dp(8));
         holder.row.setSaveFromParentEnabled(false);
         holder.dot = new View(this);
         holder.dot.setBackground(roundedDrawable(0xff8892a0, 4));
@@ -1268,7 +1278,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         TextView row = railText("", 12, 0xffc2ccda);
         row.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
                 android.graphics.Typeface.NORMAL));
-        row.setPadding(dp(10), dp(9), dp(6), dp(1));
+        row.setMinimumHeight(dp(44));
+        row.setPadding(dp(10), dp(11), dp(6), dp(5));
         row.setOnClickListener(view -> {
             if (holder.live) focusChrome(holder.connection, "workspace", holder.workspaceId);
         });
@@ -1295,8 +1306,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         holder.row = new LinearLayout(this);
         holder.row.setOrientation(LinearLayout.HORIZONTAL);
         holder.row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        holder.row.setMinimumHeight(dp(38));
-        holder.row.setPadding(dp(10), dp(5), dp(6), dp(5));
+        holder.row.setMinimumHeight(dp(48));
+        holder.row.setPadding(dp(10), dp(6), dp(6), dp(6));
         holder.row.setSaveFromParentEnabled(false);
         holder.dot = new View(this);
         holder.dot.setBackground(roundedDrawable(0xff8892a0, 4));
