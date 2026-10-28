@@ -242,6 +242,11 @@ pub(crate) struct DisplayMetrics {
     pub stacked_controls: bool,
 }
 
+/// Monospace advance as a fraction of the em. Measured on this device's font:
+/// 0.6 fitted the block but clipped the pane's last column, so the fit keeps a
+/// small margin instead of trusting the glyph metrics exactly.
+const CELL_ADVANCE_EM: f32 = 0.66;
+
 #[cfg(any(feature = "android-ui", test))]
 impl DisplayMetrics {
     pub fn new(preferences: DisplayPreferences, viewport_width: f32) -> Self {
@@ -255,7 +260,7 @@ impl DisplayMetrics {
         let font_size = if preferences.font_size > 0. {
             preferences.font_size
         } else if widest_line_chars > 0 && viewport_width > 0. {
-            (viewport_width / (widest_line_chars as f32 * 0.6)).clamp(11., 20.)
+            (viewport_width / (widest_line_chars as f32 * CELL_ADVANCE_EM)).clamp(11., 20.)
         } else {
             13.
         };

@@ -367,7 +367,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         panes.setOnClickListener(view -> showPanes());
         synchronousTouch(panes);
         bar.addView(panes, new LinearLayout.LayoutParams(dp(54), dp(48)));
-        Button session = localButton("Tab");
+        // "Tab" belongs to the key beside it; this one opens session actions.
+        Button session = localButton("Tabs");
         session.setContentDescription("New tab, split, zoom or close this session's pane");
         session.setOnClickListener(view -> showSessionActions());
         synchronousTouch(session);
