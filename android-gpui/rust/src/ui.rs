@@ -246,6 +246,33 @@ impl Render for TerminalView {
         let surface_height = viewport.height.to_f64() - f64::from(metrics.header_height);
         let content_height = f64::from(metrics.row_height * fit) * snapshot.lines.len() as f64;
         let short_pane = content_height < surface_height - 1.;
+        // An empty pane must say why it is empty: a bare surface reads as a crash.
+        let empty_card = div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(metrics.gap * 2.))
+            .px(px(metrics.padding * 4.))
+            .child(
+                div()
+                    .text_size(px(metrics.font_size * 1.3))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(if status.is_empty() {
+                        SharedString::from("Connecting to the pane…")
+                    } else {
+                        SharedString::from(status.clone())
+                    }),
+            )
+            .child(
+                div()
+                    .text_size(px(metrics.font_size))
+                    .text_color(rgb(model::palette().muted))
+                    .text_center()
+                    .child(
+                        "No terminal surface yet. Press Back to choose a host, \
+                         or wait if the connection is still opening.",
+                    ),
+            );
         div()
             .size_full()
             .flex()
@@ -276,8 +303,11 @@ impl Render for TerminalView {
                             .child(snapshot.title.clone()),
                     )
                     .child(
+                        // The status is a short state word, not a second title: give
+                        // the pane identity the rest of the row instead of half of it.
                         div()
-                            .flex_1()
+                            .flex_none()
+                            .max_w(px(metrics.font_size * 14.))
                             .min_w_0()
                             .truncate()
                             .text_right()
@@ -300,7 +330,11 @@ impl Render for TerminalView {
                     .overflow_hidden()
                     .flex()
                     .flex_col()
-                    .when(short_pane, |body| body.justify_end())
+                    .when(snapshot.lines.is_empty(), |body| {
+                        body.items_center().justify_center()
+                    })
+                    .when(!snapshot.lines.is_empty(), |body| {
+                        body.when(short_pane, |body| body.justify_end())
                     .child(
                         div()
                             .min_w_0()
@@ -345,6 +379,8 @@ impl Render for TerminalView {
                         .track_scroll(&self.scroll),
                             ),
                     )
+                    })
+                    .when(snapshot.lines.is_empty(), |body| body.child(empty_card))
                     .child(
                         canvas(
                             |_, _, _| (),
