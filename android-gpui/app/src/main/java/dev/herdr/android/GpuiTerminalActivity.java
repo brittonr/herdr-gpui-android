@@ -813,6 +813,49 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         applySidebarWidth();
     }
 
+    private static SurfaceView findSurface(View view) {
+        if (view instanceof SurfaceView) return (SurfaceView) view;
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                SurfaceView found = findSurface(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private void captureScreen() {
+        View decor = getWindow().getDecorView();
+        final android.graphics.Bitmap image = android.graphics.Bitmap.createBitmap(
+                decor.getWidth(), decor.getHeight(), android.graphics.Bitmap.Config.ARGB_8888);
+        // A window PixelCopy shows exactly what the compositor presents, which a
+        // software draw of the hierarchy does not reproduce for scrolled content.
+        android.view.PixelCopy.request(getWindow(), image, result -> {
+            if (result != android.view.PixelCopy.SUCCESS) {
+                decor.draw(new android.graphics.Canvas(image));
+                Toast.makeText(this, "Window copy failed: " + result, Toast.LENGTH_SHORT).show();
+            }
+            saveScreenshot(image);
+        }, new Handler(Looper.getMainLooper()));
+    }
+
+    /** Writes the composite off the UI thread; the file stays app-private. */
+    private void saveScreenshot(android.graphics.Bitmap image) {
+        Thread writer = new Thread(() -> {
+            try (java.io.FileOutputStream out =
+                         new java.io.FileOutputStream(new java.io.File(getFilesDir(), "screen.png"))) {
+                image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+            } catch (Exception ignored) {
+            } finally {
+                image.recycle();
+            }
+        }, "herdr-screenshot");
+        writer.setDaemon(true);
+        writer.start();
+        Toast.makeText(this, "Screenshot saved", Toast.LENGTH_SHORT).show();
+    }
+
     private void toggleSidebar() {
         sidebarOpen = !sidebarOpen;
         getSharedPreferences("terminal-display", MODE_PRIVATE).edit()
@@ -831,8 +874,14 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             sidebar.setLayoutParams(layout);
         }
         if (sidebarButton != null) {
-            sidebarButton.setText(sidebarOpen ? "Hide" : "List");
+            // A closed rail must announce itself: "List" hid the hosts behind a
+            // word that reads like just another terminal control.
+            sidebarButton.setText(sidebarOpen ? "Hide" : "Hosts");
             sidebarButton.setSelected(sidebarOpen);
+            sidebarButton.setTextColor(sidebarOpen ? 0xffe7eaf0 : 0xff76d3b2);
+            sidebarButton.setContentDescription(sidebarOpen
+                    ? "Hide the host and workspace sidebar"
+                    : "Show the host and workspace sidebar");
         }
     }
 
@@ -1056,7 +1105,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         else if ("blocked".equals(status)) color = 0xff6b6b;
         else if ("done".equals(status)) color = 0x6ab0f3;
         else if ("idle".equals(status)) color = 0x76d3b2;
-        dot.setBackgroundColor(color);
+        // Rail colors are sized without an alpha channel; a raw int would be
+        // fully transparent.
+        dot.setBackgroundColor(0xff000000 | color);
         LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(dp(8), dp(8));
         layout.setMarginEnd(dp(10));
         dot.setLayoutParams(layout);
@@ -1067,7 +1118,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         TextView label = new TextView(this);
         label.setText(text);
         label.setTextSize(size);
-        label.setTextColor(color);
+        label.setTextColor(0xff000000 | color);
         label.setSingleLine(true);
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         label.setSaveEnabled(false);
@@ -1240,15 +1291,19 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             return;
         }
         String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab",
-                "Jump to live output", "Remote hosts…"};
+                "Jump to live output", "Remote hosts…", "Save screenshot"};
         String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close",
-                "scroll.live", "hosts.list"};
+                "scroll.live", "hosts.list", "capture.screen"};
         new AlertDialog.Builder(this)
                 .setTitle("Session · " + (connection == null ? launch.name() : connection.title))
                 .setItems(labels, (dialog, which) -> {
                     String action = actions[which];
                     if ("scroll.live".equals(action)) {
                         jumpToLive();
+                        return;
+                    }
+                    if ("capture.screen".equals(action)) {
+                        captureScreen();
                         return;
                     }
                     if ("hosts.list".equals(action)) {

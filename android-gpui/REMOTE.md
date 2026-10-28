@@ -112,8 +112,13 @@ that host's session and focuses the pane. The client keeps at most eight live
 sessions (terminal plus mirrors plus a transient connection while switching) and
 refuses more.
 
+Rail text, dots and titles are drawn from the same palette as the terminal chrome,
+so keep colour literals opaque (a 24-bit literal has a zero alpha channel and
+renders nothing).
+
 The rail is open by default at every width and its hidden/shown choice persists;
-**List** / **Hide** toggles it. It lists every saved host above the session tree. Choosing one
+**Hosts** brings it back and **Hide** closes it; the closed state is labelled in
+the host colour so an empty terminal is never mistaken for a missing rail. It lists every saved host above the session tree. Choosing one
 opens a new SSH connection with the saved device key, focuses the pane this phone
 last used there - or an agent pane that is not idle - and bumps the connection
 generation, so the old handle is closed before
@@ -146,7 +151,7 @@ rather than clearing it.
 and the light Latte). The palette is applied when a frame is painted, so an open
 terminal repaints immediately without reconnecting or waiting for output.
 
-**List** shows a workspace/agent rail and **Panes** the same session tree as a
+**Hosts** shows a workspace/agent rail and **Panes** the same session tree as a
 sheet, both from the daemon snapshot and each row carrying its agent status.
 Choosing a pane sends one `pane.focus`; choosing a tab or workspace sends
 `tab.focus` or `workspace.focus` and then follows the pane the daemon focuses,
