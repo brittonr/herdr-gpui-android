@@ -310,6 +310,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setBackgroundColor(0xff1e222a);
+        // The rail toggle leads the bar: it is the control reached most often and
+        // it must never sit past the right edge where a scroll is needed.
+        sidebarButton = localButton("Hosts");
+        sidebarButton.setContentDescription("Show or hide the workspace and agent sidebar");
+        sidebarButton.setOnClickListener(view -> toggleSidebar());
+        synchronousTouch(sidebarButton);
+        bar.addView(sidebarButton, new LinearLayout.LayoutParams(dp(70), dp(48)));
         Button keys = localButton("Keys");
         keys.setContentDescription("Show the on-screen keyboard");
         keys.setOnClickListener(view -> {
@@ -344,11 +351,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         session.setOnClickListener(view -> showSessionActions());
         synchronousTouch(session);
         bar.addView(session, new LinearLayout.LayoutParams(dp(56), dp(48)));
-        sidebarButton = localButton("List");
-        sidebarButton.setContentDescription("Show or hide the workspace and agent sidebar");
-        sidebarButton.setOnClickListener(view -> toggleSidebar());
-        synchronousTouch(sidebarButton);
-        bar.addView(sidebarButton, new LinearLayout.LayoutParams(dp(56), dp(48)));
         HorizontalScrollView scroll = new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.setBackgroundColor(0xff1e222a);
