@@ -625,7 +625,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private TextView optionLabel(String text) {
         TextView label = new TextView(this);
         label.setText(text);
-        label.setTextSize(14);
+        // Caption weight: the spinner below carries the actual value.
+        label.setTextSize(13);
+        label.setTextColor(0xff9fb0c6);
         label.setPadding(0, dp(8), 0, dp(4));
         label.setSaveEnabled(false);
         return label;
@@ -669,14 +671,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         options.addView(optionLabel("Physical Alt key"));
         Spinner alt = optionSpinner(new String[]{"Default (device symbols)", "Device symbols", "Terminal Alt shortcuts"}, displayOptions.altMode);
         options.addView(alt);
-        TextView help = optionLabel("Opening View cancels an unfinished on-screen draft. Compact keeps more terminal rows visible. Alt symbols use Android’s key map; Fn/Sym are not guessed. Use Ctrl here for one letter, or map a physical key to Ctrl in your keyboard settings. Tap Keyboard only when you need the on-screen keyboard.");
+        // One line of guidance; the host and status it used to repeat are already
+        // in the header this sheet opens over.
+        TextView help = optionLabel("Compact keeps more rows visible. Opening this sheet cancels an unsent draft.");
         options.addView(help);
-        synchronized (stateLock) {
-            TextView status = optionLabel((lastSnapshotTitle == null ? "Terminal" : lastSnapshotTitle)
-                    + "\n" + (lastSnapshotStatus == null ? "" : lastSnapshotStatus));
-            status.setTextIsSelectable(true);
-            options.addView(status);
-        }
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.addView(options);
         displayDialog = new AlertDialog.Builder(this).setTitle("Terminal view")
