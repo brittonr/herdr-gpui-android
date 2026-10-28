@@ -82,6 +82,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private Button sidebarButton;
     private volatile boolean sidebarOpen;
     private String sidebarSignature = "";
+    private QuickCommandPalette.Owner paletteOwner;
+    private volatile java.util.List<SavedRemoteHost> savedHosts = java.util.Collections.emptyList();
+    private volatile String currentHostId;
+    private volatile boolean switchingHost;
     private AlertDialog displayDialog;
     private Button controlButton;
     /** Vertical swipe state: a short tap still reaches the terminal. */
@@ -113,7 +117,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         }
         try {
             shortcuts = Shortcut.parseConfiguration(launch.shortcuts());
-            QuickCommandPalette.Owner paletteOwner = new QuickCommandPalette.Owner() {
+            paletteOwner = new QuickCommandPalette.Owner() {
                 public void show(AlertDialog dialog) { showLocalDialog(dialog); }
                 public boolean isCurrentDialog(AlertDialog dialog) {
                     return !destroyed && !isFinishing() && displayDialog == dialog && dialog.isShowing();
@@ -122,6 +126,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             commandPalette = launch.remoteHost == null
                     ? new QuickCommandPalette(this, launch.host, launch.title, paletteOwner)
                     : new QuickCommandPalette(this, launch.remoteHost, launch.title, paletteOwner);
+            currentHostId = launch.remoteHost == null ? null : launch.remoteHost.id;
             // Remote-mutating controls live on the Java UI thread, never a deferred GPUI click.
             shortcutJson = "[]";
             loadDisplayOptions();
@@ -129,6 +134,15 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (themeIndex < 0 || themeIndex > 3) themeIndex = 0;
             nativeStart(this);
             nativeSetTheme(themeIndex);
+            // Host switching needs the saved hosts before the first rail paint.
+            worker.execute(() -> {
+                try {
+                    java.util.List<SavedRemoteHost> hosts = new RemoteHostStore(this).read();
+                    runOnUiThread(() -> { savedHosts = hosts; refreshSidebar(true); });
+                } catch (Exception ignored) {
+                    // An unreadable store leaves the rail without host rows.
+                }
+            });
             hostStarted = true;
             createSurface();
         } catch (IllegalArgumentException invalid) {
@@ -490,6 +504,15 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                             .putInt("mode", displayOptions.mode).putInt("font", displayOptions.fontSize)
                             .putInt("alt", displayOptions.altMode).putInt("theme", themeIndex).apply();
                     nativeSetTheme(themeIndex);
+            // Host switching needs the saved hosts before the first rail paint.
+            worker.execute(() -> {
+                try {
+                    java.util.List<SavedRemoteHost> hosts = new RemoteHostStore(this).read();
+                    runOnUiThread(() -> { savedHosts = hosts; refreshSidebar(true); });
+                } catch (Exception ignored) {
+                    // An unreadable store leaves the rail without host rows.
+                }
+            });
                     applyDisplayOptions();
                 }).create();
         showLocalDialog(displayDialog);
@@ -507,6 +530,106 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         dialog.show();
+    }
+
+    /**
+     * Connects to another saved host with the stored device key and keeps the
+     * GPUI surface: only the connection and its generation change.
+     */
+    private void switchHost(SavedRemoteHost host) {
+        if (host == null || switchingHost || host.id.equals(currentHostId)) return;
+        if (host.expectedFingerprint.isEmpty()) {
+            Toast.makeText(this, "Trust " + host.name + " from Remote hosts first", Toast.LENGTH_LONG).show();
+            return;
+        }
+        switchingHost = true;
+        final Connection previous;
+        synchronized (stateLock) { previous = connection; }
+        if (previous != null) {
+            synchronized (stateLock) { publish(previous, "Switching to " + host.name + "…"); }
+        }
+        worker.execute(() -> {
+            long handle = 0;
+            try {
+                char[] key = new RemoteIdentityStore(this).read();
+                String credential;
+                try {
+                    credential = new JSONObject().put("private_key", new String(key)).toString();
+                } finally {
+                    java.util.Arrays.fill(key, '\0');
+                }
+                handle = RemoteNative.connect(host.connectionJson(), credential);
+                if (handle <= 0) throw new IllegalStateException("connection refused");
+                String pane = awaitHostPane(handle);
+                final long readyHandle = handle;
+                final String readyPane = pane;
+                runOnUiThread(() -> adoptHost(host, readyHandle, readyPane));
+                handle = 0;
+            } catch (Exception | LinkageError failure) {
+                if (handle != 0) RemoteNative.close(handle);
+                runOnUiThread(() -> {
+                    switchingHost = false;
+                    Toast.makeText(this, "Could not switch to " + host.name, Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    /** Waits for the new session, focuses its first pane and returns that id. */
+    private String awaitHostPane(long handle) throws Exception {
+        long until = SystemClock.uptimeMillis() + 45_000;
+        JSONObject state = null;
+        while (SystemClock.uptimeMillis() < until) {
+            state = new JSONObject(RemoteNative.poll(handle));
+            String phase = state.optString("state");
+            if ("closed".equals(phase)) throw new IllegalStateException("closed");
+            // The pane list arrives with the first snapshot; an empty array is
+            // not readiness.
+            JSONArray listed = state.optJSONArray("panes");
+            if ("ready".equals(phase) || listed != null && listed.length() > 0) break;
+            Thread.sleep(150);
+        }
+        JSONArray panes = state == null ? null : state.optJSONArray("panes");
+        if (panes == null || panes.length() == 0) throw new IllegalStateException("no panes");
+        String pane = panes.getJSONObject(0).optString("id", "");
+        if (pane.isEmpty()) throw new IllegalStateException("no pane id");
+        RemoteNative.focus(handle, pane);
+        until = SystemClock.uptimeMillis() + 20_000;
+        while (SystemClock.uptimeMillis() < until) {
+            state = new JSONObject(RemoteNative.poll(handle));
+            if (pane.equals(state.optString("pane_id"))
+                    && "ready".equals(state.optString("state"))) return pane;
+            Thread.sleep(150);
+        }
+        return pane;
+    }
+
+    private void adoptHost(SavedRemoteHost host, long handle, String pane) {
+        if (destroyed || isFinishing()) {
+            RemoteNative.close(handle);
+            return;
+        }
+        Connection next;
+        synchronized (stateLock) {
+            Connection previous = connection;
+            connection = null;
+            if (previous != null) previous.close();
+            next = new Connection(GENERATIONS.incrementAndGet(), handle);
+            next.paneId = pane;
+            next.title = host.name;
+            next.remoteBoot = null;
+            connection = next;
+            currentHostId = host.id;
+            lastSnapshotTitle = lastSnapshotText = lastSnapshotStatus = lastSnapshotShortcuts = lastSnapshotSurface = null;
+            nativeSetActive(next.generation, false);
+            publish(next, "Connecting to " + host.name + "…");
+            next.poll = worker.scheduleWithFixedDelay(() -> pump(next), 0, COMMAND_POLL_MS, TimeUnit.MILLISECONDS);
+        }
+        if (commandPalette != null) commandPalette.close();
+        commandPalette = new QuickCommandPalette(this, host, host.name, paletteOwner);
+        switchingHost = false;
+        sidebarSignature = "";
+        refreshSidebar(true);
     }
 
     /** Persisted rail choice, defaulting to visible only where it fits. */
@@ -545,11 +668,29 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (current == null || current.isClosed()) return;
         JSONArray workspaces = current.workspaces, tabs = current.tabs, panes = current.panes;
         String signature = String.valueOf(workspaces) + String.valueOf(tabs)
-                + String.valueOf(panes) + '|' + current.paneId;
+                + String.valueOf(panes) + '|' + current.paneId + '|' + currentHostId
+                + '|' + savedHosts.size();
         if (!force && signature.equals(sidebarSignature)) return;
         sidebarSignature = signature;
         final Connection target = current;
         sidebarRows.removeAllViews();
+        if (!savedHosts.isEmpty()) {
+            sidebarRows.addView(chromeLabel("Hosts", 13, 0x9fb0c6, true));
+            for (SavedRemoteHost host : savedHosts) {
+                boolean selected = host.id.equals(currentHostId);
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                row.setMinimumHeight(dp(44));
+                row.setSaveFromParentEnabled(false);
+                row.addView(chromeDot(selected ? "idle" : "unknown"));
+                row.addView(chromeLabel(host.name, 12, selected ? 0x76d3b2 : 0xc9d3df, false));
+                row.setContentDescription("Connect to " + host.name);
+                row.setOnClickListener(view -> switchHost(host));
+                sidebarRows.addView(row);
+            }
+            sidebarRows.addView(chromeLabel("Workspaces", 13, 0x9fb0c6, true));
+        }
         if (workspaces == null || panes == null) {
             sidebarRows.addView(chromeLabel("No session chrome yet", 12, 0x8c9bb0, false));
             return;
@@ -642,7 +783,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         ScrollView scroll = new ScrollView(this);
         scroll.addView(list);
         AlertDialog sheet = new AlertDialog.Builder(this)
-                .setTitle("Panes · " + launch.name())
+                .setTitle("Panes · " + (connection == null ? launch.name() : connection.title))
                 .setView(scroll)
                 .setNegativeButton("Close", null)
                 .create();
@@ -907,7 +1048,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab", "Jump to live output"};
         String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close", "scroll.live"};
         new AlertDialog.Builder(this)
-                .setTitle("Session · " + launch.name())
+                .setTitle("Session · " + (connection == null ? launch.name() : connection.title))
                 .setItems(labels, (dialog, which) -> {
                     String action = actions[which];
                     if ("scroll.live".equals(action)) {
@@ -1400,7 +1541,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                         main.post(() -> applyRemoteClipboard(owner, copy));
                     }
                 }
-                publish(current, selected ? "SSH connected · " + launch.name() : "Waiting for selected remote pane…");
+                publish(current, selected ? "SSH connected · " + current.title : "Waiting for selected remote pane…");
                 nativeSetActive(current.generation, selected);
             }
             main.post(() -> refreshSidebar(false));
@@ -1447,7 +1588,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile boolean closed;
         String remoteBoot;
         volatile String paneId = launch.paneId;
-        final String title = launch.title;
+        volatile String title = launch.title;
         String text = "";
         String surface = "";
         JSONArray workspaces, tabs, panes;

@@ -99,6 +99,12 @@ client forwards only `http` and `https` targets, at most 2 KiB without control
 characters, and the activity rechecks the scheme before starting the intent; no
 file, `intent:` or custom scheme is reachable this way.
 
+The **List** rail lists every saved host above the session tree. Choosing one
+opens a new SSH connection with the saved device key, focuses that host's first
+pane and bumps the connection generation, so the old handle is closed before
+anything from it can reach the new surface. A host without a pinned fingerprint
+or without a saved key is refused with a message rather than guessed at.
+
 A vertical drag on the terminal scrolls the pane's scrollback: the client sends
 `pane.scroll` with an absolute `offset_from_bottom`, clamped to the window the
 daemon reports, and a tap shorter than 18 dp still reaches the terminal. **Tab >

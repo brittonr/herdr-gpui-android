@@ -94,7 +94,12 @@ validated before it reaches the renderer. Split panes and their borders are
 painted together and the panes' focused border carries the accent ring.
 Terminal hyperlinks in the daemon's table become tappable runs; only `http(s)`
 targets are forwarded, to the platform browser, never to files or custom
-schemes. Swipe down on the terminal to read scrollback and up to return; **Tab > Jump to
+schemes. The **List** rail starts with **Hosts**: every saved SSH host, with the current
+one marked. Tapping another host reconnects in place with the saved device key
+and the rail switches to that host's workspaces and agents; the GPUI surface and
+your scroll position stay in the app.
+
+Swipe down on the terminal to read scrollback and up to return; **Tab > Jump to
 live output** returns to the newest line. The activity converts a drag into
 `pane.scroll` offsets bounded by the daemon's own `max_offset_from_bottom`, and
 a short tap still reaches the terminal.
