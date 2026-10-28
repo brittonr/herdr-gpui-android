@@ -1868,34 +1868,67 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 "Jump to live output", "Remote hosts…", "Save screenshot"};
         String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close",
                 "scroll.live", "hosts.list", "capture.screen"};
-        new AlertDialog.Builder(this)
-                .setTitle("Session · " + (connection == null ? launch.name() : connection.title))
-                .setItems(labels, (dialog, which) -> {
-                    String action = actions[which];
-                    if ("scroll.live".equals(action)) {
-                        jumpToLive();
-                        return;
-                    }
-                    if ("capture.screen".equals(action)) {
-                        captureScreen();
-                        return;
-                    }
-                    if ("hosts.list".equals(action)) {
-                        startActivity(new android.content.Intent(this, RemoteHostsActivity.class)
-                                .putExtra("skip_reopen", true));
-                        return;
-                    }
-                    if ("pane.close".equals(action) || "tab.close".equals(action)) {
-                        confirmSessionAction(target, action, labels[which]);
-                    } else if ("pane.zoom.on".equals(action)) {
-                        // One control toggles: the daemon reports the current zoom state.
-                        runSessionAction(target, zoomed(target) ? "pane.zoom.off" : "pane.zoom.on", "Zoom");
-                    } else {
-                        runSessionAction(target, action, labels[which]);
-                    }
-                })
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        AlertDialog sheet = new AlertDialog.Builder(this)
+                .setTitle("Session")
+                .setView(list)
                 .setNegativeButton("Cancel", null)
-                .show();
+                .create();
+        for (int i = 0; i < labels.length; i++) {
+            // Group create/layout from view/utilities, and mark the closes as
+            // destructive instead of styling them like "New tab".
+            if (i == 4 || i == 6) list.addView(sheetDivider());
+            boolean destructive = actions[i].endsWith(".close");
+            TextView row = new TextView(this);
+            row.setText(labels[i]);
+            row.setTextSize(16);
+            row.setTextColor(destructive ? 0xffe0a0a0 : 0xffdce5ef);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(dp(48));
+            row.setPadding(dp(20), 0, dp(20), 0);
+            row.setSaveEnabled(false);
+            final int index = i;
+            row.setOnClickListener(view -> {
+                sheet.dismiss();
+                runSessionChoice(target, labels[index], actions[index]);
+            });
+            list.addView(row);
+        }
+        showLocalDialog(sheet);
+    }
+
+    private View sheetDivider() {
+        View line = new View(this);
+        line.setBackgroundColor(0x223342);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(1));
+        params.setMargins(dp(20), dp(4), dp(20), dp(4));
+        line.setLayoutParams(params);
+        return line;
+    }
+
+    private void runSessionChoice(Connection target, String label, String action) {
+        if ("scroll.live".equals(action)) {
+            jumpToLive();
+            return;
+        }
+        if ("capture.screen".equals(action)) {
+            captureScreen();
+            return;
+        }
+        if ("hosts.list".equals(action)) {
+            startActivity(new android.content.Intent(this, RemoteHostsActivity.class)
+                    .putExtra("skip_reopen", true));
+            return;
+        }
+        if ("pane.close".equals(action) || "tab.close".equals(action)) {
+            confirmSessionAction(target, action, label);
+        } else if ("pane.zoom.on".equals(action)) {
+            // One control toggles: the daemon reports the current zoom state.
+            runSessionAction(target, zoomed(target) ? "pane.zoom.off" : "pane.zoom.on", "Zoom");
+        } else {
+            runSessionAction(target, action, label);
+        }
     }
 
     private boolean zoomed(Connection target) {
