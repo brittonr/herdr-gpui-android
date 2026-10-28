@@ -24,7 +24,6 @@ final class RemoteNative {
     static native String focusWorkspace(long handle, String workspaceId);
     static native String sessionAction(long handle, String action);
     static native String scrollTo(long handle, long offsetFromBottom);
-    static native String setVisibleRows(long handle, long rows);
     static native String scrollLocal(long handle, long deltaRows, long generation,
             String title, String status, String shortcuts);
     static native void close(long handle);

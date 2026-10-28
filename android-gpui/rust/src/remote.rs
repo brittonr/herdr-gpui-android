@@ -183,6 +183,8 @@ pub struct View {
     local_offset: i64,
     /// Number of rows the buffer can serve beyond the tail window.
     buffered_rows: i64,
+    /// Rows a window holds, which may exceed the daemon's viewport.
+    visible_rows: i64,
 }
 impl Default for View {
     fn default() -> Self {
@@ -207,6 +209,7 @@ impl Default for View {
             rendered_scroll: 0,
             local_offset: 0,
             buffered_rows: 0,
+            visible_rows: 0,
         }
     }
 }
@@ -237,8 +240,7 @@ struct State {
     anchor: Option<i64>,
     /// Hyperlink table shared by the buffered rows.
     history_links: serde_json::Value,
-    /// Rows the phone surface can show, which may exceed the daemon viewport.
-    visible_rows: i64,
+
 }
 struct Session {
     state: Mutex<State>,
@@ -373,6 +375,9 @@ pub fn poll(id: u64, since: u64, mirror: bool) -> Result<String> {
     let json = {
         let owner = session(id)?;
         let mut state = lock(&owner.state);
+        // The renderer updates its capacity independently of frames, so report it
+        // on every poll rather than only when a projection runs.
+        state.view.visible_rows = state.window_rows();
         let pending = state.view.clipboard.is_some()
             || !state.view.notifications.is_empty()
             || state.view.bell > 0;
@@ -904,7 +909,8 @@ impl State {
     /// Rows a window holds: the surface's when the client reported one, else the
     /// daemon's own viewport.
     fn window_rows(&self) -> i64 {
-        (self.view.scroll.rows as i64).max(self.visible_rows).max(1)
+        let capacity = model::mailbox().state().viewport_rows as i64;
+        (self.view.scroll.rows as i64).max(capacity).max(1)
     }
 
     /// Stores one frame's rows under an absolute id that does not move when the
@@ -1336,19 +1342,6 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
         "at_edge": offset == limit && delta > 0,
     })
     .to_string())
-}
-
-/// Tells the session how many rows the phone can show, so spare height is filled
-/// with buffered history instead of background.
-pub fn set_visible_rows(id: u64, rows: i64) -> Result<String> {
-    let owner = session(id)?;
-    let mut state = lock(&owner.state);
-    let rows = rows.clamp(1, 512);
-    if state.visible_rows != rows {
-        state.visible_rows = rows;
-        project(&mut state);
-    }
-    Ok(json!({ "rows": state.visible_rows }).to_string())
 }
 
 pub fn scroll_to(id: u64, offset: i64) -> Result<String> {
