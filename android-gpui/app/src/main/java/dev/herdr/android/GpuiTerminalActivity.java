@@ -169,7 +169,14 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         // A restored activity cannot recover authority from Intent extras or framework saved state.
         launch = state == null ? GpuiLaunch.consume(System.nanoTime()) : null;
         super.onCreate(null);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        // Terminal content is private. Only a debuggable build that opts in through
+        // the global switch may be captured, so a field report can be screenshotted
+        // without weakening a release build.
+        boolean capturable = (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && "1".equals(android.provider.Settings.Global.getString(
+                        getContentResolver(), "herdr_probe"));
+        if (!capturable) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         getWindow().getDecorView().setSaveFromParentEnabled(false);
         getWindow().getDecorView().setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         worker.setRemoveOnCancelPolicy(true);

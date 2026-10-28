@@ -231,12 +231,25 @@ impl Render for TerminalView {
             }
         }
         let row_width = px(metrics.row_width(snapshot.widest_line_chars));
-        let row_height = px(metrics.row_height);
+        // The daemon's pane is its own height, usually shorter than a phone
+        // surface. Spreading its rows over the surface removes the dead band
+        // without depending on row identity the daemon does not provide, and
+        // without shrinking the number of readable columns.
+        let base_row = f64::from(metrics.row_height).max(1.);
+        let surface_rows = (f64::from(viewport.height) / base_row).floor().max(1.);
+        let lines = snapshot.lines.len().max(1) as f64;
+        let fit = if lines < surface_rows {
+            (surface_rows / lines).clamp(1., 2.2) as f32
+        } else {
+            1.
+        };
+        let row_height = px(metrics.row_height * fit);
+        let font_size = px(metrics.font_size);
         // A pane whose grid is shorter than the surface used to paint from the
         // top, leaving a dead band under the last row. Anchor those rows to the
         // bottom the way a terminal does.
         let surface_height = viewport.height.to_f64() - f64::from(metrics.header_height);
-        let content_height = f64::from(metrics.row_height) * snapshot.lines.len() as f64;
+        let content_height = f64::from(metrics.row_height * fit) * snapshot.lines.len() as f64;
         let short_pane = content_height < surface_height - 1.;
         div()
             .size_full()
@@ -311,7 +324,7 @@ impl Render for TerminalView {
                                             .w(row_width)
                                             .px_2()
                                             .font_family(crate::fonts::MONO_FAMILY)
-                                            .text_size(px(metrics.font_size))
+                                            .text_size(font_size)
                                             .line_height(row_height)
                                             .whitespace_nowrap();
                                         // Painted cells win when their runs tile the
