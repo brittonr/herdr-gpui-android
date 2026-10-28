@@ -457,16 +457,20 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
 
     private View createShortcutBar() {
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.HORIZONTAL);
+        shell.setBackgroundColor(0xff1e222a);
+        // The three controls reached constantly stay put; the rest scroll, so
+        // nothing can be scrolled out of reach on a narrow panel.
+        LinearLayout pinned = new LinearLayout(this);
+        pinned.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackgroundColor(0xff1e222a);
-        // The rail toggle leads the bar: it is the control reached most often and
-        // it must never sit past the right edge where a scroll is needed.
         sidebarButton = localButton("Hosts");
         sidebarButton.setContentDescription("Show or hide the workspace and agent sidebar");
         sidebarButton.setOnClickListener(view -> toggleSidebar());
         synchronousTouch(sidebarButton);
-        bar.addView(sidebarButton, new LinearLayout.LayoutParams(dp(64), dp(48)));
+        pinned.addView(sidebarButton, new LinearLayout.LayoutParams(dp(64), dp(48)));
         Button keys = localButton("Keys");
         keys.setContentDescription("Show the on-screen keyboard");
         keys.setOnClickListener(view -> {
@@ -475,12 +479,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (target != null) nativeShowKeyboard(target.generation);
         });
         synchronousTouch(keys);
-        bar.addView(keys, new LinearLayout.LayoutParams(dp(52), dp(48)));
+        pinned.addView(keys, new LinearLayout.LayoutParams(dp(52), dp(48)));
         Button back = localButton("Back");
         back.setContentDescription("Close this terminal and return to the host list");
         back.setOnClickListener(view -> finish());
         synchronousTouch(back);
-        bar.addView(back, new LinearLayout.LayoutParams(dp(52), dp(48)));
+        pinned.addView(back, new LinearLayout.LayoutParams(dp(52), dp(48)));
         Button options = localButton("View");
         options.setContentDescription("Terminal display and keyboard options");
         options.setOnClickListener(view -> showDisplayOptions());
@@ -564,7 +568,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         outer.setHorizontalScrollBarEnabled(false);
         outer.setBackgroundColor(0xff1e222a);
         outer.addView(bar, new FrameLayout.LayoutParams(-2, dp(48)));
-        return outer;
+        shell.addView(pinned, new LinearLayout.LayoutParams(-2, dp(48)));
+        shell.addView(outer, new LinearLayout.LayoutParams(0, dp(48), 1));
+        return shell;
     }
 
     // performClick is dispatched from the touch lambda below; lint cannot see it.
