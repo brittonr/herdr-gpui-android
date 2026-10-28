@@ -811,6 +811,49 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         super.onDestroy();
     }
 
+    /** A terminal bell: a short vibration, never a sound that overrides the ring mode. */
+    private void ringBell(int count) {
+        if (destroyed || isFinishing()) return;
+        android.os.Vibrator vibrator = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+        if (vibrator == null || !vibrator.hasVibrator()) return;
+        try {
+            long millis = Math.min(600L, 40L * Math.max(1, count));
+            vibrator.vibrate(android.os.VibrationEffect.createOneShot(millis,
+                    android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+        } catch (RuntimeException ignored) {
+            // A device policy may refuse vibration; the terminal stays usable.
+        }
+    }
+
+    /** Agent alerts from the daemon, posted on one bounded channel. */
+    private void postNotice(String title, String body, String paneId) {
+        if (destroyed || isFinishing()) return;
+        android.app.NotificationManager manager =
+                (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                "herdr-agent-alerts", "Agent alerts", android.app.NotificationManager.IMPORTANCE_DEFAULT);
+        channel.setDescription("A Herdr agent is waiting on you");
+        manager.createNotificationChannel(channel);
+        android.app.Notification notification = new android.app.Notification.Builder(this, "herdr-agent-alerts")
+                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(new android.app.Notification.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .build();
+        try {
+            manager.notify(paneId.isEmpty() ? title.hashCode() : paneId.hashCode(), notification);
+        } catch (RuntimeException ignored) {
+            // Posting can be refused while the user restricts notifications.
+        }
+    }
+
     /** OSC 52 text the daemon forwarded: plain text only, never a URI or bytes. */
     private void applyRemoteClipboard(Connection target, String text) {
         synchronized (stateLock) {
@@ -1171,6 +1214,23 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 current.tabs = state.optJSONArray("tabs");
                 current.panes = state.optJSONArray("panes");
                 current.chromePane = pane;
+                int bell = state.optInt("bell", 0);
+                if (bell > 0) {
+                    final int rings = bell;
+                    main.post(() -> ringBell(rings));
+                }
+                JSONArray notices = state.optJSONArray("notifications");
+                if (notices != null) {
+                    for (int i = 0; i < Math.min(notices.length(), 8); i++) {
+                        JSONObject notice = notices.optJSONObject(i);
+                        if (notice == null) continue;
+                        String noticeTitle = notice.optString("title", "");
+                        if (noticeTitle.isEmpty()) continue;
+                        String noticeBody = notice.optString("body", "");
+                        String noticePane = notice.optString("pane_id", "");
+                        main.post(() -> postNotice(noticeTitle, noticeBody, noticePane));
+                    }
+                }
                 long serial = state.optLong("clipboard_serial", 0);
                 String copy = state.optString("clipboard", "");
                 if (serial > current.clipboardSerial) {

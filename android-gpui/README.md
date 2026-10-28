@@ -94,7 +94,12 @@ validated before it reaches the renderer. Split panes and their borders are
 painted together and the panes' focused border carries the accent ring.
 Terminal hyperlinks in the daemon's table become tappable runs; only `http(s)`
 targets are forwarded, to the platform browser, never to files or custom
-schemes. An OSC 52 clipboard write from a pane reaches the Android clipboard as
+schemes. Agent alerts the daemon broadcasts appear as Android notifications on one
+bounded channel (newest per pane, at most eight pending), and a terminal bell
+gives a short vibration instead of overriding the ring mode. Notifications need
+the system notification permission; without it the terminal still runs.
+
+An OSC 52 clipboard write from a pane reaches the Android clipboard as
 plain text only: the payload must be base64 of valid UTF-8 within 256 KiB, and
 anything else is dropped rather than guessed at. A
 surface whose runs do not tile the extracted text exactly falls back to bounded

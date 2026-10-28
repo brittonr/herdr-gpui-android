@@ -164,6 +164,9 @@ pub struct View {
     /// One pending OSC 52 write, delivered once by `poll`.
     clipboard: Option<String>,
     clipboard_serial: u64,
+    /// Notifications and bells, drained by `poll` so each is delivered once.
+    notifications: Vec<Notice>,
+    bell: u32,
     revision: u64,
 }
 impl Default for View {
@@ -180,6 +183,8 @@ impl Default for View {
             surface: String::new(),
             clipboard: None,
             clipboard_serial: 0,
+            notifications: Vec::new(),
+            bell: 0,
             revision: 0,
         }
     }
@@ -331,9 +336,11 @@ pub fn poll(id: u64) -> Result<String> {
         let owner = session(id)?;
         let mut state = lock(&owner.state);
         let json = serde_json::to_string(&state.view)?;
-        // A clipboard write is delivered exactly once, so it never inflates
-        // every later poll with the same bytes.
+        // Clipboard writes, notifications and bells are delivered exactly once,
+        // so they never inflate every later poll with the same payload.
         state.view.clipboard = None;
+        state.view.notifications.clear();
+        state.view.bell = 0;
         json
     };
     if json.len() > 1_048_576 {
@@ -474,6 +481,17 @@ fn run(owner: &Arc<Session>, config: Config, credentials: Credentials, name: Str
     drop(runtime);
     Ok(())
 }
+
+/// One daemon notification waiting to be posted by the activity.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Notice {
+    title: String,
+    body: String,
+    pane_id: String,
+}
+
+/// Pending notifications kept for the activity; the oldest is dropped first.
+const MAX_NOTICES: usize = 8;
 
 /// The largest decoded OSC 52 write this client will put on the pasteboard.
 const MAX_CLIPBOARD_TEXT: usize = 256 * 1024;
@@ -644,6 +662,34 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                 return Some("The requested pane was closed".into());
             }
             state.snapshot = Some(snapshot);
+        }
+        ClientEvent::Message(ServerMessage::SemanticNotification(notification)) => {
+            let title = clean(&notification.title, 200);
+            if title.is_empty() {
+                return None;
+            }
+            let body = clean(notification.body.as_deref().unwrap_or_default(), 500);
+            let pane_id = notification
+                .pane_id
+                .as_deref()
+                .filter(|pane| valid_pane_id(pane))
+                .unwrap_or_default()
+                .to_owned();
+            // A pane owns at most one pending notice; the newest replaces it.
+            if !pane_id.is_empty() {
+                state.view.notifications.retain(|notice| notice.pane_id != pane_id);
+            }
+            if state.view.notifications.len() >= MAX_NOTICES {
+                state.view.notifications.remove(0);
+            }
+            state.view.notifications.push(Notice { title, body, pane_id });
+            return None;
+        }
+        ClientEvent::Message(ServerMessage::TerminalBell { count }) => {
+            if count > 0 {
+                state.view.bell = state.view.bell.saturating_add(u32::from(count));
+            }
+            return None;
         }
         ClientEvent::Message(ServerMessage::Clipboard { data }) => {
             if let Some(text) = decode_osc52(&data) {
@@ -1190,6 +1236,51 @@ mod tests {
             acknowledged: false,
             started: Instant::now(),
         });
+    }
+    #[test]
+    fn notifications_and_bells_are_bounded_and_replaced_per_pane() {
+        let notice = |pane: Option<&str>, title: &str| {
+            ClientEvent::Message(ServerMessage::SemanticNotification(SemanticNotification {
+                kind: SemanticNotificationKind::NeedsAttention,
+                title: title.into(),
+                body: Some("body".into()),
+                sound: None,
+                agent: None,
+                workspace_id: None,
+                tab_id: None,
+                pane_id: pane.map(str::to_owned),
+                position: None,
+            }))
+        };
+        let mut state = State::default();
+        apply_event(&mut state, notice(Some("p1"), "first"));
+        apply_event(&mut state, notice(Some("p1"), "second"));
+        // One pending notice per pane, newest wins.
+        assert_eq!(state.view.notifications.len(), 1);
+        assert_eq!(state.view.notifications[0].title, "second");
+        assert_eq!(state.view.notifications[0].pane_id, "p1");
+        for index in 0..12 {
+            apply_event(&mut state, notice(Some(&format!("p{index}")), "many"));
+        }
+        assert_eq!(state.view.notifications.len(), MAX_NOTICES, "the queue stays bounded");
+        assert_eq!(
+            state.view.notifications.last().unwrap().title,
+            "many".to_owned()
+        );
+        // An empty title is dropped; a hostile pane id never reaches the activity.
+        apply_event(&mut state, notice(Some("p1"), "   "));
+        apply_event(&mut state, notice(Some("bad id!"), "hostile"));
+        assert_eq!(state.view.notifications.last().unwrap().pane_id, "", "invalid pane ids are dropped");
+        apply_event(
+            &mut state,
+            ClientEvent::Message(ServerMessage::TerminalBell { count: 3 }),
+        );
+        assert_eq!(state.view.bell, 3);
+        apply_event(
+            &mut state,
+            ClientEvent::Message(ServerMessage::TerminalBell { count: 0 }),
+        );
+        assert_eq!(state.view.bell, 3, "zero counts are ignored");
     }
     #[test]
     fn osc52_writes_only_bounded_valid_text() {

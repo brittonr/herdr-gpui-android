@@ -99,6 +99,12 @@ client forwards only `http` and `https` targets, at most 2 KiB without control
 characters, and the activity rechecks the scheme before starting the intent; no
 file, `intent:` or custom scheme is reachable this way.
 
+Daemon notifications (for example an agent waiting on you) are posted on the
+`herdr-agent-alerts` channel: at most eight pending, one per pane, newest wins,
+with the pane as the notification id so a newer alert replaces the older one on
+the same pane. A terminal bell vibrates briefly. Both are delivered once by the
+poll that follows them.
+
 A program in a pane can set the phone clipboard through OSC 52. The daemon
 forwards it as base64; the client decodes it strictly and writes plain text
 only, at most 256 KiB of valid UTF-8, once per write. Invalid, oversized or
