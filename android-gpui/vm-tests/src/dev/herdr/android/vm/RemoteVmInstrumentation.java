@@ -29,6 +29,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -38,6 +39,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -107,6 +110,7 @@ public final class RemoteVmInstrumentation extends Instrumentation {
                 skips.add("Frame-only mode: direct JNI negative/positive boundary suite was not run");
                 skips.add("Frame-only mode: physical/IME/palette input and lifecycle/reconnect suite was not run");
             } else checkNativeBoundary();
+            checkIdentityEncryption();
             prepareStore();
             checkRemoteUi();
         } catch (Throwable problem) {
@@ -160,6 +164,81 @@ public final class RemoteVmInstrumentation extends Instrumentation {
         } catch (IllegalStateException closed) { inputRejected = isClosedFailure(closed); }
         require(inputRejected, "Closed handle accepted input or failed for another reason");
         pass("Closing an actual native session invalidates its handle and rejects subsequent input");
+    }
+
+    private void checkIdentityEncryption() throws Exception {
+        Class<?> type = type("dev.herdr.android.RemoteIdentityStore");
+        Constructor<?> ctor = type.getDeclaredConstructor(Context.class);
+        ctor.setAccessible(true);
+        Object identityStore = ctor.newInstance(getTargetContext());
+        if (Boolean.TRUE.equals(invoke(identityStore, "exists", new Class<?>[0]))) {
+            char[] existing = (char[]) invoke(identityStore, "read", new Class<?>[0]);
+            try { require(existing.length > 0, "Saved SSH identity decrypted to empty text"); }
+            finally { Arrays.fill(existing, '\0'); }
+            pass("Existing encrypted SSH identity decrypts on-device; its contents were not retained or reported");
+            return;
+        }
+
+        byte[] binary = "openssh-key-v1\0synthetic-storage-fixture".getBytes(StandardCharsets.US_ASCII);
+        String encoded = Base64.getEncoder().encodeToString(binary);
+        char[] fixture = ("-----BEGIN OPENSSH PRIVATE KEY-----\n" + encoded
+                + "\n-----END OPENSSH PRIVATE KEY-----\n").toCharArray();
+        File ciphertext = new File(getTargetContext().getNoBackupFilesDir(), "remote-identity-v1.enc");
+        try {
+            invoke(identityStore, "save", new Class<?>[]{char[].class}, fixture);
+            require(Boolean.TRUE.equals(invoke(identityStore, "exists", new Class<?>[0])), "Saved identity file is not reported present");
+            byte[] stored = readBytes(ciphertext);
+            try {
+                require(!contains(stored, new String(fixture).getBytes(StandardCharsets.UTF_8))
+                        && !contains(stored, encoded.getBytes(StandardCharsets.US_ASCII)),
+                        "Encrypted identity file contains cleartext key material");
+            } finally { Arrays.fill(stored, (byte) 0); }
+
+            char[] roundTrip = (char[]) invoke(identityStore, "read", new Class<?>[0]);
+            try { require(Arrays.equals(fixture, roundTrip), "Saved identity did not decrypt byte-for-byte"); }
+            finally { Arrays.fill(roundTrip, '\0'); }
+
+            byte[] damaged = readBytes(ciphertext);
+            try {
+                damaged[damaged.length - 1] ^= 1;
+                try (FileOutputStream output = new FileOutputStream(ciphertext)) { output.write(damaged); }
+            } finally { Arrays.fill(damaged, (byte) 0); }
+            rejectIdentityRead(identityStore, "Modified ciphertext was accepted");
+            invoke(identityStore, "delete", new Class<?>[0]);
+            require(!Boolean.TRUE.equals(invoke(identityStore, "exists", new Class<?>[0])), "Deleted identity file remains present");
+            rejectIdentityRead(identityStore, "Deleted identity could still be read");
+            pass("Android Keystore AES/GCM identity round-trip is encrypted at rest, rejects tampering, and deletes cleanly");
+        } finally {
+            Arrays.fill(binary, (byte) 0);
+            Arrays.fill(fixture, '\0');
+            invoke(identityStore, "delete", new Class<?>[0]);
+        }
+    }
+
+    private static byte[] readBytes(File file) throws Exception {
+        try (FileInputStream input = new FileInputStream(file); java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+            byte[] buffer = new byte[1024];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            Arrays.fill(buffer, (byte) 0);
+            return output.toByteArray();
+        }
+    }
+
+    private static boolean contains(byte[] bytes, byte[] needle) {
+        outer: for (int i = 0; i <= bytes.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) if (bytes[i + j] != needle[j]) continue outer;
+            return true;
+        }
+        return false;
+    }
+
+    private static void rejectIdentityRead(Object identityStore, String message) throws Exception {
+        try {
+            char[] unexpected = (char[]) invoke(identityStore, "read", new Class<?>[0]);
+            Arrays.fill(unexpected, '\0');
+            throw new AssertionError(message);
+        } catch (IllegalStateException expected) { }
     }
 
     private void rejectConnection(JSONObject settings, String password, String label, String... words) throws Exception {

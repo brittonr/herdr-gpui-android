@@ -218,9 +218,17 @@ public final class GpuiVmInstrumentation extends Instrumentation {
         // Exercise GPUI hit-testing and its real keyboard callback, not a test-only show method.
         SurfaceView surface = find(first.getWindow().getDecorView(), SurfaceView.class);
         require(surface != null, "GPUI SurfaceView missing");
+        boolean autoCompactBeforeIme = (Boolean) field(first, "compactDisplay");
         tap(surface, 48 * density(first), surface.getHeight() - 28 * density(first));
         await(() -> find(first.getWindow().getDecorView(), EditText.class) != null,
                 "GPUI Keyboard button opens the Android IME proxy");
+        await(() -> {
+            WindowInsets current = first.getWindow().getDecorView().getRootWindowInsets();
+            return current != null && current.isVisible(WindowInsets.Type.ime());
+        }, "Android IME becomes visible");
+        require((Boolean) field(first, "compactDisplay") == autoCompactBeforeIme,
+                "Showing the IME changed the automatic display profile");
+        checkGeometry("keyboard-open", autoCompactBeforeIme);
         onMain(() -> { });
         SystemClock.sleep(350);
         final EditText proxy = find(first.getWindow().getDecorView(), EditText.class);
@@ -968,12 +976,18 @@ public final class GpuiVmInstrumentation extends Instrumentation {
         require(bounds.bottom <= viewBounds.top, "Surface and native options row overlap");
         require(bounds.width() > 200 * density(current) && bounds.height() > 64 * density(current),
                 "Native terminal has no usable compact area");
-        require(viewBounds.height() >= 47 * density(current), "View touch target is less than 48dp");
+        for (String label : new String[]{"View", "Cmds", "Ctrl"}) {
+            Button control = button(current, label);
+            Rect controlBounds = bounds(control);
+            Rect visibleControl = new Rect();
+            require(controlBounds.height() >= 47 * density(current)
+                    && controlBounds.bottom <= decor.getHeight() - safe.bottom
+                    && control.getGlobalVisibleRect(visibleControl)
+                    && visibleControl.width() == controlBounds.width()
+                    && visibleControl.height() == controlBounds.height(),
+                    label + " control is clipped or below the 48dp safe touch target");
+        }
         require((Boolean) field(current, "compactDisplay") == expectedCompact, "Wrong resolved compact profile");
-        Rect visible = new Rect();
-        require(button(current, "View").getGlobalVisibleRect(visible)
-                && visible.width() == viewBounds.width() && visible.height() == viewBounds.height(),
-                "View button is clipped");
         observations.put(new JSONObject().put("geometry", label).put("density", density(current))
                 .put("font_scale", current.getResources().getConfiguration().fontScale)
                 .put("decor_width_px", decor.getWidth()).put("decor_height_px", decor.getHeight())
@@ -981,7 +995,7 @@ public final class GpuiVmInstrumentation extends Instrumentation {
                 .put("available_height_dp", (root.getHeight() - root.getPaddingTop() - root.getPaddingBottom()) / density(current))
                 .put("surface", bounds.toShortString()).put("view_button", viewBounds.toShortString())
                 .put("insets", safe.toString()).put("compact", expectedCompact));
-        pass("Measured " + label + " surface and 48dp View control fit system/IME safe insets");
+        pass("Measured " + label + " surface and 48dp View/Cmds/Ctrl controls fit system/IME safe insets");
     }
 
     private void checkDisplayChanges(Fixture fixture) throws Exception {

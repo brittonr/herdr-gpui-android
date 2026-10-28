@@ -26,6 +26,7 @@ import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.FrameLayout;
+import android.widget.ScrollView;
 import android.widget.Toast;
 import android.widget.TextView;
 import android.widget.Spinner;
@@ -44,6 +45,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -185,6 +187,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         commands.setOnClickListener(view -> showQuickCommands());
         synchronousTouch(commands);
         bar.addView(commands, new LinearLayout.LayoutParams(dp(64), dp(48)));
+        Button panes = localButton("Panes");
+        panes.setContentDescription("Workspaces, tabs and panes for this host");
+        panes.setOnClickListener(view -> showPanes());
+        synchronousTouch(panes);
+        bar.addView(panes, new LinearLayout.LayoutParams(dp(64), dp(48)));
         HorizontalScrollView scroll = new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.setBackgroundColor(0xff1e222a);
@@ -286,9 +293,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
     private void applyDisplayOptions() {
         if (!hostStarted || destroyed || terminalRoot == null || displayOptions == null) return;
-        float density = getResources().getDisplayMetrics().density;
-        float width = (terminalRoot.getWidth() - terminalRoot.getPaddingLeft() - terminalRoot.getPaddingRight()) / density;
-        float height = (terminalRoot.getHeight() - terminalRoot.getPaddingTop() - terminalRoot.getPaddingBottom()) / density;
+        // Configuration dimensions follow the app window through fold/orientation changes,
+        // but unlike the padded root they are not reduced by transient IME insets.
+        Configuration configuration = getResources().getConfiguration();
+        float width = configuration.screenWidthDp;
+        float height = configuration.screenHeightDp;
         if (width <= 0 || height <= 0) return;
         compactDisplay = displayOptions.compact(width, height);
         nativeSetDisplayPreferences(displayOptions.effectiveFont(compactDisplay,
@@ -399,6 +408,128 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         dialog.show();
+    }
+
+    /** Workspace, tab and agent chrome from the daemon snapshot; a tap focuses that pane in place. */
+    private void showPanes() {
+        if (destroyed || isFinishing() || displayDialog != null && displayDialog.isShowing()) return;
+        final Connection target;
+        synchronized (stateLock) { target = connection; }
+        if (target == null || target.isClosed()) return;
+        clearControl();
+        allowNextKeyboardShow = false;
+        super.gpuiHideKeyboard(imeSession);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        int padding = dp(12);
+        list.setPadding(padding, padding, padding, padding);
+        JSONArray workspaces = target.workspaces, tabs = target.tabs, panes = target.panes;
+        int rows = 0;
+        if (workspaces != null && panes != null) {
+            for (int w = 0; w < workspaces.length(); w++) {
+                JSONObject workspace = workspaces.optJSONObject(w);
+                if (workspace == null) continue;
+                String workspaceId = workspace.optString("id", "");
+                list.addView(chromeLabel(chromeTitle(workspace.optString("label", ""), workspaceId),
+                        15, 0x9fb0c6, true));
+                if (tabs != null) for (int t = 0; t < tabs.length(); t++) {
+                    JSONObject tab = tabs.optJSONObject(t);
+                    if (tab == null || !workspaceId.equals(tab.optString("workspace_id", ""))) continue;
+                    LinearLayout row = new LinearLayout(this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.addView(chromeDot(tab.optString("status", "unknown")));
+                    row.addView(chromeLabel(chromeTitle(tab.optString("label", ""), tab.optString("id", "")),
+                            13, tab.optBoolean("focused") ? 0xe7eaf0 : 0x8c9bb0, false));
+                    list.addView(row);
+                }
+                for (int p = 0; p < panes.length(); p++) {
+                    JSONObject pane = panes.optJSONObject(p);
+                    if (pane == null || !workspaceId.equals(pane.optString("workspace_id", ""))) continue;
+                    rows++;
+                    list.addView(paneRow(target, list, pane));
+                }
+            }
+        }
+        if (rows == 0) list.addView(chromeLabel("No panes reported by this session yet", 14, 0x9fb0c6, false));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
+        AlertDialog sheet = new AlertDialog.Builder(this)
+                .setTitle("Panes · " + launch.name())
+                .setView(scroll)
+                .setNegativeButton("Close", null)
+                .create();
+        showLocalDialog(sheet);
+    }
+
+    private View paneRow(Connection target, LinearLayout list, JSONObject pane) {
+        String id = pane.optString("id", "");
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setMinimumHeight(dp(48));
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setFocusable(true);
+        row.setSaveEnabled(false);
+        row.addView(chromeDot(pane.optString("status", "unknown")));
+        row.addView(chromeLabel(chromeTitle(pane.optString("title", ""), id),
+                15, id.equals(target.paneId) ? 0x76d3b2 : 0xe7eaf0, false));
+        row.setContentDescription("Focus pane " + chromeTitle(pane.optString("title", ""), id));
+        row.setOnClickListener(view -> {
+            if (displayDialog != null) displayDialog.dismiss();
+            focusRemotePane(target, id);
+        });
+        return row;
+    }
+
+    private void focusRemotePane(Connection target, String paneId) {
+        if (paneId.isEmpty() || paneId.length() > 128
+                || !paneId.matches("[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)*")) return;
+        if (target.remoteHandle <= 0) {
+            Toast.makeText(this, "Switch panes from Remote hosts for this connection", Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            JSONObject result = new JSONObject(RemoteNative.focus(target.remoteHandle, paneId));
+            if (!result.optBoolean("queued", false)) throw new IllegalStateException("Pane focus was not queued");
+            synchronized (stateLock) {
+                if (!current(target)) return;
+                target.paneId = paneId;
+                publish(target, "Switching pane…");
+            }
+        } catch (Exception | LinkageError failure) {
+            Toast.makeText(this, "Could not switch pane; reopen and check the session", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private static String chromeTitle(String value, String fallback) {
+        String title = value.replaceAll("[\\p{Cntrl}]", " ").trim();
+        if (title.isEmpty()) title = fallback;
+        return title.length() > 60 ? title.substring(0, 60) + "…" : title;
+    }
+
+    private View chromeDot(String status) {
+        View dot = new View(this);
+        int color = 0x8892a0;
+        if ("working".equals(status)) color = 0xf0b778;
+        else if ("blocked".equals(status)) color = 0xff6b6b;
+        else if ("done".equals(status)) color = 0x6ab0f3;
+        else if ("idle".equals(status)) color = 0x76d3b2;
+        dot.setBackgroundColor(color);
+        LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(dp(8), dp(8));
+        layout.setMarginEnd(dp(10));
+        dot.setLayoutParams(layout);
+        return dot;
+    }
+
+    private TextView chromeLabel(String text, int size, int color, boolean header) {
+        TextView label = new TextView(this);
+        label.setText(text);
+        label.setTextSize(size);
+        label.setTextColor(color);
+        label.setSingleLine(true);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        label.setSaveEnabled(false);
+        if (header) label.setPadding(0, dp(14), 0, dp(4));
+        return label;
     }
 
     private void showQuickCommands() {
@@ -850,6 +981,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 if (selected) current.remoteBoot = boot;
                 current.text = text;
                 current.ready = selected;
+                current.workspaces = state.optJSONArray("workspaces");
+                current.tabs = state.optJSONArray("tabs");
+                current.panes = state.optJSONArray("panes");
+                current.chromePane = pane;
                 publish(current, selected ? "SSH connected · " + launch.name() : "Waiting for selected remote pane…");
                 nativeSetActive(current.generation, selected);
             }
@@ -894,9 +1029,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         final long remoteHandle;
         volatile boolean closed;
         String remoteBoot;
-        final String paneId = launch.paneId;
+        volatile String paneId = launch.paneId;
         final String title = launch.title;
         String text = "";
+        JSONArray workspaces, tabs, panes;
+        String chromePane = "";
         long nextScreenAt;
         boolean ready;
         ScheduledFuture<?> poll;

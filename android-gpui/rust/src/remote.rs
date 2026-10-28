@@ -19,6 +19,10 @@ use zeroize::Zeroizing;
 const MAX_HANDLES: usize = 4;
 const MAX_CONFIG: usize = 8192;
 const MAX_PANES: usize = 1024;
+/// Rows the phone picker can show; the poll payload serializes no more.
+const MAX_PICKER: usize = 256;
+/// Sidebar rows are bounded so the poll payload stays inside the JNI state limit.
+const MAX_CHROME: usize = 64;
 const MAX_DISPLAY: usize = 262_144;
 pub const MAX_CREDENTIAL_JSON: usize = 420_000;
 
@@ -127,6 +131,24 @@ fn parse_config(raw: &str) -> Result<(Config, String)> {
 pub struct Pane {
     id: String,
     title: String,
+    workspace_id: String,
+    tab_id: String,
+    status: &'static str,
+}
+#[derive(Clone, Serialize)]
+pub struct Workspace {
+    id: String,
+    label: String,
+    focused: bool,
+    status: &'static str,
+}
+#[derive(Clone, Serialize)]
+pub struct Tab {
+    id: String,
+    workspace_id: String,
+    label: String,
+    focused: bool,
+    status: &'static str,
 }
 #[derive(Clone, Serialize)]
 pub struct View {
@@ -134,6 +156,8 @@ pub struct View {
     status: String,
     boot_id: String,
     panes: Vec<Pane>,
+    workspaces: Vec<Workspace>,
+    tabs: Vec<Tab>,
     pane_id: String,
     text: String,
     revision: u64,
@@ -145,6 +169,8 @@ impl Default for View {
             status: "Connecting over SSH".into(),
             boot_id: String::new(),
             panes: Vec::new(),
+            workspaces: Vec::new(),
+            tabs: Vec::new(),
             pane_id: String::new(),
             text: String::new(),
             revision: 0,
@@ -442,6 +468,8 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                 || snapshot.boot_id.len() > 128
                 || snapshot.panes.len() > MAX_PANES
                 || snapshot.agents.len() > MAX_PANES
+                || snapshot.workspaces.len() > MAX_PANES
+                || snapshot.tabs.len() > MAX_PANES
                 || snapshot
                     .panes
                     .iter()
@@ -457,9 +485,33 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                 return None;
             }
             state.view.boot_id.clone_from(&snapshot.boot_id);
+            state.view.workspaces = snapshot
+                .workspaces
+                .iter()
+                .take(MAX_CHROME)
+                .map(|workspace| Workspace {
+                    id: workspace.workspace_id.clone(),
+                    label: clean(&workspace.label, 80),
+                    focused: workspace.focused,
+                    status: agent_status(&workspace.agent_status),
+                })
+                .collect();
+            state.view.tabs = snapshot
+                .tabs
+                .iter()
+                .take(MAX_CHROME)
+                .map(|tab| Tab {
+                    id: tab.tab_id.clone(),
+                    workspace_id: tab.workspace_id.clone(),
+                    label: clean(&tab.label, 80),
+                    focused: tab.focused,
+                    status: agent_status(&tab.agent_status),
+                })
+                .collect();
             state.view.panes = snapshot
                 .panes
                 .iter()
+                .take(MAX_PICKER)
                 .map(|pane| {
                     let agent = snapshot
                         .agents
@@ -477,6 +529,9 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                     Pane {
                         id: pane.pane_id.clone(),
                         title: clean(title, 160),
+                        workspace_id: pane.workspace_id.clone(),
+                        tab_id: pane.tab_id.clone(),
+                        status: agent.map_or("unknown", |a| agent_status(&a.agent_status)),
                     }
                 })
                 .collect();
@@ -601,6 +656,16 @@ fn valid_pane_id(id: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b':'))
 }
+/// Desktop status vocabulary, bounded to what the sidebar paints.
+fn agent_status(status: &AgentStatus) -> &'static str {
+    match status {
+        AgentStatus::Idle => "idle",
+        AgentStatus::Working => "working",
+        AgentStatus::Blocked => "blocked",
+        AgentStatus::Done => "done",
+        AgentStatus::Unknown => "unknown",
+    }
+}
 fn valid_geometry(surface: &PaneSurfaceFrame, pane: &PaneSurfacePane) -> bool {
     let rect = pane.inner_rect;
     u32::from(rect.x) + u32::from(rect.width) <= u32::from(surface.frame.width)
@@ -664,7 +729,10 @@ pub fn focus(id: u64, pane_id: &str) -> Result<String> {
     }
     if pane_id.is_empty()
         || pane_id.len() > 1024
-        || !state.view.panes.iter().any(|pane| pane.id == pane_id)
+        || !state
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.panes.iter().any(|pane| pane.pane_id == pane_id))
     {
         return Err(Error::StaleTarget);
     }
@@ -1061,13 +1129,33 @@ mod tests {
     #[test]
     fn maximum_picker_and_surface_remain_inside_jni_state_limit() {
         let view = View {
-            panes: (0..MAX_PANES)
+            panes: (0..MAX_PICKER)
                 .map(|_| Pane {
                     id: "p".repeat(128),
                     title: clean(&"\\".repeat(160), 160),
+                    workspace_id: "w".repeat(64),
+                    tab_id: "t".repeat(64),
+                    status: "working",
                 })
                 .collect(),
             text: "\\".repeat(MAX_DISPLAY),
+            workspaces: (0..MAX_CHROME)
+                .map(|_| Workspace {
+                    id: "w".repeat(64),
+                    label: clean(&"\\".repeat(80), 80),
+                    focused: false,
+                    status: "working",
+                })
+                .collect(),
+            tabs: (0..MAX_CHROME)
+                .map(|_| Tab {
+                    id: "t".repeat(64),
+                    workspace_id: "w".repeat(64),
+                    label: clean(&"\\".repeat(80), 80),
+                    focused: false,
+                    status: "blocked",
+                })
+                .collect(),
             ..Default::default()
         };
         assert!(serde_json::to_string(&view).unwrap().len() < 1_048_576);

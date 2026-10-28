@@ -15,8 +15,9 @@ final class GpuiDisplayOptions {
     }
 
     boolean compact(float widthDp, float heightDp) {
+        // Include narrow fold-cover windows while leaving wide, nearly-square inner screens standard.
         return mode == COMPACT || mode == AUTO && widthDp > 0 && heightDp > 0
-                && (heightDp <= 500 || widthDp <= 360);
+                && (heightDp <= 500 || widthDp <= 480);
     }
 
     float effectiveFont(boolean compact, float systemScale) {

@@ -17,8 +17,11 @@ Use a reachable SSH server and an existing SSH account, with Herdr already
 installed and its requested session running. The application does not install
 or upgrade Herdr, configure SSH access, or change a firewall.
 Use password authentication or provide an existing compatible OpenSSH/PEM
-private key and its optional passphrase. Credentials are used for one connection
-and are not stored in the profile. The app does not generate or install SSH keys.
+private key and its optional passphrase. Passwords and passphrases are used for
+one connection and are not stored in the profile. A private key can be saved
+explicitly as one device-wide, Android Keystore-encrypted identity outside every
+profile; that copy is decrypted only for a connection that names it, and its
+passphrase is never saved. The app does not generate or install SSH keys.
 This build enables Ed25519 and ECDSA key algorithms; RSA and DSA support is not
 enabled. SSH configuration files, agent forwarding, jump hosts and interactive
 multi-factor authentication are not implemented.
@@ -46,8 +49,10 @@ host when the phone disconnects.
    SSH port, username and Herdr session
 2. Inspect the server key. Compare the displayed SHA-256 fingerprint with a
    trusted copy from the host administrator before explicitly trusting it
-3. Connect and enter the SSH password, or choose **Use private key** and provide
-   an existing key and optional passphrase. None of these credentials is saved
+3. Connect and enter the SSH password, choose **Use private key** for a
+   one-use key, or save a key once from **Remote hosts** and choose
+   **Use saved SSH key**. Passwords and pasted keys are used once; only an
+   explicitly saved identity is kept
 4. Select a pane, then use the GPUI terminal and **Cmds** palette
 
 Inspection retrieves the public server key without authenticating. Credentials
@@ -58,9 +63,11 @@ profile's connection identity clear its trust, and stale dialogs cannot save a
 pin for a different profile revision.
 
 Host settings, trusted fingerprints, extra keys and OMP quick commands are saved
-in an AndroidKeyStore-encrypted profile file excluded from backup. Password
-drafts are not saved in profiles or framework state. Authentication failure
-does not trigger automatic retries.
+in an AndroidKeyStore-encrypted profile file excluded from backup. An explicitly
+saved SSH identity is stored separately in the same Keystore-backed encrypted
+form and is removed only by its own **Remove saved SSH key** action. Password
+drafts, pasted keys and passphrases are not saved in profiles or framework
+state. Authentication failure does not trigger automatic retries.
 
 ## Input and lifecycle
 
@@ -82,6 +89,13 @@ deleted pane or stale launch cannot silently retarget a command.
 The first remote renderer continues to show bounded plain text extracted from
 the selected, validated binary surface. Exact VT colors, cursor, graphics and
 unlimited scrollback are not implied by the new transport.
+
+**Panes** in the terminal lists the session's workspaces, tabs and panes from
+the daemon snapshot, each with its agent status. Choosing a pane sends one
+`pane.focus` request and keeps the same connection; the surface that follows is
+validated against the same boot ID and projection revision. Tab and workspace
+switch requests and a sidebar of their own are not implemented yet, so those
+rows are labels rather than controls.
 
 ## SSH over Iroh
 

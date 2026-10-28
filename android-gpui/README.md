@@ -3,9 +3,10 @@
 ## Remote connection update
 
 Version 0.5.0 adds embedded SSH over direct TCP or Iroh. Open **Remote hosts**,
-verify the SSH server fingerprint, authenticate with a one-use password or
-existing private key, and select a pane. It uses Herdr's binary bridge and does
-not require an HTTP companion. See [remote setup, trust and limits](REMOTE.md).
+verify the SSH server fingerprint, authenticate with a one-use password, a
+one-use private key, or a device-wide key saved encrypted on the phone, and
+select a pane. It uses Herdr's binary bridge and does not require an HTTP
+companion. See [remote setup, trust and limits](REMOTE.md).
 
 The Remote preview installs as `dev.herdr.android.gpui.remote`, alongside the
 preserved Compact app. The prior development signing key was lost with the
@@ -143,7 +144,10 @@ requested.
    Iroh additionally needs its SSH receiver. See [remote setup](REMOTE.md).
 2. Install the Remote preview and add a TCP or Iroh profile.
 3. Independently verify its SSH fingerprint, authenticate, and select a pane.
-4. Use **Cmds** for editable OMP commands and **View** for compact display options.
+4. Use **Panes** to switch workspace, tab or pane from the daemon's own snapshot:
+   each row carries the agent status dot (idle, working, blocked, done) and a tap
+   focuses that pane without leaving the terminal. **Cmds** opens editable OMP
+   commands and **View** the compact display options.
 
 For the optional HTTPS workflow, open **Companion hosts** and use the
 [companion setup](../android/README.md#host-prerequisites), then tap **GPUI** from

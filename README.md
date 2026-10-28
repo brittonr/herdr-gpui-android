@@ -7,7 +7,7 @@ This is a source preview. Real Herdr end-to-end sessions and physical ARM64/Tita
 ## Features
 
 - Native Android host management with encrypted profiles and explicit SSH host-key trust
-- Embedded password or compatible private-key SSH authentication; credentials are used for one connection and not saved in profiles
+- Embedded password or compatible private-key SSH authentication; passwords and passphrases are used once, and a private key is kept only when explicitly saved as an Android Keystore-encrypted device identity outside every profile
 - Direct TCP or Iroh `/iroh/ssh` transport to Herdr's binary remote-client bridge
 - GPUI/wgpu terminal surface, ordered keyboard/IME input, and explicit pane selection
 - Per-host OMP quick commands with editable previews and separately confirmed Send + Enter

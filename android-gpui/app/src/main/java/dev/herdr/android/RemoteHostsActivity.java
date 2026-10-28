@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** SSH login and pane selection. Passwords never enter a profile, Intent or saved state. */
+/** SSH login and pane selection. Credentials never enter a profile, Intent or saved state. */
 public final class RemoteHostsActivity extends Activity {
     private static final int BG = Color.rgb(16, 18, 22), TEXT = Color.rgb(231, 234, 240);
     private static final int MUTED = Color.rgb(155, 167, 185);
@@ -34,11 +34,14 @@ public final class RemoteHostsActivity extends Activity {
     private volatile int generation;
     private volatile boolean visible;
     private RemoteHostStore store;
+    private RemoteIdentityStore identityStore;
+    private boolean identityPresent;
     private LinearLayout content;
     private TextView status;
     private AlertDialog dialog;
     private EditText password;
     private EditText keyPassphrase;
+    private EditText identityInput;
     private char[] pendingSecret;
     private char[] pendingPassphrase;
     private SavedRemoteHost selected;
@@ -50,6 +53,7 @@ public final class RemoteHostsActivity extends Activity {
         super.onCreate(null);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new RemoteHostStore(this);
+        identityStore = new RemoteIdentityStore(this);
         shell();
     }
 
@@ -113,6 +117,7 @@ public final class RemoteHostsActivity extends Activity {
         pendingPassphrase = null;
         if (password != null) password.setText("");
         if (keyPassphrase != null) keyPassphrase.setText("");
+        if (identityInput != null) identityInput.setText("");
     }
 
     private void dismissDialog() {
@@ -131,13 +136,21 @@ public final class RemoteHostsActivity extends Activity {
         content.removeAllViews();
         setStatus("Loading encrypted profiles…");
         int token = generation;
-        run(token, () -> store.read(), hosts -> renderProfiles(hosts));
+        run(token, () -> new ProfilesSnapshot(store.read(), identityStore.exists()), snapshot -> {
+            identityPresent = snapshot.identityPresent;
+            renderProfiles(snapshot.hosts);
+        });
     }
 
     private void renderProfiles(List<SavedRemoteHost> hosts) {
         content.removeAllViews();
-        setStatus("SSH · credentials are used once and never saved");
+        setStatus("SSH · passwords and passphrases are one-use; a private key may be saved encrypted on this device");
         content.addView(label("Connect to an existing Herdr daemon through SSH. Verify its host key before entering credentials.", 15, MUTED));
+        content.addView(button(identityPresent ? "Replace device-wide saved SSH key" : "Save device-wide SSH key", this::editIdentity));
+        if (identityPresent) {
+            content.addView(label("An encrypted SSH identity is saved in Android Keystore-backed storage on this device.", 13, MUTED));
+            content.addView(button("Remove saved SSH key", this::removeIdentity));
+        }
         content.addView(button("Add remote host", () -> editProfile(null)));
         content.addView(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class))));
         content.addView(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
@@ -157,6 +170,86 @@ public final class RemoteHostsActivity extends Activity {
             card.addView(button("Delete profile", () -> deleteProfile(host)));
             content.addView(card);
         }
+    }
+
+    private static final class ProfilesSnapshot {
+        final List<SavedRemoteHost> hosts;
+        final boolean identityPresent;
+        ProfilesSnapshot(List<SavedRemoteHost> hosts, boolean identityPresent) {
+            this.hosts = hosts;
+            this.identityPresent = identityPresent;
+        }
+    }
+
+    private void editIdentity() {
+        generation++;
+        dismissDialog();
+        LinearLayout fields = column();
+        fields.setPadding(dp(16), 0, dp(16), 0);
+        fields.addView(label("Save one device-wide existing OpenSSH or PEM private key, encrypted with Android Keystore. It is not added to any host profile. A key passphrase is requested only for a connection and is never saved.", 14, MUTED));
+        identityInput = field(fields, "Paste existing OpenSSH / PEM private key", "", true);
+        identityInput.setSingleLine(false);
+        identityInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        identityInput.setMinLines(5);
+        identityInput.setMaxLines(10);
+        TextView error = label("", 13, MUTED);
+        fields.addView(error);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(fields);
+        AlertDialog editing = new AlertDialog.Builder(this).setTitle(identityPresent ? "Replace saved SSH key" : "Save SSH key")
+                .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save key", null).create();
+        editing.setOnDismissListener(ignored -> {
+            if (identityInput != null) identityInput.setText("");
+            identityInput = null;
+            if (dialog == editing) dialog = null;
+        });
+        showDialog(editing);
+        editing.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            if (identityInput == null || identityInput.length() == 0) {
+                error.setText("Paste a nonempty OpenSSH or PEM private key.");
+                return;
+            }
+            if (!boundedSecret(identityInput.getText(), 64 * 1024)) {
+                error.setText("SSH key must be valid text and at most 64 KiB.");
+                return;
+            }
+            final char[] identity = characters(identityInput);
+            synchronized (this) { pendingSecret = identity; pendingPassphrase = null; }
+            identityInput.setText("");
+            identityInput = null;
+            editing.dismiss();
+            dialog = null;
+            int token = generation;
+            run(token, () -> {
+                try {
+                    identityStore.save(identity);
+                    return true;
+                } finally {
+                    Arrays.fill(identity, '\0');
+                    synchronized (this) { if (pendingSecret == identity) pendingSecret = null; }
+                }
+            }, ignored -> {
+                identityPresent = true;
+                dismissDialog();
+                showProfiles();
+            }, failure -> {
+                setStatus(failure);
+            });
+        });
+    }
+
+    private void removeIdentity() {
+        generation++;
+        showDialog(new AlertDialog.Builder(this).setTitle("Remove saved SSH key?")
+                .setMessage("Permanently remove the device-wide encrypted SSH key and its Android Keystore key. Saved SSH profiles and host fingerprints are unchanged.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Remove key", (which, index) -> {
+                    int token = generation;
+                    run(token, () -> { identityStore.delete(); return true; }, ignored -> {
+                        identityPresent = false;
+                        showProfiles();
+                    });
+                }).create());
     }
 
     private void editProfile(SavedRemoteHost old) {
@@ -282,7 +375,7 @@ public final class RemoteHostsActivity extends Activity {
                 setStatus("Verify this SSH fingerprint before trusting the host");
                 showDialog(new AlertDialog.Builder(this).setTitle("Trust this SSH host key?")
                         .setMessage(destination(host) + "\n\n" + key
-                                + "\n\nCompare this SHA-256 fingerprint with a trusted source. No password has been sent.")
+                                + "\n\nCompare this SHA-256 fingerprint with a trusted source. No credentials have been sent.")
                         .setNegativeButton("Cancel", (which, index) -> showProfiles())
                         .setPositiveButton("Trust fingerprint", (which, index) -> run(token,
                                 () -> store.trust(host, key), trusted -> { selected = trusted; showPassword(trusted); }))
@@ -291,68 +384,95 @@ public final class RemoteHostsActivity extends Activity {
         });
     }
 
-    private void showPassword(SavedRemoteHost host) { showCredentials(host, false); }
+    private enum CredentialMode { PASSWORD, ONE_USE_KEY, SAVED_KEY }
 
-    private void showCredentials(SavedRemoteHost host, boolean privateKey) {
+    private void showPassword(SavedRemoteHost host) { showCredentials(host, CredentialMode.PASSWORD); }
+
+    private void showCredentials(SavedRemoteHost host, CredentialMode mode) {
         dismissDialog();
         LinearLayout fields = column();
         fields.setPadding(dp(16), 0, dp(16), 0);
         fields.addView(label(destination(host), 16, TEXT));
         fields.addView(label("Trusted " + host.expectedFingerprint
-                + "\nCredentials are used once and cleared on close or pause.", 13, MUTED));
+                + (mode == CredentialMode.SAVED_KEY
+                    ? "\nThe saved private key is decrypted only for this connection. Its passphrase is one-use."
+                    : "\nPasswords and passphrases are used once and cleared on close or pause."), 13, MUTED));
         fields.addView(label("The app checks for a running Herdr session. Herdr’s bridge may start it if it stops while connecting.", 13, MUTED));
-        password = field(fields, privateKey ? "Existing OpenSSH / PEM private key" : "SSH password", "", true);
-        if (privateKey) {
-            password.setSingleLine(false);
-            password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                    | InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-            password.setMinLines(3); password.setMaxLines(6);
+        password = null;
+        keyPassphrase = null;
+        if (mode != CredentialMode.SAVED_KEY) {
+            boolean privateKey = mode == CredentialMode.ONE_USE_KEY;
+            password = field(fields, privateKey ? "Existing OpenSSH / PEM private key" : "SSH password", "", true);
+            if (privateKey) {
+                password.setSingleLine(false);
+                password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                        | InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+                password.setMinLines(3); password.setMaxLines(6);
+            }
+        }
+        if (mode != CredentialMode.PASSWORD) {
             keyPassphrase = field(fields, "Key passphrase (optional)", "", true);
-            fields.addView(label("Paste an existing key. This app does not create or save SSH keys.", 13, MUTED));
+        }
+        if (mode == CredentialMode.ONE_USE_KEY) {
+            fields.addView(label("This key is used once and is not saved. To save a device-wide encrypted key, return to Remote hosts.", 13, MUTED));
+        }
+        if (mode == CredentialMode.SAVED_KEY) {
+            fields.addView(label("Uses the device-wide encrypted identity. No automatic password or pasted-key fallback is attempted.", 13, MUTED));
+        }
+        if (mode != CredentialMode.PASSWORD) fields.addView(button("Use password", () -> showCredentials(host, CredentialMode.PASSWORD)));
+        if (mode != CredentialMode.ONE_USE_KEY) fields.addView(button("Use one-use private key", () -> showCredentials(host, CredentialMode.ONE_USE_KEY)));
+        if (identityPresent && mode != CredentialMode.SAVED_KEY) {
+            fields.addView(button("Use saved SSH key", () -> showCredentials(host, CredentialMode.SAVED_KEY)));
         }
         ScrollView scrolling = new ScrollView(this); scrolling.addView(fields);
         AlertDialog login = new AlertDialog.Builder(this).setTitle("Connect to " + host.name).setView(scrolling)
                 .setNegativeButton("Cancel", (which, index) -> showProfiles())
-                .setNeutralButton(privateKey ? "Use password" : "Use private key", (which, index) -> showCredentials(host, !privateKey))
                 .setPositiveButton("Connect", null).create();
         showDialog(login);
         final int loginGeneration = generation;
         login.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             if (!current(loginGeneration) || dialog != login || !login.isShowing()) return;
-            if (password == null || password.length() == 0) return;
-            int maximum = privateKey ? 65536 : 4096;
-            if (!boundedSecret(password.getText(), maximum)) {
-                password.setError(privateKey ? "Key exceeds 64 KiB" : "Password exceeds 4096 bytes"); return;
+            if (mode != CredentialMode.SAVED_KEY) {
+                if (password == null || password.length() == 0) return;
+                int maximum = mode == CredentialMode.ONE_USE_KEY ? 65536 : 4096;
+                if (!boundedSecret(password.getText(), maximum)) {
+                    password.setError(mode == CredentialMode.ONE_USE_KEY ? "Key exceeds 64 KiB" : "Password exceeds 4096 bytes"); return;
+                }
             }
             if (keyPassphrase != null && !boundedSecret(keyPassphrase.getText(), 4096)) {
                 keyPassphrase.setError("Passphrase exceeds 4096 bytes"); return;
             }
-            final char[] secret = value(password).toCharArray();
-            final char[] phrase = keyPassphrase == null ? new char[0] : value(keyPassphrase).toCharArray();
+            final char[] secret = mode == CredentialMode.SAVED_KEY ? new char[0] : characters(password);
+            final char[] phrase = keyPassphrase == null ? new char[0] : characters(keyPassphrase);
             synchronized (this) { pendingSecret = secret; pendingPassphrase = phrase; }
-            password.setText("");
+            if (password != null) password.setText("");
             if (keyPassphrase != null) keyPassphrase.setText("");
             login.dismiss(); dialog = null; password = null; keyPassphrase = null;
-            connect(host, secret, phrase, privateKey);
+            connect(host, secret, phrase, mode);
         });
         login.setOnCancelListener(ignored -> showProfiles());
     }
 
-    private void connect(SavedRemoteHost host, char[] secret, char[] phrase, boolean privateKey) {
+    private void connect(SavedRemoteHost host, char[] secret, char[] phrase, CredentialMode mode) {
         setStatus("Connecting to " + host.name + "…");
         int token = generation;
         submit(() -> {
             long handle = 0;
+            char[] credentialSecret = secret;
             try {
                 if (!current(token)) return;
                 SavedRemoteHost currentHost = store.requireCurrent(host);
+                if (mode == CredentialMode.SAVED_KEY) credentialSecret = identityStore.read();
                 String credential;
                 synchronized (this) {
-                    if (!current(token) || pendingSecret != secret) return;
-                    JSONObject payload = new JSONObject().put(privateKey ? "private_key" : "password", new String(secret));
+                    if (!current(token) || pendingSecret != secret || pendingPassphrase != phrase) return;
+                    boolean privateKey = mode != CredentialMode.PASSWORD;
+                    JSONObject payload = new JSONObject().put(privateKey ? "private_key" : "password", new String(credentialSecret));
                     if (privateKey && phrase.length > 0) payload.put("passphrase", new String(phrase));
                     credential = payload.toString();
-                    Arrays.fill(secret, '\0'); Arrays.fill(phrase, '\0');
+                    Arrays.fill(credentialSecret, '\0');
+                    if (credentialSecret != secret) Arrays.fill(secret, '\0');
+                    Arrays.fill(phrase, '\0');
                     pendingSecret = null; pendingPassphrase = null;
                 }
                 handle = RemoteNative.connect(currentHost.connectionJson(), credential);
@@ -370,7 +490,9 @@ public final class RemoteHostsActivity extends Activity {
             } finally {
                 if (handle != 0) RemoteNative.close(handle);
                 synchronized (this) {
-                    Arrays.fill(secret, '\0'); Arrays.fill(phrase, '\0');
+                    Arrays.fill(credentialSecret, '\0');
+                    if (credentialSecret != secret) Arrays.fill(secret, '\0');
+                    Arrays.fill(phrase, '\0');
                     if (pendingSecret == secret) pendingSecret = null;
                     if (pendingPassphrase == phrase) pendingPassphrase = null;
                 }
@@ -512,6 +634,12 @@ public final class RemoteHostsActivity extends Activity {
             if (bytes > limit) return false;
         }
         return true;
+    }
+    private static char[] characters(EditText field) {
+        CharSequence text = field.getText();
+        char[] result = new char[text.length()];
+        for (int i = 0; i < text.length(); i++) result[i] = text.charAt(i);
+        return result;
     }
     private static String value(EditText field) { return field.getText().toString(); }
     private void privateView(View view) {
