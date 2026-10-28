@@ -761,7 +761,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     @Override public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
         clearControl();
-        if (terminalRoot != null) terminalRoot.post(this::applyDisplayOptions);
+        if (terminalRoot != null) terminalRoot.post(() -> {
+            applySidebarDefault();
+            applyDisplayOptions();
+        });
     }
 
     private TextView optionLabel(String text) {
@@ -1152,12 +1155,15 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
      * An explicit choice always wins.
      */
     private void applySidebarDefault() {
-        boolean chosen = getSharedPreferences("terminal-display", MODE_PRIVATE)
-                .contains("list");
+        // The stored value is the preference for a panel with room. Folding to the
+        // cover must not keep half the terminal covered by the rail, and unfolding
+        // restores what the user asked for.
         int widthDp = getResources().getConfiguration().screenWidthDp;
-        sidebarOpen = getSharedPreferences("terminal-display", MODE_PRIVATE)
-                .getBoolean("list", widthDp >= 600);
-        if (!chosen && widthDp < 600) sidebarSignature = null;
+        boolean wantsRail = getSharedPreferences("terminal-display", MODE_PRIVATE)
+                .getBoolean("list", true);
+        boolean fits = widthDp >= 600;
+        if (sidebarOpen != (wantsRail && fits)) sidebarSignature = null;
+        sidebarOpen = wantsRail && fits;
         applySidebarWidth();
     }
 
