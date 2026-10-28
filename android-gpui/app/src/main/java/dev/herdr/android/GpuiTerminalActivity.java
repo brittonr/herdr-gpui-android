@@ -569,7 +569,19 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         outer.setBackgroundColor(0xff1e222a);
         outer.addView(bar, new FrameLayout.LayoutParams(-2, dp(48)));
         shell.addView(pinned, new LinearLayout.LayoutParams(-2, dp(48)));
-        shell.addView(outer, new LinearLayout.LayoutParams(0, dp(48), 1));
+        // The scroller cuts its last control in half; the fade marks the boundary
+        // as "swipe for more" instead of a rendering fault.
+        FrameLayout scrolling = new FrameLayout(this);
+        scrolling.addView(outer, new FrameLayout.LayoutParams(-1, dp(48)));
+        View fade = new View(this);
+        fade.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.RIGHT_LEFT,
+                new int[]{0xff1e222a, 0x001e222a}));
+        fade.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        FrameLayout.LayoutParams fadeParams = new FrameLayout.LayoutParams(dp(20), dp(48));
+        fadeParams.gravity = android.view.Gravity.END;
+        scrolling.addView(fade, fadeParams);
+        shell.addView(scrolling, new LinearLayout.LayoutParams(0, dp(48), 1));
         return shell;
     }
 
