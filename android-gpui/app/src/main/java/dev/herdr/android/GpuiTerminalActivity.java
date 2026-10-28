@@ -410,7 +410,21 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             row.addView(button, layout);
         }
         scroll.addView(row);
-        bar.addView(scroll, new LinearLayout.LayoutParams(0, dp(48), 1));
+        // The key strip scrolls sideways; an edge fade says so instead of showing
+        // a button sliced in half at the boundary.
+        FrameLayout strip = new FrameLayout(this);
+        strip.addView(scroll, new FrameLayout.LayoutParams(-1, dp(48)));
+        View fade = new View(this);
+        android.graphics.drawable.GradientDrawable gradient =
+                new android.graphics.drawable.GradientDrawable(
+                        android.graphics.drawable.GradientDrawable.Orientation.RIGHT_LEFT,
+                        new int[]{0xff1e222a, 0x001e222a});
+        fade.setBackground(gradient);
+        fade.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        FrameLayout.LayoutParams fadeParams = new FrameLayout.LayoutParams(dp(20), dp(48));
+        fadeParams.gravity = android.view.Gravity.END;
+        strip.addView(fade, fadeParams);
+        bar.addView(strip, new LinearLayout.LayoutParams(0, dp(48), 1));
         return bar;
     }
 

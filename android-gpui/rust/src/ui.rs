@@ -355,7 +355,9 @@ impl Render for TerminalView {
                                         let line = div()
                                             .h(row_height)
                                             .w(row_width)
-                                            .px_2()
+                                            // Match the header's inset so the terminal and
+                                            // the pane title share one left edge.
+                                            .px(px(metrics.padding + 4.))
                                             .font_family(crate::fonts::MONO_FAMILY)
                                             .text_size(font_size)
                                             .line_height(row_height)
