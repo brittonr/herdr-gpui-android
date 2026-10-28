@@ -298,7 +298,9 @@ impl Render for TerminalView {
                     .px(px(metrics.padding + 4.))
                     .border_b_1()
                     .border_color(rgb(model::palette().border))
-                    .text_size(px(metrics.font_size))
+                    // Chrome keeps its own scale: the pane title must stay legible
+                    // on the cover, where the fitted terminal type drops to 11 px.
+                    .text_size(px(metrics.font_size.clamp(13., 16.)))
                     .child(
                         div()
                             .flex_1()
