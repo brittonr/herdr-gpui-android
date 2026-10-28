@@ -335,6 +335,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
     /** Explains a dead connection and offers the one action that can fix it. */
     private void showReconnectBanner(String message) {
+        // fail() runs on the poll worker; Android views may only be touched on
+        // the main thread, so marshal first instead of throwing silently there.
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+            runOnUiThread(() -> showReconnectBanner(message));
+            return;
+        }
         if (terminalRoot == null) return;
         if (banner == null) {
             banner = new LinearLayout(this);
@@ -373,20 +379,23 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
     /** Reuses the saved host for this session; no credential is kept in memory. */
     private void reconnectCurrentHost() {
-        final SavedRemoteHost host;
-        String id = currentHostId;
-        SavedRemoteHost found = null;
-        for (SavedRemoteHost candidate : savedHosts) {
-            if (candidate.id.equals(id)) found = candidate;
-        }
-        host = found;
-        if (host == null) {
-            Toast.makeText(this, "Open the host list to reconnect", Toast.LENGTH_LONG).show();
-            return;
-        }
+        final String id = currentHostId;
         hideReconnectBanner();
-        publishCurrent("Reconnecting to " + host.name + "…");
+        publishCurrent("Reconnecting…");
         worker.execute(() -> {
+            SavedRemoteHost host = null;
+            try {
+                // The rail's cached list is often empty here; the store is truth.
+                for (SavedRemoteHost candidate : new RemoteHostStore(this).read()) {
+                    if (candidate.id.equals(id)) host = candidate;
+                }
+            } catch (Exception ignored) {
+                host = null;
+            }
+            if (host == null) {
+                runOnUiThread(() -> showReconnectBanner("Open the host list to reconnect"));
+                return;
+            }
             long handle = 0;
             try {
                 char[] key = new RemoteIdentityStore(this).read();
@@ -401,7 +410,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 String chosen = awaitHostPane(handle, host.id, null);
                 final long readyHandle = handle;
                 final String readyPane = chosen;
-                runOnUiThread(() -> { hideReconnectBanner(); adoptHost(host, readyHandle, readyPane); });
+                final SavedRemoteHost readyHost = host;
+                runOnUiThread(() -> { hideReconnectBanner(); adoptHost(readyHost, readyHandle, readyPane); });
                 handle = 0;
             } catch (Exception | LinkageError failure) {
                 if (handle != 0) RemoteNative.close(handle);
