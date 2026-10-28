@@ -122,7 +122,10 @@ accent pill. Workspaces print as small upper-case labels, panes below them with
 a dot and up to two lines of title, and the focused pane gets the stronger
 accent pill with white text. A one-pixel rule separates hosts, the rail keeps a
 matching edge line, and a short gradient at the bottom edge shows the list
-continues past the screen.
+continues past the screen. A host dot is solid while its session is connected
+and a ring while it dials or is down; a row flashes blue when its agent changes
+state or takes on a different task, so a background refresh is visible without
+being noise.
 
 The rail is open by default at every width and its hidden/shown choice persists;
 **Hosts** brings it back and **Hide** closes it; the closed state is labelled in

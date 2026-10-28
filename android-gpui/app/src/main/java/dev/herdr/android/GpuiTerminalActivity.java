@@ -84,6 +84,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private final java.util.Map<String, RailPaneRow> railPanes = new java.util.HashMap<>();
     private final java.util.Map<String, TextView> railNotes = new java.util.HashMap<>();
     private final java.util.Map<String, View> railRules = new java.util.HashMap<>();
+    private long railFlashWindow;
+    private int railFlashCount;
     private ScrollView sidebarScroll;
     private Button sidebarButton;
     private volatile boolean sidebarOpen;
@@ -940,15 +942,15 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     : sample == null ? null : sample.workspaces;
             JSONArray panes = live && current != null ? current.panes
                     : sample == null ? null : sample.panes;
-            addHostRows(host, live, workspaces, panes, current, order, keep);
+            addHostRows(host, live, sample, workspaces, panes, current, order, keep);
             if (h + 1 < savedHosts.size()) order.add(railRule(host.id, keep));
         }
         pruneRailRows(keep);
         commitRailOrder(order);
     }
 
-    private void addHostRows(SavedRemoteHost host, boolean live, JSONArray workspaces, JSONArray panes,
-            Connection current, java.util.List<View> order, java.util.Set<String> keep) {
+    private void addHostRows(SavedRemoteHost host, boolean live, HostSample sample, JSONArray workspaces,
+            JSONArray panes, Connection current, java.util.List<View> order, java.util.Set<String> keep) {
         String hostKey = "host:" + host.id;
         keep.add(hostKey);
         RailHostRow header = railHostRows.get(hostKey);
@@ -956,10 +958,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             header = createRailHostRow(host);
             railHostRows.put(hostKey, header);
         }
-        updateRailHostRow(header, host, live, workspaces);
+        updateRailHostRow(header, host, live, sample, workspaces);
         order.add(header.row);
         if (workspaces == null || panes == null) {
-            HostSample sample = hostSamples.get(host.id);
             String noteKey = "note:" + host.id;
             keep.add(noteKey);
             TextView note = railNotes.get(noteKey);
@@ -1076,12 +1077,21 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         return holder;
     }
 
-    private void updateRailHostRow(RailHostRow holder, SavedRemoteHost host, boolean live, JSONArray workspaces) {
+    private void updateRailHostRow(RailHostRow holder, SavedRemoteHost host, boolean live,
+            HostSample sample, JSONArray workspaces) {
         holder.host = host;
-        String status = live ? "idle" : "unknown";
+        // Connection state is the thing a glance should answer, so it gets its
+        // own dot shape: solid when connected, ring while dialling, hollow when down.
+        String status = live || (sample != null && sample.connected) ? "connected"
+                : sample != null ? "connecting" : "offline";
         if (!status.equals(holder.status)) {
+            boolean pulse = holder.status != null;
             holder.status = status;
-            holder.dot.setBackground(roundedDrawable(0xff000000 | railStatusColor(status), 4));
+            holder.dot.setBackground("connected".equals(status)
+                    ? roundedDrawable(0xff76d3b2, 4)
+                    : ringDrawable("connecting".equals(status) ? 0xfff0b778 : 0xff5c6779));
+            if (pulse) pulseRailDot(holder.dot);
+            if ("connected".equals(status) && pulse) flashRailRow(holder.row, holder.glow);
         }
         if (holder.live != live) {
             holder.live = live;
@@ -1165,8 +1175,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         holder.connection = connection;
         holder.paneId = paneId;
         if (!status.equals(holder.status)) {
+            boolean pulse = holder.status != null;
             holder.status = status;
             holder.dot.setBackground(roundedDrawable(0xff000000 | railStatusColor(status), 4));
+            if (pulse) {
+                pulseRailDot(holder.dot);
+                flashRailRow(holder.row, holder.glow);
+            }
         }
         if (holder.selected != selected) {
             holder.selected = selected;
@@ -1174,8 +1189,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             holder.title.setTextColor(selected ? 0xfff2f6fb : 0xffc2ccda);
         }
         if (!title.contentEquals(holder.title.getText())) {
+            // A spinner glyph changes every tick; only a real subject change is
+            // worth a flash, otherwise the rail would strobe.
+            boolean subjectChanged = holder.title.getText().length() > 0
+                    && !railTitleSubject(title).equals(railTitleSubject(holder.title.getText().toString()));
             holder.title.setText(title);
             holder.row.setContentDescription("Focus pane " + title);
+            if (subjectChanged) flashRailRow(holder.row, holder.glow);
         }
     }
 
@@ -1205,6 +1225,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         String status;
         boolean live;
         int counted = -1;
+        final RailGlow glow = new RailGlow();
+    }
+
+    private static final class RailGlow {
+        android.graphics.drawable.GradientDrawable drawable;
+        android.animation.ValueAnimator animator;
     }
 
     private static final class RailWorkspaceRow {
@@ -1224,6 +1250,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         boolean live;
         boolean selected;
         String status;
+        final RailGlow glow = new RailGlow();
     }
 
     private static int railStatusColor(String status) {
@@ -1232,6 +1259,58 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if ("done".equals(status)) return 0x6ab0f3;
         if ("idle".equals(status)) return 0x76d3b2;
         return 0x8892a0;
+    }
+
+    /** Title without the leading icon and its per-tick spinner glyph. */
+    private static String railTitleSubject(String title) {
+        int start = 0;
+        while (start < title.length()) {
+            int code = title.codePointAt(start);
+            boolean decoration = code == 0x03c0 || (code >= 0x2800 && code <= 0x28ff)
+                    || Character.isWhitespace(code) || code == '\u200e' || code == '\u200f';
+            if (!decoration) break;
+            start += Character.charCount(code);
+        }
+        return title.substring(start);
+    }
+
+    private android.graphics.drawable.GradientDrawable ringDrawable(int color) {
+        android.graphics.drawable.GradientDrawable ring = new android.graphics.drawable.GradientDrawable();
+        ring.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        ring.setColor(0x00000000);
+        ring.setStroke(dp(2), color);
+        return ring;
+    }
+
+    /** A single scale pulse: enough to catch the eye, short enough to stay quiet. */
+    private void pulseRailDot(View dot) {
+        dot.animate().cancel();
+        dot.setScaleX(1f);
+        dot.setScaleY(1f);
+        dot.animate().scaleX(1.8f).scaleY(1.8f).setDuration(140)
+                .withEndAction(() -> dot.animate().scaleX(1f).scaleY(1f).setDuration(180).start())
+                .start();
+    }
+
+    private void flashRailRow(View row, RailGlow glow) {
+        // A sampler tick can change several rows at once; keep the rail calm.
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - railFlashWindow > 800) {
+            railFlashWindow = now;
+            railFlashCount = 0;
+        }
+        if (railFlashCount >= 6) return;
+        railFlashCount++;
+        if (glow.drawable == null) {
+            glow.drawable = roundedDrawable(0x006ab0f3, 8);
+            row.setForeground(glow.drawable);
+        }
+        if (glow.animator != null) glow.animator.cancel();
+        glow.drawable.setColor(0x3a6ab0f3);
+        glow.animator = android.animation.ValueAnimator.ofArgb(0x3a6ab0f3, 0x006ab0f3);
+        glow.animator.setDuration(600);
+        glow.animator.addUpdateListener(update -> glow.drawable.setColor((int) update.getAnimatedValue()));
+        glow.animator.start();
     }
 
     private TextView railText(String text, int size, int color) {
