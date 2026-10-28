@@ -1270,9 +1270,17 @@ const SESSION_ACTIONS: [&str; 7] = [
 
 /// Scrolls the focused pane to an absolute offset from the bottom. Zero returns
 /// to the live view; the daemon bounds the request to the pane's scrollback.
-/// Moves the client viewport `delta` rows into its own buffer. The daemon is not
-/// touched; `at_edge` tells the caller to prefetch more history.
-pub fn scroll_local(id: u64, delta: i64) -> Result<String> {
+/// Window pushed straight to the UI while the client scrolls its own buffer.
+pub struct UiPaint<'a> {
+    pub generation: i64,
+    pub title: &'a str,
+    pub status: &'a str,
+    pub shortcuts: &'a str,
+}
+
+/// Moves the client viewport `delta` rows into its own buffer and paints the
+/// result directly, so motion follows the finger instead of the poll timer.
+pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
     let owner = session(id)?;
     let mut state = lock(&owner.state);
     if state.view.state == "closed" || owner.cancel.is_cancelled() {
@@ -1286,6 +1294,23 @@ pub fn scroll_local(id: u64, delta: i64) -> Result<String> {
     let next = (state.local_offset + delta).clamp(0, limit);
     state.local_offset = next;
     project(&mut state);
+    let text = state.view.text.clone();
+    let surface = state.view.surface.clone();
+    let status = if paint.status.is_empty() {
+        state.view.status.clone()
+    } else {
+        paint.status.to_owned()
+    };
+    drop(state);
+    if let Ok(snapshot) = model::Snapshot::with_surface(
+        paint.title,
+        &text,
+        &status,
+        paint.shortcuts,
+        Some(surface.as_str()),
+    ) {
+        model::mailbox().set_snapshot(paint.generation, snapshot);
+    }
     Ok(json!({
         "offset": next,
         "limit": limit,

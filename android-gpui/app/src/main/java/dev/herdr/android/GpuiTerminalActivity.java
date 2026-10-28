@@ -154,7 +154,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     /** Locally accumulated scrollback target; polls only resync it while idle. */
     private long desiredScroll, lastSentScroll = -1;
     /** Rows requested but not yet drawn, so the local buffer stays ahead. */
-    private static final long PREFETCH_WINDOW = 8;
+    private static final long PREFETCH_WINDOW = 32;
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
     private boolean lastFollowSent = true;
@@ -412,7 +412,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         try {
             scrollWorker.execute(() -> {
                 try {
-                    JSONObject answer = new JSONObject(RemoteNative.scrollLocal(target.remoteHandle, lines));
+                    JSONObject answer = new JSONObject(RemoteNative.scrollLocal(target.remoteHandle, lines,
+                            target.generation, target.title, target.status, shortcutJson));
                     if (answer.optBoolean("at_edge", false)) {
                         prefetchHistory(target);
                     } else if (answer.optLong("offset", 0) == 0 && target.renderedScroll != 0) {
@@ -2318,6 +2319,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (target.generation == lastSnapshotGeneration && target.title.equals(lastSnapshotTitle)
                 && target.text.equals(lastSnapshotText) && status.equals(lastSnapshotStatus)
                 && shortcutJson.equals(lastSnapshotShortcuts) && target.surface.equals(lastSnapshotSurface)) return;
+        target.status = status;
         nativeSetSnapshot(target.generation, target.title, target.text, status, shortcutJson, target.surface);
         lastSnapshotGeneration = target.generation;
         lastSnapshotTitle = target.title;
@@ -2336,6 +2338,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile String paneId = launch.paneId;
         volatile long remoteRevision;
         volatile String remotePhase = "";
+        volatile String status = "Connecting…";
         volatile long fastUntil;
         volatile long renderedScroll;
         volatile long desiredHistory;

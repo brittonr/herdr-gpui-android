@@ -234,8 +234,27 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_scrollLocal(
     _class: JClass<'_>,
     handle: jlong,
     delta: jlong,
+    generation: jlong,
+    title: JString<'_>,
+    status: JString<'_>,
+    shortcuts: JString<'_>,
 ) -> jstring {
-    result_string(&mut env, remote::scroll_local(handle as u64, delta))
+    let Some(title) = read(&mut env, &title, 1024) else {
+        return std::ptr::null_mut();
+    };
+    let Some(status) = read(&mut env, &status, 4096) else {
+        return std::ptr::null_mut();
+    };
+    let Some(shortcuts) = read(&mut env, &shortcuts, 65536) else {
+        return std::ptr::null_mut();
+    };
+    let paint = remote::UiPaint {
+        generation: generation as i64,
+        title: &title,
+        status: &status,
+        shortcuts: &shortcuts,
+    };
+    result_string(&mut env, remote::scroll_local(handle as u64, delta, paint))
 }
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
