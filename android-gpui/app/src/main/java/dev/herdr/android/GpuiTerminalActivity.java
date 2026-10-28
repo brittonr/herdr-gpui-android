@@ -84,6 +84,12 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private String sidebarSignature = "";
     private AlertDialog displayDialog;
     private Button controlButton;
+    /** Vertical swipe state: a short tap still reaches the terminal. */
+    private float touchDownY, lastTouchY, scrollFraction;
+    private boolean scrolling;
+    /** Locally accumulated scrollback target; polls only resync it while idle. */
+    private long desiredScroll, lastSentScroll = -1;
+    private long lastScrollSentAt;
     private boolean controlLatched;
     private int oneShotKey = KeyEvent.KEYCODE_UNKNOWN;
     /** Index into the renderer's built-in palettes. */
@@ -285,6 +291,57 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             if (clicked) view.performClick();
             return true;
         });
+    }
+
+    private float rowHeightPx() {
+        long rows;
+        synchronized (stateLock) { rows = connection == null ? 0 : connection.scrollRows; }
+        if (rows > 0 && terminalRoot != null) {
+            int height = terminalRoot.getHeight() - terminalRoot.getPaddingTop() - terminalRoot.getPaddingBottom();
+            if (height > 0) return Math.max(1f, (float) height / rows);
+        }
+        float font = displayOptions == null ? 13f
+                : displayOptions.effectiveFont(compactDisplay, getResources().getConfiguration().fontScale);
+        float lineHeight = compactDisplay ? 1.4f : 1.5f;
+        return Math.max(1f, font * lineHeight * getResources().getDisplayMetrics().density);
+    }
+
+    /** Drag down reveals older lines: offsets grow toward the pane's scrollback. */
+    private void requestScroll(int lines) {
+        final Connection target;
+        synchronized (stateLock) { target = connection; }
+        if (target == null || target.isClosed() || target.remoteHandle <= 0) return;
+        long next = Math.max(0, Math.min(target.scrollMax, desiredScroll + lines));
+        if (next == desiredScroll) return;
+        desiredScroll = next;
+        long now = SystemClock.uptimeMillis();
+        // One request per ~100 ms: a fast swipe must not queue a request per pixel.
+        if (now - lastScrollSentAt < 100 && next != 0 && next != target.scrollMax) return;
+        if (next == lastSentScroll) return;
+        lastScrollSentAt = now;
+        lastSentScroll = next;
+        try {
+            worker.execute(() -> {
+                try { RemoteNative.scrollTo(target.remoteHandle, next); }
+                catch (RuntimeException | LinkageError ignored) { }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException busy) {
+            lastSentScroll = -1;
+        }
+    }
+
+    private void jumpToLive() {
+        final Connection target;
+        synchronized (stateLock) { target = connection; }
+        if (target == null || target.isClosed() || target.remoteHandle <= 0) return;
+        desiredScroll = 0;
+        lastSentScroll = -1;
+        try {
+            worker.execute(() -> {
+                try { RemoteNative.scrollTo(target.remoteHandle, 0); }
+                catch (RuntimeException | LinkageError ignored) { }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException busy) { }
     }
 
     private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -752,6 +809,28 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean forwardTouch(MotionEvent event) {
         int count = event.getPointerCount();
         if (!hostStarted || count < 1 || count > 16) return false;
+        int masked = event.getActionMasked();
+        if (masked == MotionEvent.ACTION_DOWN) {
+            touchDownY = lastTouchY = event.getY();
+            scrolling = false;
+            scrollFraction = 0f;
+        } else if (masked == MotionEvent.ACTION_MOVE && count == 1) {
+            if (!scrolling && Math.abs(event.getY() - touchDownY) > dp(18)) scrolling = true;
+            if (scrolling) {
+                float rowPx = rowHeightPx();
+                scrollFraction += (event.getY() - lastTouchY) / rowPx;
+                lastTouchY = event.getY();
+                int lines = (int) scrollFraction;
+                if (lines != 0) {
+                    scrollFraction -= lines;
+                    requestScroll(lines);
+                }
+                return true;
+            }
+        } else if ((masked == MotionEvent.ACTION_UP || masked == MotionEvent.ACTION_CANCEL) && scrolling) {
+            scrolling = false;
+            return true;
+        }
         int[] ids = new int[count];
         float[] xs = new float[count], ys = new float[count];
         for (int i = 0; i < count; i++) {
@@ -825,12 +904,16 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             Toast.makeText(this, "Session controls need the SSH workflow", Toast.LENGTH_LONG).show();
             return;
         }
-        String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab"};
-        String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close"};
+        String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab", "Jump to live output"};
+        String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close", "scroll.live"};
         new AlertDialog.Builder(this)
                 .setTitle("Session · " + launch.name())
                 .setItems(labels, (dialog, which) -> {
                     String action = actions[which];
+                    if ("scroll.live".equals(action)) {
+                        jumpToLive();
+                        return;
+                    }
                     if ("pane.close".equals(action) || "tab.close".equals(action)) {
                         confirmSessionAction(target, action, labels[which]);
                     } else if ("pane.zoom.on".equals(action)) {
@@ -1280,6 +1363,16 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 current.tabs = state.optJSONArray("tabs");
                 current.panes = state.optJSONArray("panes");
                 current.chromePane = pane;
+                JSONObject scroll = state.optJSONObject("scroll");
+                if (scroll != null) {
+                    current.scrollOffset = scroll.optLong("offset", 0);
+                    current.scrollMax = scroll.optLong("max", 0);
+                    current.scrollRows = scroll.optLong("rows", 0);
+                    if (!scrolling) {
+                        desiredScroll = current.scrollOffset;
+                        lastSentScroll = current.scrollOffset;
+                    }
+                }
                 int bell = state.optInt("bell", 0);
                 if (bell > 0) {
                     final int rings = bell;
@@ -1359,6 +1452,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         String surface = "";
         JSONArray workspaces, tabs, panes;
         volatile long clipboardSerial;
+        volatile long scrollOffset, scrollMax, scrollRows;
         String chromePane = "";
         long nextScreenAt;
         boolean ready;

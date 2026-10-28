@@ -94,7 +94,12 @@ validated before it reaches the renderer. Split panes and their borders are
 painted together and the panes' focused border carries the accent ring.
 Terminal hyperlinks in the daemon's table become tappable runs; only `http(s)`
 targets are forwarded, to the platform browser, never to files or custom
-schemes. **Tab** controls the focused session through allowlisted daemon methods: new
+schemes. Swipe down on the terminal to read scrollback and up to return; **Tab > Jump to
+live output** returns to the newest line. The activity converts a drag into
+`pane.scroll` offsets bounded by the daemon's own `max_offset_from_bottom`, and
+a short tap still reaches the terminal.
+
+**Tab** controls the focused session through allowlisted daemon methods: new
 tab, split right or down, zoom toggle, close pane and close tab (both confirmed).
 The client follows whichever pane the daemon focuses afterwards.
 

@@ -168,6 +168,7 @@ pub struct View {
     /// Notifications and bells, drained by `poll` so each is delivered once.
     notifications: Vec<Notice>,
     bell: u32,
+    scroll: Scroll,
     revision: u64,
 }
 impl Default for View {
@@ -186,6 +187,7 @@ impl Default for View {
             clipboard_serial: 0,
             notifications: Vec::new(),
             bell: 0,
+            scroll: Scroll::default(),
             revision: 0,
         }
     }
@@ -481,6 +483,19 @@ fn run(owner: &Arc<Session>, config: Config, credentials: Credentials, name: Str
     // Runtime and relay ownership ends on this background thread, never JNI/UI.
     drop(runtime);
     Ok(())
+}
+
+/// Scroll position of the focused pane, so the activity can bound a swipe.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct Scroll {
+    offset: u64,
+    max: u64,
+    rows: u64,
+}
+
+/// Clamps a requested offset to the pane's own scrollback window.
+fn clamp_offset(requested: i64, max: u64) -> u64 {
+    requested.max(0).min(i64::try_from(max).unwrap_or(i64::MAX)) as u64
 }
 
 /// One daemon notification waiting to be posted by the activity.
@@ -803,6 +818,15 @@ fn project(state: &mut State) {
         state.view.text = text;
         state.view.surface = surface;
         state.view.revision = revision;
+        state.view.scroll = matching_surface(state, &pane_id)
+            .and_then(|(_, pane)| pane.scroll)
+            .filter(|metrics| metrics.viewport_rows > 0)
+            .map(|metrics| Scroll {
+                offset: metrics.offset_from_bottom.min(metrics.max_offset_from_bottom),
+                max: metrics.max_offset_from_bottom,
+                rows: metrics.viewport_rows,
+            })
+            .unwrap_or_default();
     } else if !state.view.pane_id.is_empty() {
         state.view.state = "connecting";
         state.view.status = "Waiting for the selected pane surface".into();
@@ -1039,6 +1063,34 @@ const SESSION_ACTIONS: [&str; 7] = [
     "pane.zoom.on",
     "pane.zoom.off",
 ];
+
+/// Scrolls the focused pane to an absolute offset from the bottom. Zero returns
+/// to the live view; the daemon bounds the request to the pane's scrollback.
+pub fn scroll_to(id: u64, offset: i64) -> Result<String> {
+    let owner = session(id)?;
+    let mut state = lock(&owner.state);
+    if state.view.state == "closed" || owner.cancel.is_cancelled() {
+        return Err(Error::Closed);
+    }
+    let pane = state
+        .snapshot
+        .as_ref()
+        .and_then(|snapshot| snapshot.focused_pane_id.clone())
+        .filter(|pane| valid_pane_id(pane))
+        .ok_or(Error::StaleTarget)?;
+    let scroll = state.view.scroll;
+    let target = clamp_offset(offset, scroll.max);
+    if target == scroll.offset {
+        return Ok(json!({"queued": false}).to_string());
+    }
+    state.client.as_ref().ok_or(Error::Closed)?.request(
+        &state.view.boot_id,
+        Method::PaneScroll,
+        json!({"pane_id": pane, "offset_from_bottom": target}),
+    )?;
+    state.view.scroll.offset = target;
+    Ok(json!({"queued": true, "offset": target, "max": scroll.max}).to_string())
+}
 
 /// Runs one allowlisted session action against the daemon's focused workspace,
 /// tab and pane, then follows whatever pane the daemon focuses.
@@ -1306,6 +1358,14 @@ mod tests {
             acknowledged: false,
             started: Instant::now(),
         });
+    }
+    #[test]
+    fn scroll_offsets_stay_inside_the_pane_window() {
+        assert_eq!(clamp_offset(-5, 100), 0, "never scroll past the live view");
+        assert_eq!(clamp_offset(0, 100), 0);
+        assert_eq!(clamp_offset(40, 100), 40);
+        assert_eq!(clamp_offset(1_000, 100), 100, "bounded by the pane's scrollback");
+        assert_eq!(clamp_offset(i64::MAX, 0), 0);
     }
     #[test]
     fn session_actions_are_allowlisted() {

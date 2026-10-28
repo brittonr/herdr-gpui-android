@@ -23,5 +23,6 @@ final class RemoteNative {
     static native String focusTab(long handle, String tabId);
     static native String focusWorkspace(long handle, String workspaceId);
     static native String sessionAction(long handle, String action);
+    static native String scrollTo(long handle, long offsetFromBottom);
     static native void close(long handle);
 }

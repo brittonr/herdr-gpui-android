@@ -99,6 +99,11 @@ client forwards only `http` and `https` targets, at most 2 KiB without control
 characters, and the activity rechecks the scheme before starting the intent; no
 file, `intent:` or custom scheme is reachable this way.
 
+A vertical drag on the terminal scrolls the pane's scrollback: the client sends
+`pane.scroll` with an absolute `offset_from_bottom`, clamped to the window the
+daemon reports, and a tap shorter than 18 dp still reaches the terminal. **Tab >
+Jump to live output** returns to offset zero.
+
 **Tab** sends only allowlisted methods - `tab.create`, `tab.close`,
 `pane.split`, `pane.close`, `pane.zoom` - against the daemon's focused
 workspace, tab and pane. Close requests are confirmed first, and nothing else
