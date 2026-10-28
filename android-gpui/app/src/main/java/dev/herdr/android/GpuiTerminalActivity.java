@@ -497,6 +497,28 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         session.setOnClickListener(view -> showSessionActions());
         synchronousTouch(session);
         bar.addView(session, new LinearLayout.LayoutParams(dp(50), dp(48)));
+        // Panning is client-side: it is how a wide pane stays readable at a type
+        // size that actually fits this display.
+        for (float panStep : new float[]{-96f, 96f}) {
+            Button pan = new Button(this);
+            pan.setText(panStep < 0 ? "\u25C0" : "\u25B6");
+            pan.setTextSize(12);
+            pan.setTextColor(0xffe7eaf0);
+            pan.setBackgroundTintList(ColorStateList.valueOf(0xff303744));
+            pan.setAllCaps(false);
+            pan.setMinWidth(0);
+            pan.setMinimumWidth(0);
+            pan.setFocusable(false);
+            pan.setSaveEnabled(false);
+            pan.setContentDescription(panStep < 0 ? "Pan left" : "Pan right");
+            final float step = panStep;
+            pan.setOnClickListener(view -> nativePan(step));
+            synchronousTouch(pan);
+            LinearLayout.LayoutParams panParams = new LinearLayout.LayoutParams(dp(44), dp(48));
+            int panGap = Math.round(4 * getResources().getDisplayMetrics().density);
+            panParams.setMargins(panGap, 0, panGap, 0);
+            bar.addView(pan, panParams);
+        }
         HorizontalScrollView scroll = new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.setBackgroundColor(0xff1e222a);
@@ -2698,6 +2720,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
 
     private static native void nativeSetDisplayPreferences(float fontSize, boolean compact,
             float systemFontScale);
+
+    /** Moves the terminal horizontally by this many logical pixels. */
+    private static native void nativePan(float delta);
     private static native void nativeSetTheme(int index);
     private static native void nativeSetSnapshot(long generation, String title, String text, String status,
             String shortcutsJson, String surfaceJson);

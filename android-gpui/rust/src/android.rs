@@ -363,6 +363,17 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetFoll
     model::mailbox().set_follow(generation, follow != 0);
 }
 
+/// Horizontal pan for a pane wider than the surface; client-local only.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativePan(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    delta: jfloat,
+) {
+    model::mailbox().pan(delta);
+}
+
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetDisplayPreferences(

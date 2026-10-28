@@ -242,6 +242,7 @@ impl Render for TerminalView {
         // Natural leading: a terminal's rhythm is information. Spare height goes
         // above the block, never into the line spacing.
         let fit = 1.0f32;
+        let pan = self.state.pan;
         let row_height = px(metrics.row_height);
         let font_size = px(metrics.font_size);
         // A pane whose grid is shorter than the surface used to paint from the
@@ -348,7 +349,12 @@ impl Render for TerminalView {
                                 box_.h(px(content_height.max(0.) as f32))
                             })
                             .when(!short_pane, |box_| box_.size_full())
-                            .child(uniform_list(
+                            .child(
+                                div()
+                                    .h_full()
+                                    .w(row_width)
+                                    .ml(px(-pan))
+                                    .child(uniform_list(
                             "terminal-lines",
                             snapshot.lines.len(),
                             move |range, _, _| {
@@ -385,6 +391,7 @@ impl Render for TerminalView {
                             ListHorizontalSizingBehavior::Unconstrained,
                         )
                         .track_scroll(&self.scroll),
+                            ),
                             ),
                     )
                     })

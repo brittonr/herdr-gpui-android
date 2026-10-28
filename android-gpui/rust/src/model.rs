@@ -761,8 +761,13 @@ pub struct Mailbox {
     ime_session: i64,
     preedit: Arc<str>,
     display_preferences: DisplayPreferences,
+    pan: f32,
     pub follow: bool,
 }
+
+/// Enough for the widest supported line without letting a stray gesture hide
+/// the whole pane.
+pub const MAX_PAN: f32 = 2400.;
 
 #[derive(Clone)]
 pub struct ViewState {
@@ -774,6 +779,9 @@ pub struct ViewState {
     pub display_preferences: DisplayPreferences,
     /// Whether new output should pull the viewport to the newest line.
     pub follow: bool,
+    /// Client-local horizontal offset in logical pixels; the daemon owns the
+    /// wrap width, so panning is how a wide pane stays readable.
+    pub pan: f32,
 }
 
 impl Default for Mailbox {
@@ -787,6 +795,7 @@ impl Default for Mailbox {
             ime_session: 0,
             preedit: Arc::from(""),
             display_preferences: DisplayPreferences::default(),
+            pan: 0.,
             // A fresh session tails its pane until the user scrolls back.
             follow: true,
         }
@@ -867,11 +876,30 @@ impl Mailbox {
         true
     }
 
+
+    /// Horizontal pan in logical pixels, bounded. Returns whether it moved, so
+    /// callers only repaint on a real change.
+    pub fn pan(&mut self, delta: f32) -> bool {
+        if !delta.is_finite() {
+            return false;
+        }
+        let next = (self.pan + delta).clamp(0., MAX_PAN);
+        if (next - self.pan).abs() < 0.5 {
+            return false;
+        }
+        self.pan = next;
+        self.revision = self.revision.wrapping_add(1);
+        #[cfg(feature = "android-ui")]
+        signal_change();
+        true
+    }
+
     pub fn state(&self) -> ViewState {
         ViewState {
             generation: self.generation,
             active: self.active,
             revision: self.revision,
+            pan: self.pan,
             snapshot: self.snapshot.clone(),
             preedit: self.preedit.clone(),
             display_preferences: self.display_preferences,
@@ -1089,6 +1117,22 @@ mod tests {
         assert!(box_.state().snapshot.lines.is_empty());
     }
     #[test]
+    fn pan_is_bounded_and_only_reports_real_movement() {
+        let mut box_ = Mailbox::default();
+        assert_eq!(box_.state().pan, 0.);
+        assert!(!box_.pan(-96.));
+        assert!(box_.pan(96.));
+        assert_eq!(box_.state().pan, 96.);
+        for _ in 0..100 {
+            box_.pan(96.);
+        }
+        assert_eq!(box_.state().pan, MAX_PAN);
+        box_.pan(-MAX_PAN * 2.);
+        assert_eq!(box_.state().pan, 0.);
+        assert!(!box_.pan(f32::NAN));
+        assert_eq!(box_.state().pan, 0.);
+    }
+
     fn auto_type_fills_a_narrow_pane_and_stays_on_screen_for_a_wide_one() {
         let auto = DisplayPreferences::default();
         // A 70-cell pane on a 798 dp panel grows instead of leaving the row half empty.
