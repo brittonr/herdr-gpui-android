@@ -17,6 +17,9 @@ final class RemoteNative {
     static native void initialize(Context context);
     static native String inspect(String configJson);
     static native long connect(String configJson, String credentialJson);
+
+    /** Real columns,rows,cellW,cellH so the daemon renders a pane that fits the phone. */
+    static native long connectGrid(String configJson, String credentialJson, String grid);
     static native String poll(long handle, long sinceRevision, boolean mirror);
     static native String input(long handle, String paneId, String commandJson);
     static native String focus(long handle, String paneId);

@@ -279,6 +279,31 @@ pub fn connect(raw: &str, password: String) -> Result<u64> {
     begin(raw, Credentials::password(std::mem::take(&mut *password)))
 }
 
+/// "cols,rows,cell_w_px,cell_h_px" from the phone's surface. Out-of-range or
+/// malformed input falls back to the 80x24 default rather than a guessed grid.
+fn parse_grid(raw: &str) -> herdr_client::ConnectOptions {
+    let mut parts = raw.split(',').map(str::trim);
+    let cols = parts.next().and_then(|v| v.parse::<u16>().ok());
+    let rows = parts.next().and_then(|v| v.parse::<u16>().ok());
+    let cell_w = parts.next().and_then(|v| v.parse::<u32>().ok());
+    let cell_h = parts.next().and_then(|v| v.parse::<u32>().ok());
+    match (cols, rows, cell_w, cell_h) {
+        (Some(cols), Some(rows), Some(cell_w), Some(cell_h))
+            if (20..=400).contains(&cols)
+                && (5..=200).contains(&rows)
+                && (1..=64).contains(&cell_w)
+                && (1..=64).contains(&cell_h) =>
+        {
+            herdr_client::ConnectOptions {
+                surface_size: ClientSurfaceSize { cols, rows },
+                cell_width_px: cell_w,
+                cell_height_px: cell_h,
+            }
+        }
+        _ => herdr_client::ConnectOptions::default(),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WireCredentials {
@@ -317,9 +342,20 @@ fn parse_credentials(raw: &str) -> Result<Credentials> {
 /// JNI retains the raw credential JSON in a zeroizing buffer until this returns.
 /// Parsed secrets move directly into transport-owned zeroizing storage.
 pub fn connect_credentials(raw: &str, credential_json: &str) -> Result<u64> {
-    begin(raw, parse_credentials(credential_json)?)
+    begin_with_grid(raw, parse_credentials(credential_json)?, "")
 }
+
+/// The phone's real grid; see `parse_grid` for the accepted form.
+pub fn connect_credentials_grid(raw: &str, credential_json: &str, grid: &str) -> Result<u64> {
+    begin_with_grid(raw, parse_credentials(credential_json)?, grid)
+}
+
 fn begin(raw: &str, credentials: Credentials) -> Result<u64> {
+    begin_with_grid(raw, credentials, "")
+}
+
+fn begin_with_grid(raw: &str, credentials: Credentials, grid: &str) -> Result<u64> {
+    let grid = grid.to_owned();
     let (config, name) = parse_config(raw)?;
     let mut all = lock(sessions());
     if all.len() >= MAX_HANDLES {
@@ -337,7 +373,7 @@ fn begin(raw: &str, credentials: Credentials) -> Result<u64> {
     std::thread::Builder::new()
         .name("herdr-android-session".into())
         .spawn(move || {
-            if let Err(error) = run(&worker, config, credentials, name) {
+            if let Err(error) = run(&worker, config, credentials, name, parse_grid(&grid)) {
                 finish(&worker, &error.to_string());
             }
         })?;
@@ -451,7 +487,13 @@ fn clean(raw: &str, max: usize) -> String {
     result
 }
 
-fn run(owner: &Arc<Session>, config: Config, credentials: Credentials, name: String) -> Result<()> {
+fn run(
+    owner: &Arc<Session>,
+    config: Config,
+    credentials: Credentials,
+    name: String,
+    options: herdr_client::ConnectOptions,
+) -> Result<()> {
     let runtime = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -464,7 +506,7 @@ fn run(owner: &Arc<Session>, config: Config, credentials: Credentials, name: Str
     let (setup_finished, setup_done) = std::sync::mpsc::sync_channel(1);
     let cancel = owner.cancel.clone();
     let client =
-        herdr_client::connect_with_remote_connector(Default::default(), true, move |stop| {
+        herdr_client::connect_with_remote_connector(options, true, move |stop| {
             let setup = || -> Result<_> {
                 let mut ssh = worker_runtime.block_on(herdr_remote_transport::connect(
                     &config,

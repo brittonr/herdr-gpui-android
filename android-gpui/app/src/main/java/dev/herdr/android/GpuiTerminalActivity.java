@@ -310,6 +310,23 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         }
     }
 
+
+    /**
+     * Real terminal grid for the daemon: the monospace cell box the renderer
+     * uses, so Herdr sizes the pane to this display instead of 80x24.
+     */
+    private String terminalGrid() {
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        int stored = getSharedPreferences("terminal-display", MODE_PRIVATE).getInt("font", 13);
+        float fontPx = Math.max(8f, (stored > 0 ? stored : 13) * getResources()
+                .getConfiguration().fontScale * dm.density / dm.scaledDensity * dm.density);
+        int cellW = Math.max(1, Math.round(fontPx * 0.6f));
+        int cellH = Math.max(1, Math.round(fontPx * 1.25f));
+        int cols = Math.min(400, Math.max(20, dm.widthPixels / cellW));
+        int rows = Math.min(200, Math.max(5, (dm.heightPixels - dp(48) * 3) / cellH));
+        return cols + "," + rows + "," + cellW + "," + cellH;
+    }
+
     private View createShortcutBar() {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
@@ -735,7 +752,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 } finally {
                     java.util.Arrays.fill(key, '\0');
                 }
-                long handle = RemoteNative.connect(host.connectionJson(), credential);
+                long handle = RemoteNative.connectGrid(host.connectionJson(), credential, terminalGrid());
                 if (handle <= 0) throw new IllegalStateException("connect refused");
                 sample.handle = handle;
                 sample.connected = false;
@@ -851,7 +868,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 } finally {
                     java.util.Arrays.fill(key, '\0');
                 }
-                handle = RemoteNative.connect(host.connectionJson(), credential);
+                handle = RemoteNative.connectGrid(host.connectionJson(), credential, terminalGrid());
                 if (handle <= 0) throw new IllegalStateException("connection refused");
                 String chosen = awaitHostPane(handle, host.id, forcedPane);
                 final long readyHandle = handle;

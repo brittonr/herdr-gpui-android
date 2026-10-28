@@ -124,6 +124,35 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_inspect(
     result_string(&mut env, remote::inspect(&config))
 }
 
+/// Grid-aware connect: the phone reports its real columns, rows and cell box so
+/// Herdr renders a pane that fills the display instead of the 80x24 default.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_connectGrid(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    config: JString<'_>,
+    credentials: JString<'_>,
+    grid: JString<'_>,
+) -> jlong {
+    let Some(config) = read(&mut env, &config, 8192) else {
+        return 0;
+    };
+    let Some(credentials) = read(&mut env, &credentials, remote::MAX_CREDENTIAL_JSON) else {
+        return 0;
+    };
+    let Some(grid) = read(&mut env, &grid, 64) else {
+        return 0;
+    };
+    match remote::connect_credentials_grid(&config, &credentials, &grid) {
+        Ok(handle) => handle as jlong,
+        Err(error) => {
+            fail(&mut env, &error.to_string());
+            0
+        }
+    }
+}
+
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_RemoteNative_connect(
