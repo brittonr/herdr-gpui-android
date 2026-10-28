@@ -868,7 +868,7 @@ public final class RemoteHostsActivity extends Activity {
         button.setTextColor(0xffdce5ef);
         button.setTextSize(14);
         button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff1e222a));
-        button.setMinHeight(dp(44));
+        button.setMinHeight(dp(48));
         button.setStateListAnimator(null);
         privateView(button);
         button.setOnClickListener(view -> action.run());

@@ -1316,8 +1316,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         TextView row = railText("", 12, 0xffc2ccda);
         row.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
                 android.graphics.Typeface.NORMAL));
-        row.setMinimumHeight(dp(44));
-        row.setPadding(dp(10), dp(11), dp(6), dp(5));
+        row.setMinimumHeight(dp(48));
+        row.setPadding(dp(10), dp(13), dp(6), dp(7));
         row.setOnClickListener(view -> {
             if (holder.live) focusChrome(holder.connection, "workspace", holder.workspaceId);
         });
@@ -1522,7 +1522,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                     row.addView(chromeDot(tab.optString("status", "unknown")));
                     row.addView(chromeLabel(chromeTitle(tab.optString("label", ""), tab.optString("id", "")),
                             13, tab.optBoolean("focused") ? 0xe7eaf0 : 0x8c9bb0, false));
-                    row.setMinimumHeight(dp(40));
+                    // 48 dp is Android's minimum touch target; 40 was below it.
+                    row.setMinimumHeight(dp(48));
                     row.setContentDescription("Focus tab " + chromeTitle(tab.optString("label", ""), tab.optString("id", "")));
                     String tabId = tab.optString("id", "");
                     row.setOnClickListener(view -> {
