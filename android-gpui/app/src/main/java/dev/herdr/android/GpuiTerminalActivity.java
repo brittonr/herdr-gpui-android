@@ -540,6 +540,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (hostId == null || paneId == null || paneId.isEmpty()) return;
         getSharedPreferences("terminal-host-panes", MODE_PRIVATE).edit()
                 .putString(hostId, paneId).apply();
+        String preference = "remote-startup";
+        getSharedPreferences(preference, MODE_PRIVATE).edit()
+                .putString("last_host", hostId)
+                .putString("last_pane", paneId)
+                .apply();
     }
 
     private String rememberedHostPane(String hostId) {
@@ -1107,14 +1112,21 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             Toast.makeText(this, "Session controls need the SSH workflow", Toast.LENGTH_LONG).show();
             return;
         }
-        String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab", "Jump to live output"};
-        String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close", "scroll.live"};
+        String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab",
+                "Jump to live output", "Remote hosts…"};
+        String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close",
+                "scroll.live", "hosts.list"};
         new AlertDialog.Builder(this)
                 .setTitle("Session · " + (connection == null ? launch.name() : connection.title))
                 .setItems(labels, (dialog, which) -> {
                     String action = actions[which];
                     if ("scroll.live".equals(action)) {
                         jumpToLive();
+                        return;
+                    }
+                    if ("hosts.list".equals(action)) {
+                        startActivity(new android.content.Intent(this, RemoteHostsActivity.class)
+                                .putExtra("skip_reopen", true));
                         return;
                     }
                     if ("pane.close".equals(action) || "tab.close".equals(action)) {

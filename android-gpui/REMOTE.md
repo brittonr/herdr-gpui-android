@@ -99,6 +99,12 @@ client forwards only `http` and `https` targets, at most 2 KiB without control
 characters, and the activity rechecks the scheme before starting the intent; no
 file, `intent:` or custom scheme is reachable this way.
 
+Launching reopens the remembered session: the app reads the last host and pane,
+verifies the pinned fingerprint, connects with the saved device key and starts
+the terminal without showing the host list. The list remains reachable from the
+terminal's **Tab > Remote hosts…**, where **Reopen the last session at launch**
+switches the behaviour back to starting on the list.
+
 The rail is open by default at every width and its hidden/shown choice persists;
 **List** / **Hide** toggles it. It lists every saved host above the session tree. Choosing one
 opens a new SSH connection with the saved device key, focuses the pane this phone

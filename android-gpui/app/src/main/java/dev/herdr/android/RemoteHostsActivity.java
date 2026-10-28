@@ -47,6 +47,7 @@ public final class RemoteHostsActivity extends Activity {
     private SavedRemoteHost selected;
     private volatile long ownedHandle;
     private boolean openingPane;
+    private boolean reopenedThisVisit;
     private String paneSnapshot = "";
 
     @Override public void onCreate(Bundle state) {
@@ -60,6 +61,13 @@ public final class RemoteHostsActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         visible = true;
+        // Reopening should land in the terminal, not this list; the list is the
+        // fallback when the remembered session cannot be restored.
+        boolean skip = getIntent() != null && getIntent().getBooleanExtra("skip_reopen", false);
+        if (!skip && !reopenedThisVisit && reopenEnabled() && queueReopen()) {
+            reopenedThisVisit = true;
+            return;
+        }
         showProfiles();
     }
 
@@ -95,6 +103,116 @@ public final class RemoteHostsActivity extends Activity {
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
+    }
+
+    private static final String STARTUP = "remote-startup";
+
+    static boolean reopenEnabled(android.content.Context context) {
+        return context.getSharedPreferences(STARTUP, MODE_PRIVATE).getBoolean("reopen", true);
+    }
+
+    private boolean reopenEnabled() { return reopenEnabled(this); }
+
+    /** Remembered host and pane for the next launch, written when a pane opens. */
+    static void rememberLastSession(android.content.Context context, SavedRemoteHost host, String paneId) {
+        if (host == null || paneId == null || paneId.isEmpty()) return;
+        context.getSharedPreferences(STARTUP, MODE_PRIVATE).edit()
+                .putString("last_host", host.id)
+                .putString("last_pane", paneId)
+                .apply();
+    }
+
+    /** Starts the remembered session on the worker; returns false when nothing is remembered. */
+    private boolean queueReopen() {
+        android.content.SharedPreferences prefs = getSharedPreferences(STARTUP, MODE_PRIVATE);
+        String hostId = prefs.getString("last_host", "");
+        String paneId = prefs.getString("last_pane", "");
+        if (hostId.isEmpty() || paneId.isEmpty()) return false;
+        setStatus("Reopening the last session…");
+        int token = generation;
+        submit(() -> {
+            if (!current(token)) return;
+            SavedRemoteHost host = null;
+            try {
+                for (SavedRemoteHost candidate : store.read()) {
+                    if (candidate.id.equals(hostId)) host = candidate;
+                }
+            } catch (Exception unreadable) {
+                host = null;
+            }
+            if (host == null || host.expectedFingerprint.isEmpty() || !identityStore.exists()) {
+                main.post(() -> { if (current(token)) showProfiles(); });
+                return;
+            }
+            long handle = 0;
+            try {
+                RemoteNative.ensureLoaded(this);
+                JSONObject inspection = result(RemoteNative.inspect(host.connectionJson()));
+                String key = SavedRemoteHost.fingerprint(inspection.getString("fingerprint"));
+                if (!host.expectedFingerprint.equals(key)) throw new IllegalStateException("host key changed");
+                char[] secret = identityStore.read();
+                String credential;
+                try {
+                    credential = new JSONObject().put("private_key", new String(secret)).toString();
+                } finally { Arrays.fill(secret, '\0'); }
+                handle = RemoteNative.connect(host.connectionJson(), credential);
+                if (handle <= 0) throw new IllegalStateException("connect refused");
+                String focused = reopenPane(handle, paneId);
+                final long readyHandle = handle;
+                final String readyPane = focused;
+                final SavedRemoteHost readyHost = host;
+                main.post(() -> {
+                    if (!current(token)) { RemoteNative.close(readyHandle); return; }
+                    try {
+                        GpuiLaunch.launchRemote(this, readyHost, readyHandle, readyPane, readyPane);
+                        rememberLastSession(this, readyHost, readyPane);
+                        finish();
+                    } catch (Exception | LinkageError failure) {
+                        RemoteNative.close(readyHandle);
+                        showProfiles();
+                        setStatus("The last session could not be reopened. Pick a host to continue.");
+                    }
+                });
+                handle = 0;
+            } catch (Exception | LinkageError failure) {
+                if (handle != 0) RemoteNative.close(handle);
+                main.post(() -> { if (current(token)) { showProfiles(); setStatus("The last session could not be reopened. Pick a host to continue."); } });
+            }
+        });
+        return true;
+    }
+
+    /** Waits for the session and focuses the remembered pane, or a live one. */
+    private String reopenPane(long handle, String remembered) throws Exception {
+        long until = System.currentTimeMillis() + 30_000;
+        JSONObject state = null;
+        while (System.currentTimeMillis() < until) {
+            state = new JSONObject(RemoteNative.poll(handle));
+            String phase = state.optString("state");
+            if ("closed".equals(phase)) throw new IllegalStateException("closed");
+            org.json.JSONArray panes = state.optJSONArray("panes");
+            if ("ready".equals(phase) || panes != null && panes.length() > 0) break;
+            Thread.sleep(150);
+        }
+        org.json.JSONArray panes = state == null ? null : state.optJSONArray("panes");
+        if (panes == null || panes.length() == 0) throw new IllegalStateException("no panes");
+        String pane = "";
+        for (int i = 0; i < panes.length(); i++) {
+            if (remembered.equals(panes.getJSONObject(i).optString("id", ""))) pane = remembered;
+        }
+        for (int i = 0; i < panes.length() && pane.isEmpty(); i++) {
+            String status = panes.getJSONObject(i).optString("status", "");
+            if (!"unknown".equals(status) && !"idle".equals(status)) pane = panes.getJSONObject(i).optString("id", "");
+        }
+        if (pane.isEmpty()) pane = panes.getJSONObject(0).optString("id", "");
+        RemoteNative.focus(handle, pane);
+        until = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < until) {
+            state = new JSONObject(RemoteNative.poll(handle));
+            if (pane.equals(state.optString("pane_id")) && "ready".equals(state.optString("state"))) break;
+            Thread.sleep(150);
+        }
+        return pane;
     }
 
     private void cancelConnection() {
@@ -151,6 +269,23 @@ public final class RemoteHostsActivity extends Activity {
             content.addView(label("An encrypted SSH identity is saved in Android Keystore-backed storage on this device.", 13, MUTED));
             content.addView(button("Remove saved SSH key", this::removeIdentity));
         }
+        android.widget.CheckBox reopen = new android.widget.CheckBox(this);
+        reopen.setText("Reopen the last session at launch");
+        reopen.setTextColor(TEXT);
+        reopen.setTextSize(14);
+        reopen.setChecked(reopenEnabled());
+        reopen.setSaveEnabled(false);
+        content.addView(reopen);
+        TextView reopenHint = label(reopen.isChecked()
+                ? "The app opens the remembered host and pane instead of this list."
+                : "The app opens this host list every time.", 13, MUTED);
+        content.addView(reopenHint);
+        reopen.setOnCheckedChangeListener((view, checked) -> {
+            getSharedPreferences(STARTUP, MODE_PRIVATE).edit().putBoolean("reopen", checked).apply();
+            reopenHint.setText(checked
+                    ? "The app opens the remembered host and pane instead of this list."
+                    : "The app opens this host list every time.");
+        });
         content.addView(button("Add remote host", () -> editProfile(null)));
         content.addView(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class))));
         content.addView(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
@@ -557,6 +692,7 @@ public final class RemoteHostsActivity extends Activity {
         }, currentHost -> {
             if (ownedHandle != handle) return;
             try {
+                rememberLastSession(this, currentHost, id);
                 GpuiLaunch.launchRemote(this, currentHost, handle, id, title);
                 // startActivity succeeded: only the launch grant/terminal now owns the handle.
                 ownedHandle = 0;
