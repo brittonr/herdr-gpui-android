@@ -100,13 +100,16 @@ public final class RemoteHostsActivity extends Activity {
     private void shell() {
         LinearLayout root = column();
         root.setBackgroundColor(BG);
-        root.setPadding(dp(16), dp(12), dp(16), dp(12));
+        // fitSystemWindows overwrites any padding set on the same view, which left
+        // every line flush to the rounded edge; the inset belongs on the content.
         root.setFitsSystemWindows(true);
         privateView(root);
         status = label("", 14, MUTED);
+        status.setPadding(dp(16), dp(12), dp(16), 0);
         root.addView(status);
         ScrollView scroll = new ScrollView(this);
         content = column();
+        content.setPadding(dp(16), dp(12), dp(16), dp(12));
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
@@ -220,7 +223,8 @@ public final class RemoteHostsActivity extends Activity {
                 try {
                     GpuiLaunch.launchRemote(this, host, readyHandle, readyPane, readyPane);
                     rememberLastSession(this, host, readyPane);
-                    finish();
+                    // Stay on the back stack: the terminal's Back button and the
+                    // system gesture both promise a return to this host list.
                 } catch (Exception | LinkageError failure) {
                     RemoteNative.close(readyHandle);
                 }
@@ -356,10 +360,22 @@ public final class RemoteHostsActivity extends Activity {
                     : "Iroh · " + host.endpointId + " · " + host.session, 14, MUTED));
             card.addView(label(host.expectedFingerprint.isEmpty() ? "Host key not trusted yet" : host.expectedFingerprint, 12, MUTED));
             card.addView(button("Connect", () -> inspectHost(host)));
-            card.addView(button("Edit profile", () -> editProfile(host)));
-            card.addView(button("Edit extra keys", () -> editShortcuts(host)));
-            if (!host.expectedFingerprint.isEmpty()) card.addView(button("Forget SSH trust", () -> forgetTrust(host)));
-            card.addView(button("Delete profile", () -> deleteProfile(host)));
+            // One primary action; secondary and destructive actions share rows so
+            // "Delete profile" never carries the same weight as "Connect".
+            LinearLayout secondary = row();
+            secondary.addView(weighted(button("Edit profile", () -> editProfile(host))));
+            secondary.addView(weighted(button("Edit extra keys", () -> editShortcuts(host))));
+            card.addView(secondary);
+            LinearLayout destructive = row();
+            if (!host.expectedFingerprint.isEmpty()) {
+                Button forget = button("Forget SSH trust", () -> forgetTrust(host));
+                forget.setTextColor(0xffe0a0a0);
+                destructive.addView(weighted(forget));
+            }
+            Button delete = button("Delete profile", () -> deleteProfile(host));
+            delete.setTextColor(0xffe0a0a0);
+            destructive.addView(weighted(delete));
+            card.addView(destructive);
             content.addView(card);
         }
     }
@@ -874,6 +890,24 @@ public final class RemoteHostsActivity extends Activity {
         button.setOnClickListener(view -> action.run());
         return button;
     }
+
+    private LinearLayout row() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(4), 0, 0);
+        privateView(row);
+        return row;
+    }
+
+    /** Half-width sibling in a row: weight carries the width, margin the gap. */
+    private Button weighted(Button button) {
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        params.setMarginEnd(dp(4));
+        button.setLayoutParams(params);
+        return button;
+    }
+
     private LinearLayout column() {
         LinearLayout result = new LinearLayout(this);
         result.setOrientation(LinearLayout.VERTICAL); privateView(result);
