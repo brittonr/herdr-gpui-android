@@ -147,10 +147,12 @@ requested.
    Iroh additionally needs its SSH receiver. See [remote setup](REMOTE.md).
 2. Install the Remote preview and add a TCP or Iroh profile.
 3. Independently verify its SSH fingerprint, authenticate, and select a pane.
-4. Use **Panes** to switch workspace, tab or pane from the daemon's own snapshot:
-   each row carries the agent status dot (idle, working, blocked, done) and a tap
-   focuses that pane without leaving the terminal. **Cmds** opens editable OMP
-   commands and **View** the compact display options.
+4. Use **List** for the workspace/agent rail (it opens by default where width
+   allows) or **Panes** for the same session tree as a sheet. Workspace, tab and
+   pane rows carry the agent status dot (idle, working, blocked, done); a tap
+   switches workspace or tab, or focuses that pane, without leaving the
+   terminal. **Cmds** opens editable OMP commands and **View** the compact
+   display options.
 
 For the optional HTTPS workflow, open **Companion hosts** and use the
 [companion setup](../android/README.md#host-prerequisites), then tap **GPUI** from

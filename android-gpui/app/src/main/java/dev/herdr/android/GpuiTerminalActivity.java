@@ -77,6 +77,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private GpuiDisplayOptions displayOptions;
     private boolean compactDisplay;
     private FrameLayout terminalRoot;
+    private LinearLayout sidebar, sidebarRows;
+    private ScrollView sidebarScroll;
+    private Button sidebarButton;
+    private volatile boolean sidebarOpen;
+    private String sidebarSignature = "";
     private AlertDialog displayDialog;
     private Button controlButton;
     private boolean controlLatched;
@@ -160,11 +165,28 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         content.setOrientation(LinearLayout.VERTICAL);
         content.addView(surface, new LinearLayout.LayoutParams(-1, 0, 1));
         content.addView(createShortcutBar(), new LinearLayout.LayoutParams(-1, dp(48)));
-        root.addView(content, new FrameLayout.LayoutParams(-1, -1));
+        // The sidebar rail mirrors the desktop's list of workspaces and agents.
+        sidebar = new LinearLayout(this);
+        sidebar.setOrientation(LinearLayout.VERTICAL);
+        sidebar.setBackgroundColor(0xff161a21);
+        sidebar.setSaveFromParentEnabled(false);
+        sidebarScroll = new ScrollView(this);
+        sidebarScroll.setBackgroundColor(0xff161a21);
+        sidebarRows = new LinearLayout(this);
+        sidebarRows.setOrientation(LinearLayout.VERTICAL);
+        sidebarRows.setPadding(dp(10), dp(8), dp(10), dp(8));
+        sidebarScroll.addView(sidebarRows);
+        sidebar.addView(sidebarScroll, new LinearLayout.LayoutParams(-1, -1));
+        LinearLayout columns = new LinearLayout(this);
+        columns.setOrientation(LinearLayout.HORIZONTAL);
+        columns.addView(sidebar, new LinearLayout.LayoutParams(0, -1));
+        columns.addView(content, new LinearLayout.LayoutParams(0, -1, 1));
+        root.addView(columns, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         root.requestApplyInsets();
         surface.requestFocus();
         root.post(this::hideInitialKeyboard);
+        root.post(() -> { applySidebarDefault(); refreshSidebar(true); });
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) controller.setSystemBarsAppearance(0,
@@ -192,6 +214,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         panes.setOnClickListener(view -> showPanes());
         synchronousTouch(panes);
         bar.addView(panes, new LinearLayout.LayoutParams(dp(64), dp(48)));
+        sidebarButton = localButton("List");
+        sidebarButton.setContentDescription("Show or hide the workspace and agent sidebar");
+        sidebarButton.setOnClickListener(view -> toggleSidebar());
+        synchronousTouch(sidebarButton);
+        bar.addView(sidebarButton, new LinearLayout.LayoutParams(dp(56), dp(48)));
         HorizontalScrollView scroll = new HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.setBackgroundColor(0xff1e222a);
@@ -408,6 +435,81 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         dialog.show();
+    }
+
+    /** Persisted rail choice, defaulting to visible only where it fits. */
+    private void applySidebarDefault() {
+        boolean wide = getResources().getConfiguration().screenWidthDp >= 700;
+        sidebarOpen = wide;
+        applySidebarWidth();
+    }
+
+    private void toggleSidebar() {
+        sidebarOpen = !sidebarOpen;
+        applySidebarWidth();
+        if (sidebarOpen) refreshSidebar(true);
+    }
+
+    private void applySidebarWidth() {
+        if (sidebar == null) return;
+        int width = sidebarOpen ? Math.min(dp(240), Math.max(dp(160),
+                terminalRoot == null ? dp(200) : terminalRoot.getWidth() / 3)) : 0;
+        LinearLayout.LayoutParams layout = (LinearLayout.LayoutParams) sidebar.getLayoutParams();
+        if (layout != null && layout.width != width) {
+            layout.width = width;
+            sidebar.setLayoutParams(layout);
+        }
+        if (sidebarButton != null) {
+            sidebarButton.setText(sidebarOpen ? "Hide" : "List");
+            sidebarButton.setSelected(sidebarOpen);
+        }
+    }
+
+    /** Rebuilds the rail only when the daemon's chrome actually changed. */
+    private void refreshSidebar(boolean force) {
+        if (!sidebarOpen || sidebarRows == null) return;
+        Connection current = null;
+        synchronized (stateLock) { current = connection; }
+        if (current == null || current.isClosed()) return;
+        JSONArray workspaces = current.workspaces, tabs = current.tabs, panes = current.panes;
+        String signature = String.valueOf(workspaces) + String.valueOf(tabs)
+                + String.valueOf(panes) + '|' + current.paneId;
+        if (!force && signature.equals(sidebarSignature)) return;
+        sidebarSignature = signature;
+        final Connection target = current;
+        sidebarRows.removeAllViews();
+        if (workspaces == null || panes == null) {
+            sidebarRows.addView(chromeLabel("No session chrome yet", 12, 0x8c9bb0, false));
+            return;
+        }
+        for (int w = 0; w < workspaces.length(); w++) {
+            JSONObject workspace = workspaces.optJSONObject(w);
+            if (workspace == null) continue;
+            String workspaceId = workspace.optString("id", "");
+            String workspaceLabel = chromeTitle(workspace.optString("label", ""), workspaceId);
+            TextView header = chromeLabel(workspaceLabel, 13, 0x9fb0c6, true);
+            header.setMinimumHeight(dp(36));
+            header.setContentDescription("Focus workspace " + workspaceLabel);
+            header.setOnClickListener(view -> focusChrome(target, "workspace", workspaceId));
+            sidebarRows.addView(header);
+            for (int p = 0; p < panes.length(); p++) {
+                JSONObject pane = panes.optJSONObject(p);
+                if (pane == null || !workspaceId.equals(pane.optString("workspace_id", ""))) continue;
+                String paneId = pane.optString("id", "");
+                String title = chromeTitle(pane.optString("title", ""), paneId);
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                row.setMinimumHeight(dp(44));
+                row.setSaveFromParentEnabled(false);
+                row.addView(chromeDot(pane.optString("status", "unknown")));
+                row.addView(chromeLabel(title, 12,
+                        paneId.equals(target.paneId) ? 0x76d3b2 : 0xc9d3df, false));
+                row.setContentDescription("Focus pane " + title);
+                row.setOnClickListener(view -> focusRemotePane(target, paneId));
+                sidebarRows.addView(row);
+            }
+        }
     }
 
     /** Workspace, tab and agent chrome from the daemon snapshot; a tap focuses that pane in place. */
@@ -1027,6 +1129,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 publish(current, selected ? "SSH connected · " + launch.name() : "Waiting for selected remote pane…");
                 nativeSetActive(current.generation, selected);
             }
+            main.post(() -> refreshSidebar(false));
         } catch (IOException | JSONException | RuntimeException failure) {
             fail(current, mutation
                     ? "SSH input stopped; it may have reached the host. Reconnect and inspect before retrying"

@@ -93,12 +93,12 @@ validated binary surface. Runs must tile each row exactly or the row falls back
 to plain text, so a malformed surface can never misalign colors. Graphics,
 images, unlimited scrollback and split-pane painting are not rendered yet.
 
-**Panes** in the terminal lists the session's workspaces, tabs and panes from
-the daemon snapshot, each with its agent status. Choosing a pane sends one
-`pane.focus` request and keeps the same connection; the surface that follows is
-validated against the same boot ID and projection revision. Tab and workspace
-switch requests and a sidebar of their own are not implemented yet, so those
-rows are labels rather than controls.
+**List** shows a workspace/agent rail and **Panes** the same session tree as a
+sheet, both from the daemon snapshot and each row carrying its agent status.
+Choosing a pane sends one `pane.focus`; choosing a tab or workspace sends
+`tab.focus` or `workspace.focus` and then follows the pane the daemon focuses,
+while another client's focus move is ignored. Every surface that follows is
+validated against the same boot ID and projection revision.
 
 ## SSH over Iroh
 
