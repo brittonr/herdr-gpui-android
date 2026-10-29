@@ -136,6 +136,8 @@ public final class DeviceDiagnosticsActivity extends Activity {
         root.addView(read);
 
         output = label("", 14, TEXT);
+        // The snapshot is JSON: machine text uses the mono face, as in the terminal.
+        output.setTypeface(android.graphics.Typeface.MONOSPACE);
         output.setTextIsSelectable(true);
         ScrollView scroll = new ScrollView(this);
         privateView(scroll);
