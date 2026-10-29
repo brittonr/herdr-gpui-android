@@ -12,14 +12,19 @@ import org.json.JSONObject;
 
 /** Immutable remote profile. Passwords are deliberately absent from this schema. */
 final class SavedRemoteHost {
-    final String id, name, transport, host, endpointId, username, session;
+    /** Matches the native parser's limit for pasted Iroh text. */
+    static final int MAX_TICKET = 4096;
+    /** Matches the native parser's limit for relay URLs. */
+    static final int MAX_RELAY = 512;
+    final String id, name, transport, host, endpointId, endpointTicket, relayUrl, username, session;
     final int port;
     final String expectedFingerprint, shortcuts, connectionRevision;
     final List<QuickCommand> quickCommands;
 
     SavedRemoteHost(String id, String name, String transport, String host, int port,
-            String endpointId, String username, String session, String expectedFingerprint,
-            String shortcuts, List<QuickCommand> quickCommands, String connectionRevision) {
+            String endpointId, String endpointTicket, String relayUrl, String username,
+            String session, String expectedFingerprint, String shortcuts,
+            List<QuickCommand> quickCommands, String connectionRevision) {
         this.id = id == null ? UUID.randomUUID().toString() : uuid(id);
         this.name = plain(name, 80, "Profile name");
         if (!"tcp".equals(transport) && !"iroh".equals(transport)) {
@@ -32,9 +37,13 @@ final class SavedRemoteHost {
             if (port < 1 || port > 65535) throw new IllegalArgumentException("SSH port must be 1–65535");
             this.port = port;
             this.endpointId = "";
+            this.endpointTicket = "";
+            this.relayUrl = "";
         } else {
             this.endpointId = plain(endpointId, 128, "Iroh endpoint ID");
             if (!this.endpointId.matches("[A-Za-z0-9]+")) throw new IllegalArgumentException("Enter the Iroh endpoint ID, without a URL");
+            this.endpointTicket = ticket(endpointTicket);
+            this.relayUrl = relay(relayUrl);
             this.host = "";
             this.port = 22; // The receiver chooses its SSH target; this value is unused by Iroh.
         }
@@ -50,11 +59,15 @@ final class SavedRemoteHost {
     }
 
     static SavedRemoteHost create(String name, String transport, String host, int port,
-            String endpointId, String username, String session) {
-        return new SavedRemoteHost(null, name, transport, host, port, endpointId, username, session,
-                "", SavedHost.DEFAULT_KEYS, OmpQuickCommands.defaults(), null);
+            String endpointId, String endpointTicket, String relayUrl, String username, String session) {
+        return new SavedRemoteHost(null, name, transport, host, port, endpointId, endpointTicket,
+                relayUrl, username, session, "", SavedHost.DEFAULT_KEYS, OmpQuickCommands.defaults(), null);
     }
 
+    /**
+     * A ticket and a relay only route to the same endpoint, which Iroh authenticates by its
+     * ID, so neither changes identity or trust.
+     */
     boolean sameIdentity(SavedRemoteHost other) {
         return other != null && transport.equals(other.transport) && host.equals(other.host)
             && port == other.port && endpointId.equals(other.endpointId) && username.equals(other.username)
@@ -68,13 +81,14 @@ final class SavedRemoteHost {
     }
 
     SavedRemoteHost copy(String newName, String pin, String keys, List<QuickCommand> commands, String revision) {
-        return new SavedRemoteHost(id, newName, transport, host, port, endpointId, username, session,
-                pin, keys, commands, revision);
+        return new SavedRemoteHost(id, newName, transport, host, port, endpointId, endpointTicket,
+                relayUrl, username, session, pin, keys, commands, revision);
     }
 
     String connectionJson() throws JSONException {
         return new JSONObject().put("transport", transport).put("host", host).put("port", port)
-            .put("endpoint_id", endpointId).put("username", username).put("session", session)
+            .put("endpoint_id", endpointId).put("endpoint_ticket", endpointTicket)
+            .put("relay_url", relayUrl).put("username", username).put("session", session)
             .put("expected_fingerprint", expectedFingerprint).toString();
     }
 
@@ -101,7 +115,11 @@ final class SavedRemoteHost {
         long portValue = ((Number) port).longValue();
         if (portValue < 1 || portValue > 65535) throw new IllegalArgumentException("Invalid SSH port");
         return new SavedRemoteHost(string(value, "id"), string(value, "name"), string(value, "transport"),
-            string(value, "host"), (int) portValue, string(value, "endpoint_id"), string(value, "username"),
+            string(value, "host"), (int) portValue, string(value, "endpoint_id"),
+            // Profiles saved before tickets and relays existed have neither.
+            value.has("endpoint_ticket") ? string(value, "endpoint_ticket") : "",
+            value.has("relay_url") ? string(value, "relay_url") : "",
+            string(value, "username"),
             string(value, "session"), string(value, "expected_fingerprint"), string(value, "shortcuts"),
             commands, string(value, "connectionRevision"));
     }
@@ -118,6 +136,24 @@ final class SavedRemoteHost {
         Object result = value.get(key);
         if (!(result instanceof String)) throw new IllegalArgumentException("Invalid saved remote profile");
         return (String) result;
+    }
+
+    /** Empty, or the canonical ticket from the native parser, which also checks its endpoint. */
+    private static String ticket(String value) {
+        if (value == null || value.length() > MAX_TICKET
+                || !value.isEmpty() && !value.matches("endpoint[a-z2-7]+")) {
+            throw new IllegalArgumentException("Invalid Iroh ticket");
+        }
+        return value;
+    }
+
+    /** Empty, or the canonical relay URL from the native parser. */
+    private static String relay(String value) {
+        if (value == null || value.length() > MAX_RELAY
+                || !value.isEmpty() && !value.matches("https?://\\S+")) {
+            throw new IllegalArgumentException("Invalid Iroh relay URL");
+        }
+        return value;
     }
 
     private static String plain(String value, int max, String label) {

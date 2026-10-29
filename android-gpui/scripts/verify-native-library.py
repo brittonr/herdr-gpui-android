@@ -89,7 +89,7 @@ def verify_elf(data, *, runtime=False, expected_api=None, abi='arm64-v8a'):
             'Java_dev_gpui_mobile_GpuiInputActivity_nativeIme',
             'Java_dev_herdr_android_GpuiChrome_nativeThemeColors',
             *('Java_dev_herdr_android_RemoteNative_' + name for name in (
-                'initialize', 'inspect', 'connect', 'poll', 'pollTerminal', 'input', 'focus', 'close',
+                'initialize', 'inspect', 'irohTarget', 'connect', 'poll', 'pollTerminal', 'input', 'focus', 'close',
                 'openShell', 'shellInput', 'shellAlive', 'shellText', 'closeShell',
             )),
             *('Java_dev_herdr_android_GpuiTerminalActivity_' + name for name in (

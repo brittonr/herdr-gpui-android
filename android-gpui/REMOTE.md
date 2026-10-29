@@ -317,10 +317,50 @@ validated against the same boot ID and projection revision.
 
 ## SSH over Iroh
 
-Choose **Iroh + SSH** and enter the receiver's endpoint ID, SSH username and
-Herdr session. The app uses Iroh's N0 address discovery and relay configuration;
-an ephemeral client identity is sufficient. Credentials still belong to SSH,
-and the server key is verified through the same explicit trust flow as TCP.
+Choose **Iroh + SSH** and paste the receiver's endpoint ID or an `endpoint…`
+ticket, then the SSH username and Herdr session. A ticket also names the relay
+URL and IP addresses the receiver published. The app dials those alongside
+Iroh's N0 address discovery and relays, so it can reach a receiver that
+publishes no discovery record. An ephemeral client identity is sufficient.
+Credentials still belong to SSH, and the server key is verified through the
+same explicit trust flow as TCP.
+
+The profile's identity is the endpoint ID, saved as lowercase hex. Pasting a
+newer ticket for the same endpoint keeps saved SSH trust; a different endpoint
+clears it. A ticket is refused when it is longer than 4096 characters, lists
+more than 32 addresses, names a relay that is not an `http` or `https` URL, uses
+a custom transport, or is not in its canonical encoding.
+
+**Paste endpoint or ticket** fills the field from the clipboard and selects
+**Iroh + SSH**; text that is neither an endpoint ID nor a valid ticket leaves
+the field unchanged. To move a ticket from the host, show it as a QR code there,
+for example with `qrencode -t ansiutf8 '<ticket>'`. Scan it with the phone's
+camera app, copy the text it offers, then tap Paste.
+
+**Your own relay.** To keep connections off Iroh's public infrastructure, set
+**Iroh relay URL** to your own
+[iroh-relay](https://github.com/n0-computer/iroh/tree/main/iroh-relay)
+server, for example `https://relay.example.com`, and give the receiver the same
+relay as its only relay. For iroh-ssh 0.2.12 that is
+`iroh-ssh server --relay-url https://relay.example.com`; `--extra-relay-url`
+keeps Iroh's public relays, so the receiver may choose one of those instead and
+the app cannot reach it. dumbpipe 0.40.1 has no relay option, so it cannot be
+used with this setting. With a relay set, the app uses only that relay. It does
+not contact Iroh's public relays, it neither looks up nor publishes endpoint
+addresses, and from a ticket it dials only the IP addresses, not the ticket's
+relay. Once the relay has introduced the two endpoints, Iroh may still connect
+directly to addresses the receiver announces.
+
+- An `https` relay needs a certificate from a public certificate authority: the
+  app checks it against Mozilla's root list built into Iroh, not against
+  certificates installed on the phone.
+- `http` relays work, for example `iroh-relay --dev` on a trusted network. The
+  relay never sees the SSH traffic, which stays encrypted end to end, but
+  without TLS the network can see which endpoints use the relay.
+- The URL must not contain a user name or password, and is limited to 512
+  characters. The relay replaces the URL's path with its own.
+- The relay only routes to the endpoint, which Iroh authenticates by its ID, so
+  changing or clearing the relay keeps saved SSH trust.
 
 The wire interoperability target is
 [rustonbsd/iroh-ssh 0.2.12](https://github.com/rustonbsd/iroh-ssh/tree/d0e9b6a823d25bf5b02757bbf9c17edeb39cfad5):
@@ -332,10 +372,41 @@ companion bearer token is required. The reference receiver does not add its own
 peer allowlist; knowing its endpoint ID permits reaching the SSH server, whose
 authentication remains essential.
 
+[dumbpipe 0.40.1](https://github.com/n0-computer/dumbpipe) also works as a
+receiver when told to accept that ALPN, and it prints a ticket to paste:
+
+```sh
+IROH_SECRET=<64 hex characters> dumbpipe listen-tcp --host 127.0.0.1:22 --custom-alpn utf8:/iroh/ssh
+```
+
+Without `IROH_SECRET`, dumbpipe creates a new endpoint on every start, so its
+ticket names a different endpoint and pasting it clears saved trust; it prints
+the generated secret so you can reuse it. Like iroh-ssh, it has no peer
+allowlist: anyone holding the ticket or endpoint ID can reach the SSH server.
+
 Transport tests use local Iroh endpoints with discovery and relays disabled.
 They verify raw SSH, exact ALPN, pinning, output bounds and closure even when the
-client runtime ends. Public relay/NAT traversal, an actual deployed receiver,
-and physical Android network transitions require separate verification.
+client runtime ends. Ticket parsing is tested for both endpoint ID forms, the
+canonical encoding, the length and address bounds, and refused address kinds.
+On an x86_64 emulator, a real dumbpipe 0.40.1 ticket (one N0 relay and 13 direct
+addresses) reached a local synthetic SSH fixture through inspection, trust,
+sign-in and the terminal. A newer ticket for the same endpoint kept trust, and a
+different endpoint cleared it. With the relay URL set to a local
+`iroh-relay --dev`, the emulator reached a receiver that had no IP addresses at
+all, so the relay was its only path, through inspection, trust, sign-in and the
+terminal. A packet capture of that connection contained no DNS queries and no
+traffic to Iroh's public servers; the same profile without the relay looked up
+`iroh.link` names and connected to N0 relays. **Paste endpoint or ticket**
+filled the field from text copied in the app and refused non-Iroh text.
+iroh-ssh 0.2.12 with `--relay-url` also worked through the terminal, both on the
+local `http` relay and with an `https` relay given by hostname (N0's public
+`use1-1` relay entered as the app's relay URL). In that capture the app
+resolved and contacted only that relay's hostname before trying the receiver's
+own addresses. The same `https` case reached the pane picker on a physical
+Pixel 9 Pro Fold. A profile saved by the previous build kept loading after the
+update and accepted a relay. A receiver on a different network than the phone,
+a real Herdr host behind it, and physical Android network transitions require
+separate verification.
 
 ## Address and authentication compatibility
 

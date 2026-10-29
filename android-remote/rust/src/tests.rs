@@ -5,6 +5,9 @@ use russh::{Channel, ChannelId, server};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+/// RFC 8032 test vector 1's public key: a valid Iroh endpoint ID.
+const ENDPOINT: &str = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+
 #[derive(Clone, Copy)]
 enum TestAuth {
     Normal,
@@ -554,30 +557,7 @@ async fn wrong_password_is_typed_and_does_not_start_a_session() {
     fixture.finish().await;
 }
 
-#[tokio::test]
-async fn invalid_iroh_id_is_rejected_before_network() {
-    let config = Config {
-        transport: Transport::Iroh {
-            endpoint_id: "fixture".into(),
-        },
-        username: "fixture".into(),
-        expected_fingerprint: Some("SHA256:fixture".into()),
-    };
-    assert!(matches!(
-        inspect_host_key(&config, CancellationToken::new()).await,
-        Err(Error::InvalidConfig(_))
-    ));
-    assert!(matches!(
-        connect(
-            &config,
-            Credentials::password("public-test-password".into()),
-            CancellationToken::new()
-        )
-        .await,
-        Err(Error::InvalidConfig(_))
-    ));
-}
-
+mod iroh_target;
 mod iroh_transport;
 
 #[test]

@@ -8,7 +8,7 @@ This is a source preview. Full real-daemon input/lifecycle validation and Titan-
 
 - Native Android host management with encrypted profiles and explicit SSH host-key trust
 - Embedded password or compatible private-key SSH authentication; passwords and passphrases are used once, and a private key is kept only when explicitly saved as an Android Keystore-encrypted device identity outside every profile
-- Direct TCP or Iroh `/iroh/ssh` transport to Herdr's binary remote-client bridge
+- Direct TCP or Iroh `/iroh/ssh` transport to Herdr's binary remote-client bridge; an Iroh host takes a pasted endpoint ID or `endpoint…` ticket and, optionally, your own relay in place of Iroh's public relays
 - GPUI/wgpu terminal surface, ordered keyboard/IME input, and explicit pane selection
 - Per-host OMP quick commands with editable previews and separately confirmed Send + Enter
 - Terminal type that fits the pane's own wrap width, multiplied by Android's system font scale, with an explicit 11-18 sp override in **View**; every cell is painted on one monospace grid, so box-drawing, block, braille and wide glyphs from fallback fonts stay in their columns

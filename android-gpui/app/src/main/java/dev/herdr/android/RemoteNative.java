@@ -16,6 +16,11 @@ final class RemoteNative {
 
     static native void initialize(Context context);
     static native String inspect(String configJson);
+    /**
+     * {"endpoint_id", "endpoint_ticket", "relay_url"} for a pasted endpoint ID or ticket and an
+     * optional relay URL. Parsing only: safe on the UI thread.
+     */
+    static native String irohTarget(String text, String relayUrl);
     static native long connect(String configJson, String credentialJson);
 
     /** Reports the client grid; metadata-only host mirrors do not request terminal surfaces. */

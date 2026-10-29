@@ -2,6 +2,8 @@ package dev.herdr.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
@@ -966,11 +968,17 @@ public final class RemoteHostsActivity extends Activity {
         EditText host = field(context, fields, "SSH hostname or IP", old == null ? "" : old.host, false);
         EditText port = field(context, fields, "SSH port", old == null ? "22" : Integer.toString(old.port), false);
         port.setInputType(InputType.TYPE_CLASS_NUMBER);
-        EditText endpoint = field(context, fields, "Iroh endpoint ID (Iroh only)", old == null ? "" : old.endpointId, false);
-        fields.addView(note(context, "Iroh requires an Iroh SSH receiver on the host. Its receiver selects the SSH port; the port above applies only to direct TCP.", 12));
+        EditText endpoint = field(context, fields, "Iroh endpoint ID or ticket (Iroh only)",
+                old == null ? "" : old.endpointTicket.isEmpty() ? old.endpointId : old.endpointTicket, false);
+        // Added last; paste reports into it as well.
+        TextView error = note(context, "Changing the host, Iroh endpoint, user or session clears saved SSH trust. A newer ticket or another relay for the same endpoint keeps it.", 13);
+        fields.addView(choice(context, "Paste endpoint or ticket", () -> pasteIrohTarget(endpoint, transport, error)));
+        EditText relay = field(context, fields, "Iroh relay URL (optional, Iroh only)", old == null ? "" : old.relayUrl, false);
+        relay.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        fields.addView(note(context, "Iroh needs an SSH receiver on the host: iroh-ssh, or dumbpipe listen-tcp with --custom-alpn utf8:/iroh/ssh. A ticket also carries the receiver's relay and addresses. With a relay URL the app uses only that relay, not Iroh's public relays or address lookup. The receiver selects the SSH port; the port above applies only to direct TCP.", 12));
         EditText user = field(context, fields, "SSH username", old == null ? "" : old.username, false);
         EditText session = field(context, fields, "Herdr session", old == null ? "default" : old.session, false);
-        TextView error = note(context, "Changing the connection address, user or session clears saved SSH trust.", 13);
         fields.addView(error);
         ScrollView scroll = new ScrollView(context);
         scroll.addView(fields);
@@ -978,11 +986,23 @@ public final class RemoteHostsActivity extends Activity {
                 .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create();
         showDialog(editing);
         editing.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String kind = transport.getSelectedItemPosition() == 0 ? "tcp" : "iroh";
+            String endpointId = "", endpointTicket = "", relayUrl = "";
+            if ("iroh".equals(kind)) {
+                try {
+                    JSONObject target = new JSONObject(RemoteNative.irohTarget(value(endpoint), value(relay)));
+                    endpointId = target.getString("endpoint_id");
+                    endpointTicket = target.getString("endpoint_ticket");
+                    relayUrl = target.getString("relay_url");
+                } catch (IllegalStateException | org.json.JSONException | LinkageError invalid) {
+                    error.setText(safeMessage(invalid.getMessage()));
+                    return;
+                }
+            }
             try {
-                String kind = transport.getSelectedItemPosition() == 0 ? "tcp" : "iroh";
                 SavedRemoteHost draft = SavedRemoteHost.create(value(name), kind, value(host),
                         "tcp".equals(kind) ? Integer.parseInt(value(port)) : 22,
-                        value(endpoint), value(user), value(session));
+                        endpointId, endpointTicket, relayUrl, value(user), value(session));
                 editing.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
                 int token = generation;
                 run(token, () -> store.saveProfile(old, draft), saved -> {
@@ -994,6 +1014,31 @@ public final class RemoteHostsActivity extends Activity {
                 });
             } catch (Exception failure) { error.setText("Check all profile fields and enter an SSH port from 1 to 65535."); }
         });
+    }
+
+    /**
+     * Fills the Iroh field from the clipboard, e.g. a ticket copied from a QR code scanned by the
+     * camera app. Invalid text leaves the field unchanged.
+     */
+    private void pasteIrohTarget(EditText endpoint, Spinner transport, TextView status) {
+        ClipboardManager clipboard = getSystemService(ClipboardManager.class);
+        ClipData clip = clipboard == null ? null : clipboard.getPrimaryClip();
+        // Plain text only: coercing a URI item would read its content on the UI thread.
+        CharSequence text = clip == null || clip.getItemCount() == 0 ? null : clip.getItemAt(0).getText();
+        if (text == null || text.toString().trim().isEmpty()) {
+            status.setText("The clipboard holds no text to paste.");
+            return;
+        }
+        try {
+            JSONObject target = new JSONObject(RemoteNative.irohTarget(text.toString(), ""));
+            String id = target.getString("endpoint_id");
+            String ticket = target.getString("endpoint_ticket");
+            endpoint.setText(ticket.isEmpty() ? id : ticket);
+            transport.setSelection(1);
+            status.setText((ticket.isEmpty() ? "Pasted endpoint " : "Pasted a ticket for endpoint ") + id + ".");
+        } catch (IllegalStateException | org.json.JSONException | LinkageError invalid) {
+            status.setText(safeMessage(invalid.getMessage()));
+        }
     }
 
     private void forgetTrust(SavedRemoteHost host) {

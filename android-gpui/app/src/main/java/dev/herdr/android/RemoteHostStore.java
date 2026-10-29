@@ -131,7 +131,7 @@ final class RemoteHostStore {
         SavedRemoteHost current = values.get(index);
         boolean identityChanged = !current.sameIdentity(draft);
         SavedRemoteHost saved = new SavedRemoteHost(current.id, draft.name, draft.transport, draft.host,
-            draft.port, draft.endpointId, draft.username, draft.session,
+            draft.port, draft.endpointId, draft.endpointTicket, draft.relayUrl, draft.username, draft.session,
             identityChanged ? "" : current.expectedFingerprint, current.shortcuts, current.quickCommands,
             identityChanged ? null : current.connectionRevision);
         values.set(index, saved);

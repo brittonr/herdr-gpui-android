@@ -35,7 +35,7 @@ def host_elf_fixture(api=29, machine=183):
         )
     ]
     names.extend('Java_dev_herdr_android_RemoteNative_' + name for name in
-                 ('initialize', 'inspect', 'connect', 'poll', 'pollTerminal', 'input', 'focus', 'close',
+                 ('initialize', 'inspect', 'irohTarget', 'connect', 'poll', 'pollTerminal', 'input', 'focus', 'close',
                   'openShell', 'shellInput', 'shellAlive', 'shellText', 'closeShell'))
     strings = bytearray(b'\0')
     symbols = bytearray(24)
@@ -71,7 +71,8 @@ class VerifyNativeTests(unittest.TestCase):
                      'Java_dev_herdr_android_GpuiTerminalActivity_nativeCopyText',
                      'Java_dev_herdr_android_GpuiChrome_nativeThemeColors',
                      'Java_dev_herdr_android_RemoteNative_openShell',
-                     'Java_dev_herdr_android_GpuiTerminalActivity_nativeAttachShell'):
+                     'Java_dev_herdr_android_GpuiTerminalActivity_nativeAttachShell',
+                     'Java_dev_herdr_android_RemoteNative_irohTarget'):
             with self.subTest(export=name):
                 data = host_elf_fixture()
                 data[data.index(name.encode() + b'\0')] = ord('X')

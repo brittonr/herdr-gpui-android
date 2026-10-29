@@ -2,7 +2,7 @@
 //! No reconnect, daemon lifecycle commands, terminal emulation, or input replay.
 use crate::model::{self, Command};
 use herdr_client::{ClientEvent, ClientHandle, Method, protocol::*};
-use herdr_remote_transport::{CancellationToken, Config, Credentials, Transport};
+use herdr_remote_transport::{CancellationToken, Config, Credentials, IrohTarget, Transport};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -63,6 +63,8 @@ pub enum Error {
     #[error(transparent)]
     Transport(#[from] herdr_remote_transport::Error),
     #[error(transparent)]
+    IrohTarget(#[from] herdr_remote_transport::IrohTargetError),
+    #[error(transparent)]
     Terminal(#[from] gpui_rio::Error),
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -79,6 +81,10 @@ struct WireConfig {
     port: u16,
     #[serde(default)]
     endpoint_id: String,
+    #[serde(default)]
+    endpoint_ticket: String,
+    #[serde(default)]
+    relay_url: String,
     username: String,
     session: String,
     #[serde(default)]
@@ -113,7 +119,11 @@ pub(crate) fn parse_config(raw: &str) -> Result<(Config, String)> {
             }
         }
         "iroh" => Transport::Iroh {
-            endpoint_id: wire.endpoint_id,
+            target: IrohTarget::from_profile(
+                &wire.endpoint_id,
+                &wire.endpoint_ticket,
+                &wire.relay_url,
+            )?,
         },
         _ => return Err(Error::Config),
     };
@@ -276,6 +286,18 @@ pub fn inspect(raw: &str) -> Result<String> {
         CancellationToken::new(),
     ))?;
     Ok(serde_json::to_string(&json!({"fingerprint": key}))?)
+}
+
+/// Profile fields for pasted Iroh text and an optional relay: the endpoint ID
+/// that keys SSH trust, a ticket only when it adds addresses, and the relay in
+/// canonical form. Parsing only, no network.
+pub fn iroh_target(text: &str, relay: &str) -> Result<String> {
+    let target = text.parse::<IrohTarget>()?.with_relay(relay)?;
+    Ok(serde_json::to_string(&json!({
+        "endpoint_id": target.endpoint_id(),
+        "endpoint_ticket": target.ticket().unwrap_or_default(),
+        "relay_url": target.relay_url().unwrap_or_default(),
+    }))?)
 }
 
 /// Returns as soon as a bounded handle and owned background worker exist.
@@ -2820,11 +2842,93 @@ mod tests {
         );
         assert!(parse_config(&" ".repeat(MAX_CONFIG + 1)).is_err());
     }
+    /// RFC 8032 test vector 1's public key, and a ticket for it naming the relay
+    /// `https://relay.example./` and the address `192.0.2.1:7000`.
+    const ENDPOINT: &str = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+    const TICKET: &str = "endpointadlvvgabqkyqvn6vjp7nhslea45a5yls6pnkmizfv4bbu2hxa5iruaqac5uhi5dqom5c6l3smvwgc6jomv4gc3lqnrss4lybadaaaaqb3a3a";
+    fn iroh_config(endpoint_id: &str, ticket: &str, relay: &str) -> String {
+        json!({"transport": "iroh", "endpoint_id": endpoint_id, "endpoint_ticket": ticket,
+            "relay_url": relay, "username": "fixture", "session": "main"})
+        .to_string()
+    }
+    #[test]
+    fn iroh_profiles_are_parsed_at_the_config_boundary() {
+        let target = |raw: &str| match parse_config(raw).unwrap().0.transport {
+            Transport::Iroh { target } => target,
+            Transport::Tcp { .. } => panic!("expected an Iroh transport"),
+        };
+        let bare = target(&iroh_config(ENDPOINT, "", ""));
+        assert_eq!(bare.endpoint_id(), ENDPOINT);
+        assert_eq!(bare.ticket(), None);
+        assert_eq!(bare.relay_url(), None);
+        let relayed = target(&iroh_config(ENDPOINT, TICKET, "https://relay.example.org"));
+        assert_eq!(relayed.ticket().as_deref(), Some(TICKET));
+        assert_eq!(
+            relayed.relay_url().as_deref(),
+            Some("https://relay.example.org/")
+        );
+        // Profiles saved before tickets and relays existed have neither field.
+        let legacy = r#"{"transport":"iroh","endpoint_id":"ENDPOINT","username":"fixture","session":"main"}"#;
+        let legacy = target(&legacy.replace("ENDPOINT", ENDPOINT));
+        assert_eq!(legacy.endpoint_id(), ENDPOINT);
+        assert_eq!(legacy.relay_url(), None);
+        let other = "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+        assert!(matches!(
+            parse_config(&iroh_config(other, TICKET, "")),
+            Err(Error::IrohTarget(
+                herdr_remote_transport::IrohTargetError::EndpointMismatch
+            ))
+        ));
+        assert!(matches!(
+            parse_config(&iroh_config("fixture", "", "")),
+            Err(Error::IrohTarget(
+                herdr_remote_transport::IrohTargetError::Unrecognized(_)
+            ))
+        ));
+        assert!(matches!(
+            parse_config(&iroh_config(ENDPOINT, "", "wss://relay.example.org")),
+            Err(Error::IrohTarget(
+                herdr_remote_transport::IrohTargetError::RelayUrlScheme
+            ))
+        ));
+    }
+    #[test]
+    fn pasted_iroh_text_becomes_canonical_profile_fields() {
+        let fields = |text: &str, relay: &str| -> serde_json::Value {
+            serde_json::from_str(&iroh_target(text, relay).unwrap()).unwrap()
+        };
+        assert_eq!(
+            fields(&format!(" {TICKET}\n"), ""),
+            json!({"endpoint_id": ENDPOINT, "endpoint_ticket": TICKET, "relay_url": ""})
+        );
+        assert_eq!(
+            fields(
+                "25njqamcweflpvkl73j4szahhihoc4xt3ktcgjnpaingr5yhkena",
+                " HTTP://192.0.2.7:3340 "
+            ),
+            json!({"endpoint_id": ENDPOINT, "endpoint_ticket": "",
+                "relay_url": "http://192.0.2.7:3340/"})
+        );
+        assert!(matches!(
+            iroh_target("ssh fixture@host", ""),
+            Err(Error::IrohTarget(
+                herdr_remote_transport::IrohTargetError::Unrecognized(_)
+            ))
+        ));
+        assert!(matches!(
+            iroh_target(ENDPOINT, "https://user:secret@relay.example.org"),
+            Err(Error::IrohTarget(
+                herdr_remote_transport::IrohTargetError::RelayUrlCredentials
+            ))
+        ));
+    }
     #[test]
     fn missing_host_pin_returns_handle_then_closes_without_deadlock() {
-        let config =
-            r#"{"transport":"iroh","endpoint_id":"fixture","username":"fixture","session":"main"}"#;
-        let id = connect(config, "fixture-unused-password".into()).unwrap();
+        let id = connect(
+            &iroh_config(ENDPOINT, "", ""),
+            "fixture-unused-password".into(),
+        )
+        .unwrap();
         let start = Instant::now();
         loop {
             let state: serde_json::Value =

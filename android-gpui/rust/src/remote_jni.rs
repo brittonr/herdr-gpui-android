@@ -124,6 +124,26 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_inspect(
     result_string(&mut env, remote::inspect(&config))
 }
 
+/// Canonical profile fields for pasted Iroh text and a relay URL. Parsing
+/// only: safe on the UI thread.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_irohTarget(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    text: JString<'_>,
+    relay: JString<'_>,
+) -> jstring {
+    // Larger than the parser's limits so oversized text gets its specific error.
+    let Some(text) = read(&mut env, &text, 8192) else {
+        return std::ptr::null_mut();
+    };
+    let Some(relay) = read(&mut env, &relay, 2048) else {
+        return std::ptr::null_mut();
+    };
+    result_string(&mut env, remote::iroh_target(&text, &relay))
+}
+
 /// Reports the client grid and negotiates surface interest in the initial hello.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]

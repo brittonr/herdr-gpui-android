@@ -292,7 +292,7 @@ async fn iroh_external_cancellation_closes_even_while_session_is_retained() {
 async fn missing_pin_or_prior_cancellation_never_starts_iroh_discovery() {
     let config = Config {
         transport: Transport::Iroh {
-            endpoint_id: "unused".into(),
+            target: ENDPOINT.parse().unwrap(),
         },
         username: "fixture".into(),
         expected_fingerprint: None,

@@ -3843,6 +3843,28 @@
     },
     {
       "name": "hash32",
+      "version": "0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "authors": [
+        "Jorge Aparicio <jorge@japaric.io>"
+      ],
+      "repository": "https://github.com/japaric/hash32",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE",
+          "bytes": 10847,
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "bytes": 1058,
+          "sha256": "c986bcdb83103d4ddf58aeb7b5302359782e54dc4eea14a0cc27c62dcbd50729"
+        }
+      ]
+    },
+    {
+      "name": "hash32",
       "version": "0.3.1",
       "license": "MIT OR Apache-2.0",
       "authors": [
@@ -3924,6 +3946,30 @@
           "path": "LICENSE-MIT",
           "bytes": 1060,
           "sha256": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2"
+        }
+      ]
+    },
+    {
+      "name": "heapless",
+      "version": "0.7.17",
+      "license": "MIT OR Apache-2.0",
+      "authors": [
+        "Jorge Aparicio <jorge@japaric.io>",
+        "Per Lindgren <per.lindgren@ltu.se>",
+        "Emil Fresk <emil.fresk@gmail.com>"
+      ],
+      "repository": "https://github.com/japaric/heapless",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE",
+          "bytes": 10847,
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "bytes": 1058,
+          "sha256": "035e70219855119df4273b3c5b97543ae82e0dd60c520416e759107c602f651b"
         }
       ]
     },
@@ -4784,6 +4830,29 @@
           "path": "LICENSE-BSD3",
           "bytes": 1600,
           "sha256": "bcaa9acadee6c20991d4b5eb56e226191411a3f6ceb92587b272f2ef0221ed71"
+        }
+      ]
+    },
+    {
+      "name": "iroh-tickets",
+      "version": "1.0.0",
+      "license": "MIT OR Apache-2.0",
+      "authors": [
+        "dignifiedquire <me@dignifiedquire.com>",
+        "n0 team"
+      ],
+      "repository": "https://github.com/n0-computer/iroh-tickets",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE",
+          "bytes": 10831,
+          "sha256": "7953ad8cebf4e01199521a5faa221ef59bec5cee0a9856b179590613a8560cbc"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "bytes": 1048,
+          "sha256": "339060c99d5c80c2742cae417f765980afe6b0149a78f959bbf2a79f19ab3af5"
         }
       ]
     },
@@ -11649,6 +11718,6 @@
       ]
     }
   ],
-  "count": 570,
-  "output_sha256": "d94db1954bd12205b2523043481fa0de03277e71c1ab41f1a1c2f7552a01e29e"
+  "count": 573,
+  "output_sha256": "26ff0cc9bc592875ed7deacaf24481791841cb31bbfb254a702e5f071e4b8dfc"
 }

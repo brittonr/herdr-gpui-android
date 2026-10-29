@@ -1,7 +1,12 @@
 //! Embedded, strictly pinned SSH transport. The caller owns the Tokio runtime.
 //! Dropping a session or bridge cancels its network work without joining a thread.
 
-use iroh::{Endpoint, EndpointAddr, EndpointId, endpoint::presets};
+mod iroh_target;
+
+use iroh::{Endpoint, EndpointAddr, RelayMap, RelayMode, endpoint::presets};
+pub use iroh_target::{
+    IrohTarget, IrohTargetError, MAX_IROH_ADDRESSES, MAX_IROH_RELAY_LEN, MAX_IROH_TARGET_LEN,
+};
 use russh::{
     ChannelMsg, MethodKind, client,
     keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate},
@@ -55,6 +60,8 @@ pub enum Error {
     OutputLimit { stream: &'static str, limit: usize },
     #[error("invalid transport configuration: {0}")]
     InvalidConfig(&'static str),
+    #[error(transparent)]
+    IrohTarget(#[from] IrohTargetError),
     #[error("SSH transport failed")]
     Ssh(#[from] russh::Error),
     #[error("SSH private key could not be decoded")]
@@ -72,7 +79,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub enum Transport {
     Tcp { host: String, port: u16 },
-    Iroh { endpoint_id: String },
+    Iroh { target: IrohTarget },
 }
 
 #[derive(Clone, Debug)]
@@ -267,15 +274,22 @@ async fn dial_target(config: &Config) -> Result<DialTarget> {
             })
         }
         Transport::Tcp { .. } => Err(Error::InvalidConfig("host and port are required")),
-        Transport::Iroh { endpoint_id } => {
-            let id: EndpointId = endpoint_id
-                .parse()
-                .map_err(|_| Error::InvalidConfig("a valid Iroh endpoint ID is required"))?;
+        Transport::Iroh { target } => {
             // Only the explicit Iroh connection path starts discovery or relay work.
-            let endpoint = Endpoint::bind(presets::N0).await?;
+            let endpoint = match target.relay() {
+                // The user's relay alone: no N0 relays, address lookup or publishing.
+                Some(relay) => {
+                    Endpoint::builder(presets::Minimal)
+                        .relay_mode(RelayMode::Custom(RelayMap::from(relay.clone())))
+                        .bind()
+                        .await?
+                }
+                // A ticket's addresses are dialled alongside N0 discovery and relays.
+                None => Endpoint::bind(presets::N0).await?,
+            };
             Ok(DialTarget::Iroh {
                 endpoint,
-                address: id.into(),
+                address: target.address(),
             })
         }
     }
