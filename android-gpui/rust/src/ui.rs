@@ -284,7 +284,7 @@ impl Render for TerminalView {
             .flex_col()
             .overflow_hidden()
             .bg(rgb(model::palette().background))
-            .text_color(rgb(0xdce5ef))
+            .text_color(rgb(model::palette().foreground))
             .font_family(crate::fonts::SANS_FAMILY)
             .track_focus(&self.focus)
             .child(
@@ -318,13 +318,16 @@ impl Render for TerminalView {
                             .min_w_0()
                             .truncate()
                             .text_right()
-                            .text_color(rgb(if self.error.is_some() {
-                                0xffa58f
-                            } else if active {
-                                0x76d3b2
-                            } else {
-                                0xf0b778
-                            }))
+                            .text_color({
+                                let palette = model::palette();
+                                rgb(if self.error.is_some() {
+                                    palette.ansi[1]
+                                } else if active {
+                                    palette.accent
+                                } else {
+                                    palette.ansi[3]
+                                })
+                            })
                             .child(status),
                     ),
             )
@@ -454,7 +457,7 @@ impl Render for TerminalView {
                         .py_1()
                         .text_size(px(metrics.font_size))
                         .truncate()
-                        .text_color(rgb(0xf0b778))
+                        .text_color(rgb(model::palette().ansi[3]))
                         .child(if self.state.display_preferences.compact {
                             "Display limit reached"
                         } else {
@@ -470,7 +473,7 @@ impl Render for TerminalView {
                         .py_1()
                         .text_size(px(metrics.font_size))
                         .truncate()
-                        .bg(rgb(0x223342))
+                        .bg(rgb(model::palette().border))
                         .child(format!("Composing: {}", self.marked)),
                 )
             })

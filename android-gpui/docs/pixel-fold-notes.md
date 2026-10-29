@@ -30,6 +30,18 @@ inferred from code. Update it when a behaviour changes.
 | Privacy | Dialogs and the terminal are `FLAG_SECURE`; nothing is backed up on Android 12+ (`data_extraction_rules`) |
 | Cost | Cold start 167–177 ms; idle CPU 0 % per thread |
 
+## Themes
+
+Four palettes ship: Default, Nord, Mocha and Latte (light). The GPUI surface is
+fully palette-driven after a fix in this session - the root text, header status
+and truncation banner had hardcoded light colours, which made the Latte header
+invisible on its own white background.
+
+**Known limitation:** the Java chrome (rail, toolbar, dialogs) still uses fixed
+dark colours, so a light theme gives dark chrome around a light terminal. That is
+a visual inconsistency, not a legibility failure, and theming the Java side means
+replacing the hardcoded colours throughout the activity.
+
 ## Verification receipt
 
 Recorded at commit `5e228b0`, Pixel 9 Pro Fold, install over USB:
