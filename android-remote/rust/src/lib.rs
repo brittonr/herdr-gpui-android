@@ -520,13 +520,7 @@ impl Session {
         let prepared = bounded(&self.guard.0, CHANNEL_TIMEOUT, async {
             let mut channel = self.handle.channel_open_session().await?;
             channel.exec(true, command.as_bytes()).await?;
-            loop {
-                match channel.wait().await {
-                    Some(ChannelMsg::Success) => break,
-                    Some(ChannelMsg::WindowAdjusted { .. }) => {}
-                    _ => return Err(Error::CommandRejected),
-                }
-            }
+            expect_success(&mut channel).await?;
             let (socket, pump_socket) = std::os::unix::net::UnixStream::pair()?;
             pump_socket.set_nonblocking(true)?;
             let pump_socket = tokio::net::UnixStream::from_std(pump_socket)?;
@@ -562,6 +556,101 @@ impl Session {
             },
         })
     }
+
+    /// An interactive login shell on a remote PTY of `columns` × `rows`: the
+    /// raw terminal bytes, not Herdr's protocol. The returned socket carries
+    /// them both ways; [`ShellSize`] changes the PTY's window size.
+    #[cfg(unix)]
+    pub async fn into_shell(mut self, term: &str, columns: u32, rows: u32) -> Result<Shell> {
+        let prepared = bounded(&self.guard.0, CHANNEL_TIMEOUT, async {
+            let mut channel = self.handle.channel_open_session().await?;
+            channel
+                .request_pty(true, term, columns, rows, 0, 0, &[])
+                .await?;
+            expect_success(&mut channel).await?;
+            channel.request_shell(true).await?;
+            expect_success(&mut channel).await?;
+            let (socket, pump_socket) = std::os::unix::net::UnixStream::pair()?;
+            pump_socket.set_nonblocking(true)?;
+            let pump_socket = tokio::net::UnixStream::from_std(pump_socket)?;
+            Ok((channel, socket, pump_socket))
+        })
+        .await;
+        let (channel, socket, pump_socket) = match prepared {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.shutdown().await;
+                return Err(error);
+            }
+        };
+        let (size, mut resized) = tokio::sync::watch::channel((columns, rows));
+        let token = self.guard.0.clone();
+        let cancel = token.clone();
+        let iroh_close = self.guard.1.take();
+        let task = tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            // Session and its socket guard remain owned until the pump finishes.
+            let _session = self;
+            let (mut remote, local) = channel.split();
+            let (mut from_app, mut to_app) = pump_socket.into_split();
+            let mut buffer = vec![0; 32 * 1024];
+            let mut resizable = true;
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = cancel.cancelled() => break,
+                    message = remote.wait() => match message {
+                        Some(ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. }) => {
+                            if to_app.write_all(&data).await.is_err() {
+                                break;
+                            }
+                        }
+                        Some(ChannelMsg::Eof | ChannelMsg::Close) | None => break,
+                        Some(_) => {}
+                    },
+                    read = from_app.read(&mut buffer) => match read {
+                        Ok(0) | Err(_) => break,
+                        Ok(read) => {
+                            if local.data(&buffer[..read]).await.is_err() {
+                                break;
+                            }
+                        }
+                    },
+                    changed = resized.changed(), if resizable => {
+                        if changed.is_err() {
+                            // The size handle is gone; the PTY keeps its last size.
+                            resizable = false;
+                            continue;
+                        }
+                        let (columns, rows) = *resized.borrow_and_update();
+                        if local.window_change(columns, rows, 0, 0).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        Ok(Shell {
+            socket,
+            size: ShellSize(size),
+            guard: BridgeGuard {
+                token,
+                task,
+                iroh_close,
+            },
+        })
+    }
+}
+
+/// Waits for the server to accept a channel request; refusal is an error.
+async fn expect_success(channel: &mut russh::Channel<client::Msg>) -> Result<()> {
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::Success) => return Ok(()),
+            Some(ChannelMsg::WindowAdjusted { .. }) => {}
+            _ => return Err(Error::CommandRejected),
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -573,6 +662,32 @@ pub struct Bridge {
 impl Bridge {
     pub fn into_parts(self) -> (std::os::unix::net::UnixStream, BridgeGuard) {
         (self.socket, self.guard)
+    }
+}
+
+/// A remote shell's PTY bytes, its window size and the guard that ends it.
+#[cfg(unix)]
+pub struct Shell {
+    socket: std::os::unix::net::UnixStream,
+    size: ShellSize,
+    guard: BridgeGuard,
+}
+#[cfg(unix)]
+impl Shell {
+    pub fn into_parts(self) -> (std::os::unix::net::UnixStream, ShellSize, BridgeGuard) {
+        (self.socket, self.size, self.guard)
+    }
+}
+
+/// Changes a remote shell's window size. Only the newest pending size is sent.
+#[cfg(unix)]
+#[derive(Clone)]
+pub struct ShellSize(tokio::sync::watch::Sender<(u32, u32)>);
+#[cfg(unix)]
+impl ShellSize {
+    pub fn resize(&self, columns: u32, rows: u32) {
+        // No receiver means the shell already ended; there is nothing to resize.
+        let _ = self.0.send((columns, rows));
     }
 }
 #[cfg(unix)]

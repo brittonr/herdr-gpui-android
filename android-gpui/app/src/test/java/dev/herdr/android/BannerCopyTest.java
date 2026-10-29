@@ -18,6 +18,13 @@ public class BannerCopyTest {
     }
 
     @Test
+    public void an_exited_shell_is_not_a_lost_connection() {
+        assertEquals("The shell exited", BannerCopy.human(BannerCopy.SHELL_EXITED));
+        // Only the exact status: a transport reason that mentions a shell stays a loss.
+        assertEquals("Connection lost", BannerCopy.human("shell channel closed"));
+    }
+
+    @Test
     public void empty_and_unknown_reasons_stay_useful() {
         assertEquals("Connection lost", BannerCopy.human(null));
         assertEquals("Connection lost", BannerCopy.human(""));

@@ -10,6 +10,8 @@ final class BannerCopy {
 
     static String human(String raw) {
         if (raw == null || raw.isEmpty()) return "Connection lost";
+        // A raw shell the user exited is not a lost connection.
+        if (SHELL_EXITED.equals(raw)) return "The shell exited";
         String lower = raw.toLowerCase(java.util.Locale.ROOT);
         if (lower.contains("health check")) return "Connection lost · the host stopped answering";
         if (lower.contains("timed out")) return "Connection lost · the host timed out";
@@ -20,4 +22,7 @@ final class BannerCopy {
         String detail = raw.length() > 120 ? raw.substring(0, 120) : raw;
         return "Connection lost · " + detail;
     }
+
+    /** The status a raw SSH shell reports once its remote shell has exited. */
+    static final String SHELL_EXITED = "Shell exited";
 }

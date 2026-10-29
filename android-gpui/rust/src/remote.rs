@@ -63,6 +63,8 @@ pub enum Error {
     #[error(transparent)]
     Transport(#[from] herdr_remote_transport::Error),
     #[error(transparent)]
+    Terminal(#[from] gpui_rio::Error),
+    #[error(transparent)]
     Io(#[from] io::Error),
 }
 pub type Result<T> = std::result::Result<T, Error>;
@@ -85,7 +87,7 @@ struct WireConfig {
 fn default_port() -> u16 {
     22
 }
-fn parse_config(raw: &str) -> Result<(Config, String)> {
+pub(crate) fn parse_config(raw: &str) -> Result<(Config, String)> {
     if raw.len() > MAX_CONFIG {
         return Err(Error::Config);
     }
@@ -165,6 +167,8 @@ pub struct View {
     /// The daemon's own focused pane, used when adopting a host whose first
     /// listed pane is rarely the interesting one.
     focused_pane: String,
+    /// Window header prepared with the active host's local display name.
+    title: String,
     text: String,
     surface: String,
     /// One pending OSC 52 write, delivered once by `poll`.
@@ -177,6 +181,8 @@ pub struct View {
     revision: u64,
     /// Content hash the client mirrors back in `poll`; not part of the hash.
     token: i64,
+    /// Navigation identity and metadata only; terminal paint never invalidates it.
+    chrome_token: i64,
     /// Scroll offset the delivered frame was rendered at.
     rendered_scroll: i64,
     /// Rows above the tail the client is showing from its own buffer.
@@ -195,6 +201,7 @@ impl Default for View {
             tabs: Vec::new(),
             pane_id: String::new(),
             focused_pane: String::new(),
+            title: String::new(),
             text: String::new(),
             surface: String::new(),
             clipboard: None,
@@ -204,6 +211,7 @@ impl Default for View {
             scroll: Scroll::default(),
             revision: 0,
             token: 0,
+            chrome_token: 0,
             rendered_scroll: 0,
             local_offset: 0,
             buffered_rows: 0,
@@ -314,7 +322,7 @@ struct WireCredentials {
     private_key: Option<Zeroizing<String>>,
     passphrase: Option<Zeroizing<String>>,
 }
-fn parse_credentials(raw: &str) -> Result<Credentials> {
+pub(crate) fn parse_credentials(raw: &str) -> Result<Credentials> {
     if raw.len() > MAX_CREDENTIAL_JSON {
         return Err(Error::Credentials);
     }
@@ -345,19 +353,35 @@ fn parse_credentials(raw: &str) -> Result<Credentials> {
 /// JNI retains the raw credential JSON in a zeroizing buffer until this returns.
 /// Parsed secrets move directly into transport-owned zeroizing storage.
 pub fn connect_credentials(raw: &str, credential_json: &str) -> Result<u64> {
-    begin_with_grid(raw, parse_credentials(credential_json)?, "")
+    begin_with_grid(raw, parse_credentials(credential_json)?, "", true)
 }
 
-/// The phone's real grid; see `parse_grid` for the accepted form.
-pub fn connect_credentials_grid(raw: &str, credential_json: &str, grid: &str) -> Result<u64> {
-    begin_with_grid(raw, parse_credentials(credential_json)?, grid)
+/// Negotiate surface interest at connection time; inactive mirrors still
+/// receive snapshots. See `parse_grid` for the accepted geometry form.
+pub fn connect_credentials_grid(
+    raw: &str,
+    credential_json: &str,
+    grid: &str,
+    surface_active: bool,
+) -> Result<u64> {
+    begin_with_grid(
+        raw,
+        parse_credentials(credential_json)?,
+        grid,
+        surface_active,
+    )
 }
 
 fn begin(raw: &str, credentials: Credentials) -> Result<u64> {
-    begin_with_grid(raw, credentials, "")
+    begin_with_grid(raw, credentials, "", true)
 }
 
-fn begin_with_grid(raw: &str, credentials: Credentials, grid: &str) -> Result<u64> {
+fn begin_with_grid(
+    raw: &str,
+    credentials: Credentials,
+    grid: &str,
+    surface_active: bool,
+) -> Result<u64> {
     let grid = grid.to_owned();
     let (config, name) = parse_config(raw)?;
     let mut all = lock(sessions());
@@ -376,7 +400,14 @@ fn begin_with_grid(raw: &str, credentials: Credentials, grid: &str) -> Result<u6
     std::thread::Builder::new()
         .name("herdr-android-session".into())
         .spawn(move || {
-            if let Err(error) = run(&worker, config, credentials, name, parse_grid(&grid)) {
+            if let Err(error) = run(
+                &worker,
+                config,
+                credentials,
+                name,
+                parse_grid(&grid),
+                surface_active,
+            ) {
                 finish(&worker, &error.to_string());
             }
         })?;
@@ -407,76 +438,207 @@ pub fn close(id: u64) {
 /// app polls twenty times a second and must not re-serialise a whole tree for a
 /// frame that did not change.
 pub fn poll(id: u64, since: u64, mirror: bool) -> Result<String> {
-    let json = {
-        let owner = session(id)?;
-        let mut state = lock(&owner.state);
-        let pending = state.view.clipboard.is_some()
-            || !state.view.notifications.is_empty()
-            || state.view.bell > 0;
-        // The projection revision moves even when nothing a client draws changes,
-        // so the token hashes the rendered content instead.
-        let token = view_token(&state.view);
-        // Zero means "I hold nothing"; a brand-new session must get the whole view
-        // even though its token is still zero.
-        if since != 0 && since == token && !pending {
-            let quiet = json!({
-                "unchanged": true,
-                "token": token as i64,
-                "revision": state.view.revision,
-                "state": state.view.state,
-                "status": state.view.status,
-                "boot_id": state.view.boot_id,
-                "pane_id": state.view.pane_id,
-                "focused_pane": state.view.focused_pane,
-                "scroll": &state.view.scroll,
-            });
-            return Ok(serde_json::to_string(&quiet)?);
-        }
-        // java.lang.Long cannot hold the top of u64, so publish it signed.
-        state.view.token = token as i64;
-        // A mirror only draws workspaces and panes; sending the surface and the
-        // pane text to every background host would dominate its payload.
-        if mirror {
-            let text = std::mem::take(&mut state.view.text);
-            let surface = std::mem::take(&mut state.view.surface);
-            let json = serde_json::to_string(&state.view)?;
-            state.view.text = text;
-            state.view.surface = surface;
-            let json = { state.view.clipboard = None; state.view.notifications.clear(); state.view.bell = 0; json };
-            return Ok(json);
-        }
-        let json = serde_json::to_string(&state.view)?;
-        // Clipboard writes, notifications and bells are delivered exactly once,
-        // so they never inflate every later poll with the same payload.
-        state.view.clipboard = None;
-        state.view.notifications.clear();
-        state.view.bell = 0;
-        json
+    let owner = session(id)?;
+    let mut state = lock(&owner.state);
+    let content = if mirror {
+        PollContent::Mirror
+    } else {
+        PollContent::Full
     };
-    if json.len() > 1_048_576 {
-        return Err(Error::StateLimit);
+    poll_view(&mut state, since, content).map(|(json, _)| json)
+}
+
+/// Paints the exact view returned by this poll without sending its styled body
+/// through Java. The caller holds its connection lock across poll and adoption;
+/// the mailbox generation independently fences a replaced activity.
+/// Zero `since` requests the full view; zero `since_chrome` refreshes navigation
+/// even when the caller already holds the current terminal frame.
+#[cfg(feature = "android-ui")]
+pub fn poll_terminal(
+    id: u64,
+    since: u64,
+    since_chrome: u64,
+    generation: i64,
+    host_name: &str,
+    shortcuts: &str,
+) -> Result<String> {
+    if generation <= 0 || model::mailbox().state().generation != generation {
+        return Err(Error::StaleTarget);
+    }
+    let owner = session(id)?;
+    let mut state = lock(&owner.state);
+    let (json, snapshot) =
+        poll_terminal_view(&mut state, since, since_chrome, host_name, shortcuts)?;
+    if let Some(snapshot) = snapshot
+        && !model::mailbox().set_snapshot(generation, snapshot)
+    {
+        return Err(Error::StaleTarget);
     }
     Ok(json)
 }
-/// Hash of everything the client renders, so an idle frame costs a few hundred
-/// bytes instead of the whole tree.
-fn view_token(view: &View) -> u64 {
+
+#[cfg(any(feature = "android-ui", test))]
+fn poll_terminal_view(
+    state: &mut State,
+    since: u64,
+    since_chrome: u64,
+    host_name: &str,
+    shortcuts: &str,
+) -> Result<(String, Option<model::Snapshot>)> {
+    update_terminal_title(&mut state.view, host_name);
+    let (json, changed) = poll_view(state, since, PollContent::Terminal { since_chrome })?;
+    let snapshot = (changed && state.view.state != "closed")
+        .then(|| terminal_snapshot(&state.view, shortcuts))
+        .transpose()?;
+    Ok((json, snapshot))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PollContent {
+    Full,
+    Mirror,
+    #[cfg(any(feature = "android-ui", test))]
+    Terminal {
+        since_chrome: u64,
+    },
+}
+
+#[cfg(any(feature = "android-ui", test))]
+fn update_terminal_title(view: &mut View, host_name: &str) {
+    view.title.clear();
+    let Some(pane) = view.panes.iter().find(|pane| pane.id == view.pane_id) else {
+        view.title.push_str(host_name);
+        return;
+    };
+    let title = pane.title.trim_matches(|ch| ch <= '\u{20}');
+    let title = if title.is_empty() { &pane.id } else { title };
+    // Android chrome limits labels to 60 UTF-16 units. Keep that width without
+    // cutting a surrogate pair when the last character is supplementary.
+    let mut units = 0;
+    let cut = title.char_indices().find_map(|(index, ch)| {
+        units += ch.len_utf16();
+        (units > 60).then_some(index)
+    });
+    let (title, ellipsis) = cut.map_or((title, ""), |end| (&title[..end], "…"));
+    view.title
+        .reserve(title.len() + ellipsis.len() + " · ".len() + host_name.len());
+    view.title.push_str(title);
+    view.title.push_str(ellipsis);
+    view.title.push_str(" · ");
+    view.title.push_str(host_name);
+}
+
+#[cfg(any(feature = "android-ui", test))]
+fn terminal_snapshot(view: &View, shortcuts: &str) -> Result<model::Snapshot> {
+    let selected = view.state == "ready" && !view.pane_id.is_empty() && !view.boot_id.is_empty();
+    Ok(model::Snapshot::with_surface(
+        &view.title,
+        if selected { &view.text } else { "" },
+        if selected {
+            "SSH connected"
+        } else {
+            "Waiting for selected remote pane…"
+        },
+        shortcuts,
+        selected.then_some(view.surface.as_str()),
+    )?)
+}
+
+fn poll_view(state: &mut State, since: u64, content: PollContent) -> Result<(String, bool)> {
+    let pending = state.view.clipboard.is_some()
+        || !state.view.notifications.is_empty()
+        || state.view.bell > 0;
+    // The projection revision moves even when nothing a client draws changes,
+    // so the token hashes the rendered content instead.
+    let (token, chrome_token) = view_tokens(&state.view);
+    // A current frame cannot repair a missing or stale navigation cache.
+    let (omit_chrome, refresh_chrome) = match content {
+        #[cfg(any(feature = "android-ui", test))]
+        PollContent::Terminal { since_chrome } => {
+            let matches = since_chrome != 0 && since_chrome == chrome_token;
+            (since != 0 && matches, !matches)
+        }
+        _ => (false, false),
+    };
+    // Zero means "I hold nothing"; a brand-new session must get the whole view
+    // even though its token is still zero.
+    if since != 0 && since == token && !pending && !refresh_chrome {
+        let quiet = json!({
+            "unchanged": true,
+            "token": token as i64,
+            "chrome_token": chrome_token as i64,
+            "revision": state.view.revision,
+            "state": state.view.state,
+            "status": state.view.status,
+            "boot_id": state.view.boot_id,
+            "pane_id": state.view.pane_id,
+            "focused_pane": state.view.focused_pane,
+            "scroll": &state.view.scroll,
+        });
+        return Ok((serde_json::to_string(&quiet)?, false));
+    }
+    // java.lang.Long cannot hold the top of u64, so publish it signed.
+    state.view.token = token as i64;
+    state.view.chrome_token = chrome_token as i64;
+    // Neither mirror nor terminal metadata needs a body. The terminal renders
+    // in Rust and reads its held snapshot only when Copy is requested.
+    let text = (content != PollContent::Full).then(|| std::mem::take(&mut state.view.text));
+    let surface = (content != PollContent::Full).then(|| std::mem::take(&mut state.view.surface));
+    // The Java connection already owns these arrays at this chrome token. Move
+    // them aside without copying; restore them before preparing the native frame.
+    let chrome = omit_chrome.then(|| {
+        (
+            std::mem::take(&mut state.view.panes),
+            std::mem::take(&mut state.view.workspaces),
+            std::mem::take(&mut state.view.tabs),
+            std::mem::take(&mut state.view.title),
+        )
+    });
+    let json = serde_json::to_string(&state.view);
+    if let Some((panes, workspaces, tabs, title)) = chrome {
+        state.view.panes = panes;
+        state.view.workspaces = workspaces;
+        state.view.tabs = tabs;
+        state.view.title = title;
+    }
+    if let Some(text) = text {
+        state.view.text = text;
+    }
+    if let Some(surface) = surface {
+        state.view.surface = surface;
+    }
+    let json = json?;
+    if json.len() > 1_048_576 {
+        return Err(Error::StateLimit);
+    }
+    // Clipboard writes, notifications and bells are delivered exactly once,
+    // so they never inflate every later poll with the same payload.
+    state.view.clipboard = None;
+    state.view.notifications.clear();
+    state.view.bell = 0;
+    Ok((json, true))
+}
+/// Finish the navigation hash before terminal data, so both invalidation scopes
+/// share one pass over metadata and neither hashes its own derived tokens.
+fn view_tokens(view: &View) -> (u64, u64) {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    view.state.hash(&mut hasher);
-    view.status.hash(&mut hasher);
     view.boot_id.hash(&mut hasher);
     view.pane_id.hash(&mut hasher);
     view.focused_pane.hash(&mut hasher);
-    view.text.hash(&mut hasher);
-    view.surface.hash(&mut hasher);
+    view.title.hash(&mut hasher);
     view.panes.hash(&mut hasher);
     view.workspaces.hash(&mut hasher);
     view.tabs.hash(&mut hasher);
+    let chrome_token = hasher.finish();
+    view.state.hash(&mut hasher);
+    view.status.hash(&mut hasher);
+    view.text.hash(&mut hasher);
+    view.surface.hash(&mut hasher);
     view.scroll.offset.hash(&mut hasher);
     view.scroll.max.hash(&mut hasher);
     view.scroll.rows.hash(&mut hasher);
-    hasher.finish()
+    (hasher.finish(), chrome_token)
 }
 
 fn clean(raw: &str, max: usize) -> String {
@@ -496,6 +658,7 @@ fn run(
     credentials: Credentials,
     name: String,
     options: herdr_client::ConnectOptions,
+    surface_active: bool,
 ) -> Result<()> {
     let runtime = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
@@ -509,7 +672,7 @@ fn run(
     let (setup_finished, setup_done) = std::sync::mpsc::sync_channel(1);
     let cancel = owner.cancel.clone();
     let client =
-        herdr_client::connect_with_remote_connector(options, true, move |stop| {
+        herdr_client::connect_with_remote_connector(options, surface_active, move |stop| {
             let setup = || -> Result<_> {
                 let mut ssh = worker_runtime.block_on(herdr_remote_transport::connect(
                     &config,
@@ -833,12 +996,19 @@ fn apply_event(state: &mut State, event: ClientEvent) -> Option<String> {
                 .to_owned();
             // A pane owns at most one pending notice; the newest replaces it.
             if !pane_id.is_empty() {
-                state.view.notifications.retain(|notice| notice.pane_id != pane_id);
+                state
+                    .view
+                    .notifications
+                    .retain(|notice| notice.pane_id != pane_id);
             }
             if state.view.notifications.len() >= MAX_NOTICES {
                 state.view.notifications.remove(0);
             }
-            state.view.notifications.push(Notice { title, body, pane_id });
+            state.view.notifications.push(Notice {
+                title,
+                body,
+                pane_id,
+            });
             return None;
         }
         ClientEvent::Message(ServerMessage::TerminalBell { count }) => {
@@ -963,7 +1133,8 @@ impl State {
         }
         let newest = max;
         let oldest = (newest - HISTORY_ROWS).max(0);
-        self.history.retain(|row, _| *row >= oldest && *row <= newest);
+        self.history
+            .retain(|row, _| *row >= oldest && *row <= newest);
     }
 
     /// The window shown for the current local offset, clamped to the buffer.
@@ -996,16 +1167,13 @@ impl State {
 }
 
 fn style_parts(style: &str) -> (serde_json::Value, Vec<String>) {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(style) else {
+    let Ok(value) = serde_json::from_str::<model::WireSurface>(style) else {
         return (json!([]), Vec::new());
     };
-    let links = value.get("links").cloned().unwrap_or_else(|| json!([]));
-    let rows = value
-        .get("rows")
-        .and_then(|rows| rows.as_array())
-        .map(|rows| rows.iter().map(|row| row.to_string()).collect())
-        .unwrap_or_default();
-    (links, rows)
+    let Ok(rows) = value.rows.iter().map(serde_json::to_string).collect() else {
+        return (json!([]), Vec::new());
+    };
+    (value.links, rows)
 }
 
 fn project(state: &mut State) {
@@ -1052,18 +1220,20 @@ fn project(state: &mut State) {
         .then(|| surface_for_pane(state, &pane_id))
         .flatten()
         .map(|(surface, _pane)| {
-        (
-            surface_text(surface),
-            surface_style(surface),
-            surface.surface_revision,
-        )
-    });
+            (
+                surface_text(surface),
+                surface_style(surface),
+                surface.surface_revision,
+            )
+        });
     if let Some((text, surface, revision)) = projection {
         state.view.scroll = surface_for_pane(state, &pane_id)
             .and_then(|(_, pane)| pane.scroll)
             .filter(|metrics| metrics.viewport_rows > 0)
             .map(|metrics| Scroll {
-                offset: metrics.offset_from_bottom.min(metrics.max_offset_from_bottom),
+                offset: metrics
+                    .offset_from_bottom
+                    .min(metrics.max_offset_from_bottom),
                 max: metrics.max_offset_from_bottom,
                 rows: metrics.viewport_rows,
             })
@@ -1145,13 +1315,16 @@ fn inside(rect: SurfaceRect, x: u16, y: u16) -> bool {
         && u32::from(y) < u32::from(rect.y) + u32::from(rect.height)
 }
 
-fn cell_style(cell: &CellData, cursor: bool, focused_border: bool) -> (u32, u32, u16) {
+fn cell_style(cell: &CellData, cursor: bool, focused_border: bool, frame: bool) -> (u32, u32, u16) {
     let mut modifier = cell.modifier;
     if cursor {
         modifier |= model::REVERSED;
     }
     if focused_border {
         modifier |= model::FOCUS_RING;
+    }
+    if frame {
+        modifier |= model::FRAME;
     }
     (cell.fg, cell.bg, modifier)
 }
@@ -1161,6 +1334,12 @@ fn cell_style(cell: &CellData, cursor: bool, focused_border: bool) -> (u32, u32,
 /// empty string when the frame cannot be represented within the payload budget,
 /// leaving the plain text path authoritative.
 fn surface_style(surface: &PaneSurfaceFrame) -> String {
+    #[derive(Serialize)]
+    struct Surface<'a> {
+        links: Vec<&'a str>,
+        rows: Vec<model::WireSurfaceRow>,
+    }
+
     let frame = &surface.frame;
     let cursor = frame.cursor.as_ref().filter(|cursor| cursor.visible);
     let mut links: Vec<&str> = Vec::new();
@@ -1169,7 +1348,7 @@ fn surface_style(surface: &PaneSurfaceFrame) -> String {
     let mut rows = Vec::new();
     for y in 0..frame.height.min(model::MAX_LINES as u16) {
         let mut text = String::new();
-        let mut runs: Vec<(usize, usize, u32, u32, u16, u32)> = Vec::new();
+        let mut runs: Vec<[u32; 6]> = Vec::new();
         for x in 0..frame.width {
             let Some(cell) = frame
                 .cells
@@ -1178,22 +1357,36 @@ fn surface_style(surface: &PaneSurfaceFrame) -> String {
                 return String::new();
             };
             if cell.skip {
+                // A wide glyph's second cell: the renderer advances one cell per
+                // glyph, so a blank keeps the next glyph in the daemon's column.
+                // The plain text for Copy still omits it.
+                if let Some(run) = runs.last_mut()
+                    && text.len() < model::MAX_LINE_CHARS * 4
+                {
+                    text.push(' ');
+                    run[1] = text.len() as u32 - run[0];
+                }
                 continue;
             }
-            let start = text.len();
+            let start = text.len() as u32;
             for ch in cell.symbol.chars().filter(|ch| !ch.is_control()) {
                 if text.len() + ch.len_utf8() > model::MAX_LINE_CHARS * 4 {
                     break;
                 }
                 text.push(ch);
             }
-            if text.len() == start {
+            if text.len() == start as usize {
                 continue;
             }
             let on_cursor = cursor.is_some_and(|cursor| cursor.x == x && cursor.y == y);
             let focused_border = focused
                 .is_some_and(|pane| inside(pane.rect, x, y) && !inside(pane.inner_rect, x, y));
-            let (fg, bg, modifier) = cell_style(cell, on_cursor, focused_border);
+            // Borders and scrollbars sit outside every pane's content.
+            let frame_cell = !surface
+                .panes
+                .iter()
+                .any(|pane| inside(pane.inner_rect, x, y));
+            let (fg, bg, modifier) = cell_style(cell, on_cursor, focused_border, frame_cell);
             let link = cell.hyperlink.and_then(|index| {
                 let slot = link_index.get_mut(index as usize)?;
                 if slot.is_none() {
@@ -1206,32 +1399,32 @@ fn surface_style(surface: &PaneSurfaceFrame) -> String {
                 }
                 *slot
             });
+            let link = link.map_or(u32::MAX, u32::from);
             let full = runs.len() >= model::MAX_RUNS_PER_LINE;
             match runs.last_mut() {
-                Some(run) if run.2 == fg && run.3 == bg && run.4 == modifier && run.5 == link.map_or(u32::MAX, u32::from) => {
-                    run.1 = text.len() - run.0;
+                Some(run) if run[2..] == [fg, bg, u32::from(modifier), link] => {
+                    run[1] = text.len() as u32 - run[0];
                 }
                 _ if full => {
                     if let Some(run) = runs.last_mut() {
-                        run.1 = text.len() - run.0;
+                        run[1] = text.len() as u32 - run[0];
                     }
                 }
-                _ => runs.push((start, text.len() - start, fg, bg, modifier, link.map_or(u32::MAX, u32::from))),
+                _ => runs.push([
+                    start,
+                    text.len() as u32 - start,
+                    fg,
+                    bg,
+                    u32::from(modifier),
+                    link,
+                ]),
             }
         }
-        rows.push((text, runs));
+        rows.push(model::WireSurfaceRow { text, runs });
     }
-    let json = json!({
-        "links": links,
-        "rows": rows
-            .iter()
-            .map(|(text, runs)| json!({
-                "t": text,
-                "r": runs.iter().map(|run| json!([run.0, run.1, run.2, run.3, run.4, run.5])).collect::<Vec<_>>(),
-            }))
-            .collect::<Vec<_>>(),
-    })
-    .to_string();
+    let Ok(json) = serde_json::to_string(&Surface { links, rows }) else {
+        return String::new();
+    };
     if json.len() > SURFACE_LIMIT {
         String::new()
     } else {
@@ -1354,25 +1547,27 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
     let offset = tail_top - next;
     let limit = (tail_top - oldest).max(0);
     project(&mut state);
-    let text = state.view.text.clone();
-    let surface = state.view.surface.clone();
-    let status = if paint.status.is_empty() {
-        state.view.status.clone()
-    } else {
-        paint.status.to_owned()
-    };
+    // Prepare the borrowed body while it is still the exact anchored view.
+    #[cfg(feature = "android-ui")]
+    let snapshot = model::Snapshot::with_surface(
+        paint.title,
+        &state.view.text,
+        if paint.status.is_empty() {
+            &state.view.status
+        } else {
+            paint.status
+        },
+        paint.shortcuts,
+        Some(&state.view.surface),
+    );
     drop(state);
     // The surface mailbox is a UI concern; `remote` alone has no window to paint.
     #[cfg(feature = "android-ui")]
-    if let Ok(snapshot) = model::Snapshot::with_surface(
-        paint.title,
-        &text,
-        &status,
-        paint.shortcuts,
-        Some(surface.as_str()),
-    ) {
+    if let Ok(snapshot) = snapshot {
         model::mailbox().set_snapshot(paint.generation, snapshot);
     }
+    #[cfg(not(feature = "android-ui"))]
+    let _ = paint;
     Ok(json!({
         "offset": offset,
         "limit": limit,
@@ -1439,7 +1634,10 @@ pub fn session_action(id: u64, action: &str) -> Result<String> {
         .filter(|workspace| valid_pane_id(workspace))
         .ok_or(Error::StaleTarget)?;
     let (method, args) = match action {
-        "tab.new" => (Method::TabCreate, json!({"workspace_id": workspace, "focus": true})),
+        "tab.new" => (
+            Method::TabCreate,
+            json!({"workspace_id": workspace, "focus": true}),
+        ),
         "tab.close" => (Method::TabClose, json!({"tab_id": tab})),
         "pane.split.right" => (
             Method::PaneSplit,
@@ -1504,15 +1702,17 @@ fn focus_chrome(
     if state.view.state == "closed" || owner.cancel.is_cancelled() {
         return Err(Error::Closed);
     }
-    if value.is_empty() || value.len() > 1024 || !known(state.snapshot.as_ref().ok_or(Error::StaleTarget)?)
+    if value.is_empty()
+        || value.len() > 1024
+        || !known(state.snapshot.as_ref().ok_or(Error::StaleTarget)?)
     {
         return Err(Error::StaleTarget);
     }
-    state
-        .client
-        .as_ref()
-        .ok_or(Error::Closed)?
-        .request(&state.view.boot_id, method, json!({ field: value }))?;
+    state.client.as_ref().ok_or(Error::Closed)?.request(
+        &state.view.boot_id,
+        method,
+        json!({ field: value }),
+    )?;
     state.follow_focus = true;
     state.view.text.clear();
     state.view.surface.clear();
@@ -1601,6 +1801,8 @@ fn key_event(key: &str) -> Result<ClientPaneInputEvent> {
 mod tests {
     use super::parse_grid;
 
+    type ViewChange = (&'static str, fn(&mut View));
+
     #[test]
     fn grid_parsing_accepts_the_phone_shape_and_falls_back_otherwise() {
         let parsed = parse_grid("259,125,9,19");
@@ -1611,9 +1813,18 @@ mod tests {
 
         // Out of range on either axis falls back rather than guessing.
         let fallback = herdr_client::ConnectOptions::default();
-        for bad in ["19,125,9,19", "401,125,9,19", "259,4,9,19", "259,201,9,19",
-                    "259,125,0,19", "259,125,65,19", "259,125,9", "", "a,b,c,d",
-                    "259,125,9,19,extra"] {
+        for bad in [
+            "19,125,9,19",
+            "401,125,9,19",
+            "259,4,9,19",
+            "259,201,9,19",
+            "259,125,0,19",
+            "259,125,65,19",
+            "259,125,9",
+            "",
+            "a,b,c,d",
+            "259,125,9,19,extra",
+        ] {
             let got = parse_grid(bad);
             assert_eq!(got.surface_size, fallback.surface_size, "{bad}");
         }
@@ -1698,23 +1909,333 @@ mod tests {
             started: Instant::now(),
         });
     }
+
+    fn polling_state() -> State {
+        State {
+            view: View {
+                state: "ready",
+                boot_id: "boot".into(),
+                pane_id: "p1".into(),
+                text: "frame".into(),
+                panes: vec![Pane {
+                    id: "p1".into(),
+                    title: "Terminal".into(),
+                    workspace_id: "w".into(),
+                    tab_id: "t".into(),
+                    status: "working",
+                }],
+                workspaces: vec![Workspace {
+                    id: "w".into(),
+                    label: "Workspace".into(),
+                    focused: true,
+                    status: "working",
+                }],
+                tabs: vec![Tab {
+                    id: "t".into(),
+                    workspace_id: "w".into(),
+                    label: "Tab".into(),
+                    focused: true,
+                    zoomed: false,
+                    status: "working",
+                }],
+                ..View::default()
+            },
+            ..State::default()
+        }
+    }
+
+    #[test]
+    fn terminal_navigation_cache_recovers_without_waiting_for_another_frame() {
+        let mut state = polling_state();
+        let (first, _) = poll_terminal_view(&mut state, 0, 0, "Host", "[]").unwrap();
+        let first: serde_json::Value = serde_json::from_str(&first).unwrap();
+        assert_eq!(first["panes"][0]["title"], "Terminal");
+        assert_eq!(first["workspaces"][0]["label"], "Workspace");
+        assert_eq!(first["tabs"][0]["label"], "Tab");
+        let since = first["token"].as_i64().unwrap() as u64;
+        let chrome = first["chrome_token"].as_i64().unwrap() as u64;
+
+        state.view.text = "new frame".into();
+        let (delta, paint) = poll_terminal_view(&mut state, since, chrome, "Host", "[]").unwrap();
+        let delta: serde_json::Value = serde_json::from_str(&delta).unwrap();
+        for field in ["panes", "workspaces", "tabs"] {
+            assert_eq!(delta[field], json!([]));
+        }
+        assert_eq!(paint.unwrap().title, "Terminal · Host");
+        let since = delta["token"].as_i64().unwrap() as u64;
+
+        // Losing the navigation cache must force a complete reply even while
+        // the full-view token still matches; a quiet reply cannot repair it.
+        let (repair, _) = poll_terminal_view(&mut state, since, 0, "Host", "[]").unwrap();
+        let repair: serde_json::Value = serde_json::from_str(&repair).unwrap();
+        for field in ["panes", "workspaces", "tabs", "title"] {
+            assert_eq!(repair[field], first[field]);
+        }
+
+        // A new frontend always receives navigation, regardless of a supplied
+        // chrome token. The omitted vectors were never discarded from State.
+        let (fresh, _) = poll_terminal_view(&mut state, 0, chrome, "Host", "[]").unwrap();
+        let fresh: serde_json::Value = serde_json::from_str(&fresh).unwrap();
+        assert_eq!(fresh["panes"], first["panes"]);
+        state.view.panes[0].status = "done";
+        let (updated, _) = poll_terminal_view(&mut state, since, chrome, "Host", "[]").unwrap();
+        let updated: serde_json::Value = serde_json::from_str(&updated).unwrap();
+        assert_ne!(updated["chrome_token"], first["chrome_token"]);
+        assert_eq!(updated["panes"][0]["status"], "done");
+        assert_eq!(updated["workspaces"], first["workspaces"]);
+        assert_eq!(updated["tabs"], first["tabs"]);
+        let since = updated["token"].as_i64().unwrap() as u64;
+        let (stale, _) = poll_terminal_view(&mut state, since, chrome, "Host", "[]").unwrap();
+        let stale: serde_json::Value = serde_json::from_str(&stale).unwrap();
+        assert_eq!(stale["panes"][0]["status"], "done");
+    }
+
+    #[test]
+    fn reused_navigation_does_not_suppress_or_repeat_pending_effects() {
+        let mut state = polling_state();
+        let (first, _) = poll_terminal_view(&mut state, 0, 0, "Host", "[]").unwrap();
+        let first: serde_json::Value = serde_json::from_str(&first).unwrap();
+        let since = first["token"].as_i64().unwrap() as u64;
+        let chrome = first["chrome_token"].as_i64().unwrap() as u64;
+        state.view.clipboard = Some("copied once".into());
+        state.view.bell = 2;
+        state.view.notifications.push(Notice {
+            title: "Permission needed".into(),
+            body: "Choose in this pane".into(),
+            pane_id: "p1".into(),
+        });
+        let (effects, _) = poll_terminal_view(&mut state, since, chrome, "Host", "[]").unwrap();
+        let effects: serde_json::Value = serde_json::from_str(&effects).unwrap();
+        assert_eq!(effects["panes"], json!([]));
+        assert_eq!(effects["clipboard"], "copied once");
+        assert_eq!(effects["bell"], 2);
+        assert_eq!(effects["notifications"][0]["pane_id"], "p1");
+        let (quiet, no_paint) =
+            poll_terminal_view(&mut state, since, chrome, "Host", "[]").unwrap();
+        let quiet: serde_json::Value = serde_json::from_str(&quiet).unwrap();
+        assert_eq!(quiet["unchanged"], true);
+        assert!(no_paint.is_none());
+    }
+
+    #[test]
+    fn native_presentation_updates_styles_without_changing_plain_text_or_navigation() {
+        let mut state = State::default();
+        state.view.pane_id = "p1".into();
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 1, "p1")));
+        let mut changed = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
+        changed.frame.cells[5].symbol = "é".into();
+        changed.frame.cells[5].fg = 0x0100_0001;
+        apply_event(&mut state, ClientEvent::Surface(Arc::new(changed.clone())));
+        let (first, first_snapshot) = poll_terminal_view(&mut state, 0, 0, "Host", "[]").unwrap();
+        let first: serde_json::Value = serde_json::from_str(&first).unwrap();
+        let first_snapshot = first_snapshot.unwrap();
+        assert_eq!(first["text"], "");
+        assert_eq!(first_snapshot.lines[1].as_ref(), "xéBx");
+        assert_eq!(
+            first_snapshot.styled.as_ref().unwrap()[1].runs[1].fg,
+            0x0100_0001
+        );
+
+        // The text and daemon revision stay unchanged, but the visible color
+        // changes. Java no longer sees styles, so the native token must carry it.
+        changed.frame.cells[5].fg = 0x0100_0002;
+        apply_event(&mut state, ClientEvent::Surface(Arc::new(changed)));
+        let since = first["token"].as_i64().unwrap() as u64;
+        let since_chrome = first["chrome_token"].as_i64().unwrap() as u64;
+        let (second, second_snapshot) =
+            poll_terminal_view(&mut state, since, since_chrome, "Host", "[]").unwrap();
+        let second: serde_json::Value = serde_json::from_str(&second).unwrap();
+        let second_snapshot = second_snapshot.unwrap();
+        assert_eq!(second["chrome_token"], first["chrome_token"]);
+        assert_ne!(second["token"], first["token"]);
+        assert_eq!(second["panes"], json!([]));
+        assert_eq!(second_snapshot.title, first_snapshot.title);
+        assert_eq!(second_snapshot.lines, first_snapshot.lines);
+        assert_eq!(
+            second_snapshot.styled.as_ref().unwrap()[1].runs[1].fg,
+            0x0100_0002
+        );
+
+        let since = second["token"].as_i64().unwrap() as u64;
+        let (quiet, no_snapshot) =
+            poll_terminal_view(&mut state, since, since_chrome, "Host", "[]").unwrap();
+        assert!(no_snapshot.is_none());
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&quiet).unwrap()["unchanged"],
+            true
+        );
+
+        pending(&mut state, "p2");
+        project(&mut state);
+        let (_, waiting) =
+            poll_terminal_view(&mut state, since, since_chrome, "Host", "[]").unwrap();
+        let waiting = waiting.unwrap();
+        assert_eq!(
+            waiting
+                .lines
+                .iter()
+                .map(|line| line.as_ref())
+                .collect::<Vec<_>>(),
+            [""]
+        );
+        assert!(waiting.styled.is_none());
+    }
+
+    #[test]
+    fn native_presentation_uses_the_anchored_window_until_returning_live() {
+        let mut state = State::default();
+        state.view.pane_id = "p1".into();
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 1, "p1")));
+        let mut frame = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
+        frame.panes[0].scroll = Some(PaneSurfaceScrollMetrics {
+            offset_from_bottom: 0,
+            max_offset_from_bottom: 5,
+            viewport_rows: 3,
+        });
+        apply_event(&mut state, ClientEvent::Surface(Arc::new(frame)));
+        let old_style = r#"{"links":[],"rows":[{"t":"old0","r":[[0,4,1,0,0,4294967295]]},{"t":"old1","r":[[0,4,0,0,0,4294967295]]},{"t":"old2","r":[[0,4,0,0,0,4294967295]]}]}"#;
+        state.remember_rows(3, 5, "old0\nold1\nold2", old_style);
+        state.anchor = Some(0);
+        project(&mut state);
+        let (older, old_snapshot) = poll_terminal_view(&mut state, 0, 0, "Host", "[]").unwrap();
+        let older: serde_json::Value = serde_json::from_str(&older).unwrap();
+        let old_snapshot = old_snapshot.unwrap();
+        assert_eq!(
+            old_snapshot
+                .lines
+                .iter()
+                .map(|line| line.as_ref())
+                .collect::<Vec<_>>(),
+            ["old0", "old1", "old2"]
+        );
+        assert_eq!(old_snapshot.styled.as_ref().unwrap()[0].runs[0].fg, 1);
+
+        state.anchor = None;
+        project(&mut state);
+        let since = older["token"].as_i64().unwrap() as u64;
+        let since_chrome = older["chrome_token"].as_i64().unwrap() as u64;
+        let (live, live_snapshot) =
+            poll_terminal_view(&mut state, since, since_chrome, "Host", "[]").unwrap();
+        let live: serde_json::Value = serde_json::from_str(&live).unwrap();
+        let live_snapshot = live_snapshot.unwrap();
+        assert_eq!(live["chrome_token"], older["chrome_token"]);
+        assert_ne!(live["token"], older["token"]);
+        assert_eq!(
+            live_snapshot
+                .lines
+                .iter()
+                .map(|line| line.as_ref())
+                .collect::<Vec<_>>(),
+            ["xxxx", "xABx", "xxxx"]
+        );
+        assert_eq!(state.view.local_offset, 0);
+    }
+
+    #[test]
+    fn terminal_updates_leave_navigation_token_unchanged() {
+        let view = View::default();
+        let before = view_tokens(&view);
+        let changes: &[ViewChange] = &[
+            ("text", |view| view.text.push_str("new output")),
+            ("surface", |view| {
+                view.surface.push_str("{\"links\":[],\"rows\":[]}")
+            }),
+            ("connection phase", |view| view.state = "ready"),
+            ("connection status", |view| view.status.push_str(" updated")),
+            ("scroll offset", |view| view.scroll.offset = 1),
+            ("scroll limit", |view| view.scroll.max = 1),
+            ("viewport rows", |view| view.scroll.rows = 24),
+        ];
+        for (name, change) in changes {
+            let mut changed = view.clone();
+            change(&mut changed);
+            let after = view_tokens(&changed);
+            assert_ne!(after.0, before.0, "{name} must update the terminal");
+            assert_eq!(after.1, before.1, "{name} must not rebuild navigation");
+        }
+    }
+
+    #[test]
+    fn navigation_token_tracks_identity_labels_status_and_focus() {
+        let view = View {
+            boot_id: "boot".into(),
+            pane_id: "p1".into(),
+            focused_pane: "p1".into(),
+            panes: vec![Pane {
+                id: "p1".into(),
+                title: "Terminal".into(),
+                workspace_id: "w1".into(),
+                tab_id: "t1".into(),
+                status: "working",
+            }],
+            workspaces: vec![Workspace {
+                id: "w1".into(),
+                label: "Workspace".into(),
+                focused: false,
+                status: "working",
+            }],
+            tabs: vec![Tab {
+                id: "t1".into(),
+                workspace_id: "w1".into(),
+                label: "Tab".into(),
+                focused: false,
+                zoomed: false,
+                status: "working",
+            }],
+            ..View::default()
+        };
+        let before = view_tokens(&view);
+        let changes: &[ViewChange] = &[
+            ("boot", |view| view.boot_id.push('2')),
+            ("selected pane", |view| view.pane_id = "p2".into()),
+            ("daemon focus", |view| view.focused_pane = "p2".into()),
+            ("pane title", |view| view.panes[0].title.push('2')),
+            ("pane status", |view| view.panes[0].status = "done"),
+            ("pane removal", |view| view.panes.clear()),
+            ("workspace label", |view| view.workspaces[0].label.push('2')),
+            ("workspace focus", |view| view.workspaces[0].focused = true),
+            ("tab label", |view| view.tabs[0].label.push('2')),
+            ("tab zoom", |view| view.tabs[0].zoomed = true),
+        ];
+        for (name, change) in changes {
+            let mut changed = view.clone();
+            change(&mut changed);
+            let after = view_tokens(&changed);
+            assert_ne!(after.0, before.0, "{name} must reach the client");
+            assert_ne!(after.1, before.1, "{name} must update navigation");
+        }
+    }
+
     #[test]
     fn scroll_offsets_stay_inside_the_pane_window() {
         assert_eq!(clamp_offset(-5, 100), 0, "never scroll past the live view");
         assert_eq!(clamp_offset(0, 100), 0);
         assert_eq!(clamp_offset(40, 100), 40);
-        assert_eq!(clamp_offset(1_000, 100), 100, "bounded by the pane's scrollback");
+        assert_eq!(
+            clamp_offset(1_000, 100),
+            100,
+            "bounded by the pane's scrollback"
+        );
         assert_eq!(clamp_offset(i64::MAX, 0), 0);
     }
     #[test]
     fn session_actions_are_allowlisted() {
         // The allowlist is checked before any session lookup, so an unknown
         // method can never reach the daemon.
-        assert!(matches!(session_action(1, "pane.clear"), Err(Error::Config)));
-        assert!(matches!(session_action(1, "command.invoke"), Err(Error::Config)));
+        assert!(matches!(
+            session_action(1, "pane.clear"),
+            Err(Error::Config)
+        ));
+        assert!(matches!(
+            session_action(1, "command.invoke"),
+            Err(Error::Config)
+        ));
         assert!(matches!(session_action(1, ""), Err(Error::Config)));
         // A stale handle fails closed for an allowed action.
-        assert!(matches!(session_action(999_999, "tab.new"), Err(Error::Closed)));
+        assert!(matches!(
+            session_action(999_999, "tab.new"),
+            Err(Error::Closed)
+        ));
     }
     #[test]
     fn notifications_and_bells_are_bounded_and_replaced_per_pane() {
@@ -1741,7 +2262,11 @@ mod tests {
         for index in 0..12 {
             apply_event(&mut state, notice(Some(&format!("p{index}")), "many"));
         }
-        assert_eq!(state.view.notifications.len(), MAX_NOTICES, "the queue stays bounded");
+        assert_eq!(
+            state.view.notifications.len(),
+            MAX_NOTICES,
+            "the queue stays bounded"
+        );
         assert_eq!(
             state.view.notifications.last().unwrap().title,
             "many".to_owned()
@@ -1749,7 +2274,11 @@ mod tests {
         // An empty title is dropped; a hostile pane id never reaches the activity.
         apply_event(&mut state, notice(Some("p1"), "   "));
         apply_event(&mut state, notice(Some("bad id!"), "hostile"));
-        assert_eq!(state.view.notifications.last().unwrap().pane_id, "", "invalid pane ids are dropped");
+        assert_eq!(
+            state.view.notifications.last().unwrap().pane_id,
+            "",
+            "invalid pane ids are dropped"
+        );
         apply_event(
             &mut state,
             ClientEvent::Message(ServerMessage::TerminalBell { count: 3 }),
@@ -1770,12 +2299,18 @@ mod tests {
         assert!(decode_osc52("aGVsbG8_").is_some());
         assert_eq!(decode_osc52(""), Some(String::new()));
         for rejected in ["not base64!", "a", "aGVsbG8=x", "//79"] {
-            assert!(decode_osc52(rejected).is_none(), "{rejected} must be dropped");
+            assert!(
+                decode_osc52(rejected).is_none(),
+                "{rejected} must be dropped"
+            );
         }
         // Raw bytes that are not UTF-8 never reach the pasteboard.
         assert!(decode_osc52("/w==").is_none(), "0xff is not UTF-8");
         let oversized = "A".repeat(MAX_CLIPBOARD_TEXT.div_ceil(3) * 4 + 8);
-        assert!(decode_osc52(&oversized).is_none(), "oversized payloads are dropped");
+        assert!(
+            decode_osc52(&oversized).is_none(),
+            "oversized payloads are dropped"
+        );
     }
     #[test]
     fn clipboard_write_is_delivered_once_and_advances_its_serial() {
@@ -1794,20 +2329,33 @@ mod tests {
                 data: "not base64!".into(),
             }),
         );
-        assert_eq!(state.view.clipboard.as_deref(), Some("hello"), "invalid writes keep the pending one");
-        assert_eq!(state.view.clipboard_serial, 1, "invalid writes do not advance");
+        assert_eq!(
+            state.view.clipboard.as_deref(),
+            Some("hello"),
+            "invalid writes keep the pending one"
+        );
+        assert_eq!(
+            state.view.clipboard_serial, 1,
+            "invalid writes do not advance"
+        );
     }
     #[test]
     fn palette_table_is_bounded() {
         assert_eq!(model::PALETTES.len(), 4);
-        assert!(model::PALETTES.iter().all(|palette| palette.ansi.len() == 16));
+        assert!(
+            model::PALETTES
+                .iter()
+                .all(|palette| palette.ansi.len() == 16)
+        );
         // An out-of-range theme never changes the active palette.
         assert!(!model::set_palette(200));
     }
     #[test]
     fn daemon_focus_move_is_followed_without_a_pending_request() {
         let mut state = State::default();
-        assert!(apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 2, "p1"))).is_none());
+        assert!(
+            apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 2, "p1"))).is_none()
+        );
         state.view.pane_id = "p1".into();
         // A tab or workspace switch delivers a snapshot and surface focused on another pane.
         state.follow_focus = true;
@@ -1853,7 +2401,10 @@ mod tests {
         // Border cells carry raw default colors plus the renderer-only ring bit,
         // so a theme switch repaints without a new surface.
         assert_eq!(runs[0][2], 0);
-        assert_ne!(runs[0][4].as_u64().unwrap() & u64::from(model::FOCUS_RING), 0);
+        assert_ne!(
+            runs[0][4].as_u64().unwrap() & u64::from(model::FOCUS_RING),
+            0
+        );
         // The cursor cell keeps its raw color and gains the reverse bit.
         assert_eq!(runs[1][2], 0x0100_0001);
         assert_ne!(runs[1][4].as_u64().unwrap() & u64::from(model::REVERSED), 0);
@@ -1870,7 +2421,10 @@ mod tests {
         let default = model::PALETTES[0];
         let latte = model::PALETTES[3];
         let cursor = rows[1].runs[1];
-        assert_eq!(model::styled_colors(&cursor, &default).0, default.background);
+        assert_eq!(
+            model::styled_colors(&cursor, &default).0,
+            default.background
+        );
         assert_eq!(model::styled_colors(&cursor, &default).1, default.ansi[1]);
         assert_eq!(model::styled_colors(&cursor, &latte).0, latte.background);
         let border = rows[1].runs[0];
@@ -1895,12 +2449,51 @@ mod tests {
         assert_eq!(parsed["rows"].as_array().unwrap().len(), 3);
     }
     #[test]
+    fn wide_glyphs_keep_later_cells_in_their_columns_without_changing_copy_text() {
+        let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
+        surface.frame.cells[5].symbol = "界".into();
+        surface.frame.cells[5].fg = 0x0100_0002;
+        surface.frame.cells[6].symbol = String::new();
+        surface.frame.cells[6].skip = true;
+        let style = surface_style(&surface);
+        let (rows, _) = model::parse_surface(&style).unwrap();
+        // Four cells, four glyph slots: the continuation cell is a blank that
+        // carries the wide glyph's own style, so its background still fills.
+        assert_eq!(rows[1].text, "x界 x");
+        assert_eq!(rows[1].text.chars().count(), 4);
+        let wide = rows[1].runs[1];
+        assert_eq!(&rows[1].text[wide.start..wide.start + wide.len], "界 ");
+        assert_eq!(wide.fg, 0x0100_0002);
+        // Copy and the plain projection never gain the placeholder.
+        let text = surface_text(&surface);
+        assert_eq!(text.lines().nth(1), Some("x界x"));
+        let snapshot = model::Snapshot::with_surface("t", &text, "s", "[]", Some(&style)).unwrap();
+        assert_eq!(snapshot.lines[1].as_ref(), "x界x");
+        assert_eq!(snapshot.widest_line_chars, 4);
+    }
+    #[test]
+    fn surface_style_marks_the_daemon_frame_outside_every_pane_content() {
+        // A 4x3 pane whose content is the middle two cells of row 1.
+        let surface = surface("boot", 1, "p1");
+        let (rows, _) = model::parse_surface(&surface_style(&surface)).unwrap();
+        let framed = |row: &model::StyledRow| -> Vec<bool> {
+            row.runs
+                .iter()
+                .flat_map(|run| {
+                    let cells = row.text[run.start..run.start + run.len].chars().count();
+                    std::iter::repeat_n(run.modifier & model::FRAME != 0, cells)
+                })
+                .collect()
+        };
+        assert_eq!(framed(&rows[0]), [true; 4]);
+        assert_eq!(framed(&rows[1]), [true, false, false, true]);
+        assert_eq!(framed(&rows[2]), [true; 4]);
+    }
+    #[test]
     fn surface_style_projects_bounded_openable_links() {
         let mut surface = Arc::unwrap_or_clone(surface("boot", 1, "p1"));
-        surface.frame.hyperlinks = vec![
-            "https://example.com/a".into(),
-            "javascript:alert(1)".into(),
-        ];
+        surface.frame.hyperlinks =
+            vec!["https://example.com/a".into(), "javascript:alert(1)".into()];
         surface.frame.cells[5].hyperlink = Some(0);
         surface.frame.cells[6].hyperlink = Some(1);
         let style = surface_style(&surface);
@@ -2188,7 +2781,8 @@ mod tests {
         let id = connect(config, "fixture-unused-password".into()).unwrap();
         let start = Instant::now();
         loop {
-            let state: serde_json::Value = serde_json::from_str(&poll(id, 0, false).unwrap()).unwrap();
+            let state: serde_json::Value =
+                serde_json::from_str(&poll(id, 0, false).unwrap()).unwrap();
             if state["state"] == "closed" {
                 break;
             }

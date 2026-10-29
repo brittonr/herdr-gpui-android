@@ -4,7 +4,7 @@ use gpui::{App, AppContext, WindowOptions};
 use jni::{
     JNIEnv,
     objects::{JClass, JString},
-    sys::{jboolean, jfloat, jlong, jstring},
+    sys::{jboolean, jfloat, jint, jintArray, jlong, jstring},
 };
 
 // The transitive android-activity crate references this symbol. The actual host
@@ -105,8 +105,8 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativePaused(
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeTouch(
     env: JNIEnv<'_>,
     _class: JClass<'_>,
-    action: jni::sys::jint,
-    action_index: jni::sys::jint,
+    action: jint,
+    action_index: jint,
     ids: jni::objects::JIntArray<'_>,
     xs: jni::objects::JFloatArray<'_>,
     ys: jni::objects::JFloatArray<'_>,
@@ -165,10 +165,10 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeKey(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
     generation: jlong,
-    key_code: jni::sys::jint,
-    action: jni::sys::jint,
-    meta_state: jni::sys::jint,
-    unicode_codepoint: jni::sys::jint,
+    key_code: jint,
+    action: jint,
+    meta_state: jint,
+    unicode_codepoint: jint,
 ) -> jboolean {
     if action == 1 {
         return 1;
@@ -254,13 +254,10 @@ pub(crate) fn open_link(generation: i64, url: &str) -> bool {
     gpui_mobile::android::jni::with_env(|env| {
         let activity = gpui_mobile::android::jni::activity(env)?;
         let name = jni_mobile::strings::JNIString::from("gpuiOpenLink");
-        let signature = jni_mobile::signature::RuntimeMethodSignature::from_str(
-            "(JLjava/lang/String;)V",
-        )
-        .map_err(|e| e.to_string())?;
-        let value = env
-            .new_string(url)
-            .map_err(|e| e.to_string())?;
+        let signature =
+            jni_mobile::signature::RuntimeMethodSignature::from_str("(JLjava/lang/String;)V")
+                .map_err(|e| e.to_string())?;
+        let value = env.new_string(url).map_err(|e| e.to_string())?;
         env.call_method(
             &activity,
             name,
@@ -363,6 +360,18 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetFoll
     model::mailbox().set_follow(generation, follow != 0);
 }
 
+/// Draws the raw shell `handle` (0 for Herdr's pane) for this generation.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeAttachShell(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    handle: jlong,
+) -> jboolean {
+    u8::from(handle >= 0 && model::mailbox().set_shell(generation, handle as u64))
+}
+
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeResetPan(
@@ -414,6 +423,32 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetThem
     }
 }
 
+/// Chrome colors for one built-in palette, in `GpuiChrome`'s order. The Java
+/// toolbar, rail and system bars use these so they follow the same theme as
+/// the painted header; an unknown index returns null.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeThemeColors(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    index: jint,
+) -> jintArray {
+    let Some(palette) = usize::try_from(index)
+        .ok()
+        .and_then(|index| model::PALETTES.get(index))
+    else {
+        return std::ptr::null_mut();
+    };
+    let roles = model::ChromeRoles::of(palette).to_argb();
+    let Ok(array) = env.new_int_array(roles.len() as i32) else {
+        return std::ptr::null_mut();
+    };
+    if env.set_int_array_region(&array, 0, &roles).is_err() {
+        return std::ptr::null_mut();
+    }
+    array.into_raw()
+}
+
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnapshot(
@@ -424,7 +459,6 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnap
     text: JString<'_>,
     status: JString<'_>,
     shortcuts: JString<'_>,
-    surface: JString<'_>,
 ) {
     if model::mailbox().state().generation != generation {
         return;
@@ -443,16 +477,7 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnap
         else {
             return Ok(None);
         };
-        // An absent or oversized surface leaves the bounded plain text in place.
-        let styled = bounded_string(&mut env, &surface, model::MAX_SNAPSHOT_BYTES)?.unwrap_or_default();
-        Ok(Snapshot::with_surface(
-            &title,
-            &text,
-            &status,
-            &shortcuts,
-            Some(styled.as_str()),
-        )
-        .ok())
+        Ok(Snapshot::new(&title, &text, &status, &shortcuts).ok())
     })();
     match snapshot {
         Ok(Some(snapshot)) => {
@@ -473,6 +498,81 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnap
                 );
             }
         }
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnapshotChrome(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+    title: JString<'_>,
+    status: JString<'_>,
+    shortcuts: JString<'_>,
+) {
+    if model::mailbox().state().generation != generation {
+        return;
+    }
+    let chrome = (|| -> jni::errors::Result<Option<(String, String, String)>> {
+        let Some(title) = bounded_string(&mut env, &title, 1024)? else {
+            return Ok(None);
+        };
+        let Some(status) = bounded_string(&mut env, &status, 4096)? else {
+            return Ok(None);
+        };
+        let Some(shortcuts) = bounded_string(&mut env, &shortcuts, model::MAX_SHORTCUT_JSON)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some((title, status, shortcuts)))
+    })();
+    match chrome {
+        Ok(Some((title, status, shortcuts))) => {
+            match model::mailbox().set_snapshot_chrome(generation, &title, &status, &shortcuts) {
+                Ok(_) => {}
+                Err(_) => {
+                    let _ = env.throw_new(
+                        "java/lang/IllegalArgumentException",
+                        "Invalid or oversized GPUI snapshot chrome",
+                    );
+                }
+            }
+        }
+        Ok(None) => {
+            let _ = env.throw_new(
+                "java/lang/IllegalArgumentException",
+                "Invalid or oversized GPUI snapshot chrome",
+            );
+        }
+        Err(_) => {
+            // Preserve an existing Java exception; never log terminal contents.
+            if !env.exception_check().unwrap_or(true) {
+                let _ = env.throw_new(
+                    "java/lang/IllegalStateException",
+                    "Could not read GPUI snapshot chrome",
+                );
+            }
+        }
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeCopyText(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    generation: jlong,
+) -> jstring {
+    let Ok(snapshot) = model::mailbox().snapshot_for_copy(generation) else {
+        return std::ptr::null_mut();
+    };
+    // Copy runs on the Android worker; neither joining nor JNI allocation holds
+    // the mailbox mutex or performs a daemon round trip.
+    let text = snapshot.lines.join("\n");
+    match env.new_string(text) {
+        Ok(value) => value.into_raw(),
+        Err(_) => std::ptr::null_mut(),
     }
 }
 
@@ -529,10 +629,10 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeImeEven
     _class: JClass<'_>,
     generation: jlong,
     session: jlong,
-    kind: jni::sys::jint,
+    kind: jint,
     text: JString<'_>,
-    start: jni::sys::jint,
-    end: jni::sys::jint,
+    start: jint,
+    end: jint,
 ) -> jboolean {
     if start < 0 || end < 0 {
         return 0;

@@ -53,7 +53,7 @@ host when the phone disconnects.
    one-use key, or save a key once from **Remote hosts** and choose
    **Use saved SSH key**. Passwords and pasted keys are used once; only an
    explicitly saved identity is kept
-4. Select a pane, then use the GPUI terminal and **Cmds** palette
+4. Select a pane, then use the GPUI terminal and **Commands** palette
 
 Inspection retrieves the public server key without authenticating. Credentials
 are sent only after the next connection verifies the explicitly saved key.
@@ -61,6 +61,23 @@ A changed key blocks connection; it is never silently accepted. Verify the new
 key separately before using the explicit forget/retrust flow. Changes to the
 profile's connection identity clear its trust, and stale dialogs cannot save a
 pin for a different profile revision.
+
+The host list leads with the saved hosts. Each one has a single **Connect**
+action; its ⋮ menu holds **Edit profile**, **Edit extra keys**, **Forget SSH
+trust** and **Delete profile**, and forgetting trust or deleting still asks for
+confirmation. The device's saved key, **Reopen the last session at launch**,
+**Companion hosts** and **Local device diagnostics** follow under **This
+device**. On panels wider than 720 dp the list keeps a centred 720 dp column.
+
+For a trusted host, with a device SSH key saved, the ⋮ menu also offers **Open
+shell**: the account's login shell on a remote PTY, without Herdr. It needs the
+same pinned host key and transport as Connect, and an SSH server that grants
+the account a PTY and a shell (no `ForceCommand` or `PermitTTY no`). Herdr need
+not be installed. The shell is told `xterm-256color` and gets each new size the
+terminal lays out. Leaving the terminal closes the connection, which ends the
+shell and anything it started without a multiplexer; nothing reconnects or
+replays. Input is queued in order to the PTY; as with a pane, a key that was
+queued may already have run when a connection fails.
 
 Host settings, trusted fingerprints, extra keys and OMP quick commands are saved
 in an AndroidKeyStore-encrypted profile file excluded from backup. An explicitly
@@ -94,6 +111,41 @@ each row exactly or the row falls back to plain text, so a malformed surface can
 never misalign colors. Graphics, images and unlimited scrollback are not
 rendered yet.
 
+Native projection, buffered history and renderer decoding share a typed row/run
+format rather than allocating a generic JSON tree for every span. The JSON wire
+shape and existing byte, row, span, Unicode-boundary and hyperlink limits remain
+unchanged. See the [Pixel measurements](docs/pixel-fold-notes.md) for the measured
+cost and device-verification scope.
+
+The active SSH terminal's `pollTerminal` prepares its generation-fenced GPUI
+snapshot directly in Rust on the existing background worker. Java receives
+navigation, notifications and scroll state, without transferring either terminal
+body through Java JSON decoding. **Copy pane text** reads the bounded, held native
+snapshot on the existing worker only when requested, without a daemon round
+trip. Its capture is generation-fenced; a delayed result cannot write the
+clipboard after the connection or pane changes or the activity pauses. The
+activity's connection lock covers native painting and metadata adoption, so
+pause or replacement cannot publish a late frame. Local title,
+status and shortcut updates change only snapshot chrome, preserving the held
+styled body. The HTTPS workflow keeps its plain-text snapshot and immediate Copy
+path. Frame validation and input/render scheduling are unchanged.
+
+Terminal polls acknowledge the frame and navigation tokens independently. When
+Java already holds the current navigation token, a changed terminal frame does
+not resend the pane/workspace/tab trees or header title; Java retains its cached
+navigation while Rust still prepares the complete styled frame. Label, status,
+focus, pane and boot changes invalidate navigation normally. A zero frame token
+requests the complete view. A zero or stale navigation token forces navigation
+delivery even if the frame token is current, so a missing cache never waits for
+another terminal update to recover. Clipboard writes, notices and bells retain
+their once-only delivery. Background mirrors and the host picker's poll contract
+are unchanged.
+
+Rows without hyperlinks are shaped and painted as one styled-text element, with
+their existing color and decoration runs. This avoids a separate flex child,
+element ID and text layout for every span. Rows containing hyperlinks retain the
+interactive span path and the same bounded Android link handling.
+
 Links the pane publishes (OSC 8) open in the platform browser when tapped. The
 client forwards only `http` and `https` targets, at most 2 KiB without control
 characters, and the activity rechecks the scheme before starting the intent; no
@@ -102,16 +154,23 @@ file, `intent:` or custom scheme is reachable this way.
 Launching reopens the remembered session: the app reads the last host and pane,
 verifies the pinned fingerprint, connects with the saved device key and starts
 the terminal without showing the host list. The list remains reachable from the
-terminal's **Tab > Remote hosts…**, where **Reopen the last session at launch**
+terminal's **Session > Remote hosts…**, where **Reopen the last session at launch**
 switches the behaviour back to starting on the list.
 
 Every saved host is mirrored in the rail by its own read-only session, polled
-every three seconds, so all trees are visible at once; the terminal itself still
+every three seconds. A mirror negotiates `surface_active: false` in the initial
+hello, preserving host/workspace/agent snapshots and endpoint health checks
+without subscribing to unseen terminal surfaces. The terminal itself still
 owns exactly one connection at a time. Tapping a pane under another host opens
-that host's session and focuses the pane. The client keeps at most eight live
+a new surface-active connection and focuses the pane; it does not reuse an
+inactive mirror as a terminal. The client keeps at most eight live
 sessions (terminal plus mirrors plus a transient connection while switching) and
-refuses more. Mirrors exist only while they can be seen: hiding the rail or
-leaving the activity closes them and brings the session count back to one.
+refuses more. Mirrors exist only while the activity is resumed and the rail is
+visible. A hidden cold start opens only the terminal; hiding the rail or a
+narrow-window transition closes its mirrors. A later visible rail repopulates
+them. Late connection results are closed if their original sidebar owner has
+stopped. Leaving the activity closes all client connections, not the host's
+terminal processes.
 
 The view stops tailing the moment a scroll target is outstanding, so incoming
 output no longer yanks a reader back to the newest line, and it only re-pins to
@@ -137,40 +196,58 @@ client renders and answers an idle poll with a few hundred bytes instead of the
 whole tree. A mirror poll omits the surface and pane text it never draws, and the
 cadence drops from twenty polls a second to ten when no input arrived recently.
 
-Rail text, dots and titles are drawn from the same palette as the terminal chrome,
-so keep colour literals opaque (a 24-bit literal has a zero alpha channel and
-renders nothing).
+Rail, toolbar, status-bar and sheet colours come from chrome roles the renderer
+derives from the terminal palette (`ChromeRoles` in `model.rs`, read once per
+theme through `nativeThemeColors`), so every Android surface follows the
+selected theme. Each text role (primary text, secondary text, accent, danger and
+warning) is blended in 5% steps toward the primary text colour - and that colour
+toward black or white - until it reaches 4.5:1 against its surface. Keep colour
+literals opaque (a 24-bit literal has a zero alpha channel and renders nothing).
 
-Each host prints as a rounded header with a circular status dot, its name, and
-how many workspaces its session reports; the connected host carries a faint
-accent pill. Workspaces print as small upper-case labels, panes below them with
-a dot and up to two lines of title, and the focused pane gets the stronger
-accent pill with white text. A one-pixel rule separates hosts, the rail keeps a
-matching edge line, and a short gradient at the bottom edge shows the list
-continues past the screen. A host dot is solid while its session is connected
-and a ring while it dials or is down; a row flashes blue when its agent changes
-state or takes on a different task, so a background refresh is visible without
-being noise.
+Each host prints as a row with a circular status dot, its name and its state
+word. Workspaces print as sentence-case labels, panes below them with a dot,
+up to two lines of title and the agent's state word. The connected host and the
+focused pane sit on the theme's tonal selection container and report themselves
+as selected to accessibility services; the workspace holding the focused pane is
+tinted with the primary colour. A one-pixel rule separates hosts, a persistent
+rail keeps a matching edge line, and a short gradient at the bottom edge shows
+the list continues past the screen. A host dot is solid while its session is
+connected and a ring while it dials or is down; a dot pulses once when its agent
+changes state, so a background refresh is visible without being noise.
 
-The rail is open by default at every width and its hidden/shown choice persists;
-**Hosts** brings it back and **Hide** closes it, and the rail also answers to
-gestures: swipe right anywhere in the left half of the terminal to open it, and
-swipe left on the rail itself to close it. Android's Back gesture owns the screen
-edges and ignores exclusion requests on this version, so the open swipe starts
-inside the content rather than at x=0; the closed state is labelled in
-the host colour so an empty terminal is never mistaken for a missing rail. It lists every saved host above the session tree. Choosing one
+The rail opens by default at 600 dp and wider and remembers the wide-panel
+preference across narrow-window transitions. The **Hosts** icon toggles it and
+shows a selected container while it is open; its tooltip and spoken label say
+what a tap will do. Below 600 dp - the Pixel Fold's cover, for example - the
+rail is a modal drawer instead: the smaller of 320 dp and 86% of the window,
+raised over a scrim, and closed by Back, a tap on the scrim or any choice in it. The drawer
+never changes the remembered wide-panel preference, so unfolding restores the
+rail the way it was. The rail also answers to gestures: swipe right anywhere in
+the left half of the terminal to open it, and swipe left on the rail itself to
+close it. Android's Back gesture owns the screen edges and ignores exclusion
+requests on this version, so the open swipe starts inside the content rather
+than at x=0. It lists every saved host above the session tree. Choosing one
 opens a new SSH connection with the saved device key, focuses the pane this phone
 last used there - or an agent pane that is not idle - and bumps the connection
 generation, so the old handle is closed before
 anything from it can reach the new surface. A host without a pinned fingerprint
 or without a saved key is refused with a message rather than guessed at.
 
+Half-open with its fold across the window - tabletop, propped like a small
+laptop - the terminal ends at the fold and the host's keys move from the
+toolbar strip to a deck of 56 dp keys below it, above the unchanged toolbar. The
+fold comes from the device's own `androidx.window.extensions`, loaded as an
+optional library and read while the activity is started; a device without it
+keeps the normal layout. The split needs room on both sides, so an open
+keyboard restores the normal layout until it closes. A fold running down the
+window (book posture) is not split, as that would halve the terminal's width.
+
 A vertical drag on the terminal scrolls the pane's scrollback: the client sends
 `pane.scroll` with an absolute `offset_from_bottom`, clamped to the window the
-daemon reports, and a tap shorter than 18 dp still reaches the terminal. **Tab >
+daemon reports, and a tap shorter than 18 dp still reaches the terminal. **Session >
 Jump to live output** returns to offset zero.
 
-**Tab** sends only allowlisted methods - `tab.create`, `tab.close`,
+**Session** sends only allowlisted methods - `tab.create`, `tab.close`,
 `pane.split`, `pane.close`, `pane.zoom` - against the daemon's focused
 workspace, tab and pane. Close requests are confirmed first, and nothing else
 can be invoked from the renderer.
@@ -190,9 +267,31 @@ rather than clearing it.
 **View > Theme** switches between the built-in palettes (Default, Nord, Mocha
 and the light Latte). The palette is applied when a frame is painted, so an open
 terminal repaints immediately without reconnecting or waiting for output.
+**Follow system** uses Latte while the phone is in light mode and Mocha, the
+same family's dark half, in dark mode; switching the system theme repaints the
+open terminal at once, with no restart.
+Applying a theme also recolours the status and navigation bars (with dark icons
+on a light theme), the toolbar, the rail and every sheet; sheets and menus use
+the device's own light or dark dialog style to match the palette's lightness.
+
+A pane shorter than the body spreads its rows over the body's height, up to
+twice their natural pitch; the type size and columns do not change, and cell
+backgrounds fill each taller row so painted panels stay solid.
+Around the pane, the body shows the palette background unless at least three
+quarters of the pane's outer ring of cells is painted visibly unlike it (any
+channel more than 32 levels apart), as an agent drawing its own background is.
+Then the commonest such colour fills the letterbox, and it keeps filling until
+the share drops under half, so content scrolling past the edge cannot make the
+surround flicker. The native projection marks the daemon's borders and
+scrollbars - every cell outside each pane's content rectangle - with a
+renderer-only `FRAME` bit: those cells do not vote, and on the default
+background they show the surround. Cells inside the pane keep their own
+background, so a default cell next to painted ones still draws the palette's.
 
 **Hosts** shows a workspace/agent rail and **Panes** the same session tree as a
 sheet, both from the daemon snapshot and each row carrying its agent status.
+The sheet lists tabs only for a workspace that has more than one; a lone tab is
+the workspace itself, so its panes sit directly under the workspace.
 Choosing a pane sends one `pane.focus`; choosing a tab or workspace sends
 `tab.focus` or `workspace.focus` and then follows the pane the daemon focuses,
 while another client's focus move is ignored. Every surface that follows is

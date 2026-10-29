@@ -9,4 +9,17 @@
         <item name="android:navigationBarColor">#101216</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
+    <!-- The GPUI host list and terminal only. DeviceDefault is the platform's
+         current design on each device, so their dialogs, menus and controls
+         match it instead of the 2014 Material theme; the terminal recolors its
+         own chrome from the palette. -->
+    <style name="GpuiTheme" parent="android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#E5AC55</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">#101216</item>
+        <item name="android:statusBarColor">#101216</item>
+        <item name="android:navigationBarColor">#101216</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
 </resources>

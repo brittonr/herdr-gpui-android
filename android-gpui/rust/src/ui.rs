@@ -1,7 +1,7 @@
 //! GPUI elements rendered by the mobile wgpu/Vulkan backend, with virtual rows.
 use crate::model::{self, DisplayMetrics, ViewState};
 use gpui::{prelude::*, *};
-use std::{ops::Range, sync::Arc};
+use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc};
 
 /// Live companion terminal view, embeddable in a GPUI window.
 pub struct TerminalView {
@@ -13,6 +13,14 @@ pub struct TerminalView {
     input_bounds: Bounds<Pixels>,
     viewport: Size<Pixels>,
     error: Option<String>,
+    /// Whether the last frame filled the letterbox; it holds a filled one longer.
+    letterbox_filled: bool,
+    /// The raw SSH shell drawn instead of Herdr's pane, by its handle.
+    #[cfg(unix)]
+    shell: Option<(u64, Entity<crate::rio::Terminal>)>,
+    /// The style last given to the shell, so unchanged frames do not repaint it.
+    #[cfg(unix)]
+    shell_style: Option<gpui_rio::TerminalStyle>,
     _updates: Task<()>,
 }
 
@@ -25,7 +33,7 @@ impl TerminalView {
             while changes.recv().await.is_ok() {
                 if this
                     .update(cx, |this, cx| {
-                        if this.refresh_snapshot() {
+                        if this.refresh_snapshot(cx) {
                             cx.notify();
                         }
                     })
@@ -35,7 +43,7 @@ impl TerminalView {
                 }
             }
         });
-        Self {
+        let mut view = Self {
             state: model::mailbox().state(),
             focus,
             scroll: UniformListScrollHandle::new(),
@@ -44,15 +52,29 @@ impl TerminalView {
             input_bounds: Bounds::default(),
             viewport: Size::default(),
             error: None,
+            letterbox_filled: false,
+            #[cfg(unix)]
+            shell: None,
+            #[cfg(unix)]
+            shell_style: None,
             _updates: updates,
-        }
+        };
+        // The window can open after a shell was attached, with no later change
+        // to wake the view: show what the mailbox already names.
+        #[cfg(unix)]
+        view.attach_shell(view.state.shell, cx);
+        view
     }
 
-    fn refresh_snapshot(&mut self) -> bool {
+    fn refresh_snapshot(&mut self, cx: &mut Context<Self>) -> bool {
         let state = model::mailbox().state();
         if self.state.revision == state.revision {
             return false;
         }
+        #[cfg(unix)]
+        self.attach_shell(state.shell, cx);
+        #[cfg(not(unix))]
+        let _ = cx;
         let new_generation = self.state.generation != state.generation;
         if new_generation || !state.active {
             self.marked.clear();
@@ -80,6 +102,47 @@ impl TerminalView {
         }
         self.state = state;
         true
+    }
+
+    /// Shows the shell `handle` names, or Herdr's pane again for 0. Input
+    /// stays with this view: Java's IME bridge commits it through the mailbox.
+    #[cfg(unix)]
+    fn attach_shell(&mut self, handle: u64, cx: &mut Context<Self>) {
+        if self.shell.as_ref().map_or(0, |(current, _)| *current) == handle {
+            return;
+        }
+        self.shell_style = None;
+        self.shell = crate::shell::session(handle).map(|session| {
+            let style = self.shell_style(self.viewport.width);
+            let terminal = crate::rio::Terminal::attach(session, style, cx);
+            terminal.update(cx, |terminal, _| terminal.set_host_input(true));
+            (handle, terminal)
+        });
+    }
+
+    #[cfg(unix)]
+    fn shell_style(&self, width: Pixels) -> gpui_rio::TerminalStyle {
+        gpui_rio::TerminalStyle {
+            theme: crate::shell::theme(&model::palette()),
+            font_family: crate::fonts::MONO_FAMILY.into(),
+            font_size: model::shell_font_size(self.state.display_preferences, width.into()),
+        }
+    }
+
+    /// The attached shell's element, after giving it the current theme and size.
+    #[cfg(unix)]
+    fn shell_element(&mut self, width: Pixels, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let terminal = self.shell.as_ref()?.1.clone();
+        let style = self.shell_style(width);
+        if self.shell_style.as_ref() != Some(&style) {
+            let next = style.clone();
+            terminal.update(cx, |terminal, cx| {
+                terminal.update_style(next);
+                cx.notify();
+            });
+            self.shell_style = Some(style);
+        }
+        Some(terminal.into_any_element())
     }
 
     #[allow(dead_code)]
@@ -143,61 +206,162 @@ fn button(
         .child(div().min_w_0().truncate().child(label.into()))
 }
 
-/// One terminal row as a row of painted runs. Linked runs are clickable and
-/// open through the bounded Android intent path.
-fn styled_row_element(
-    row: &model::StyledRow,
-    links: &Arc<Vec<String>>,
-    generation: i64,
-    row_index: usize,
-    metrics: DisplayMetrics,
-) -> Div {
-    let mut line = div().flex().flex_none().items_center();
-    for (index, run) in row.runs.iter().enumerate() {
-        let piece = &row.text[run.start..run.start + run.len];
-        // Interactive spans need an element id; the run index keeps it stable.
-        let mut span = div()
-            .flex_none()
-            .whitespace_nowrap()
-            .id(ElementId::Name(format!("r{row_index}-{index}").into()));
-        if let Some(url) = run.link.and_then(|link| links.get(usize::from(link)).cloned()) {
-            span = span
-                .cursor_pointer()
-                .hover(|style| style.bg(rgb(model::palette().chrome)))
-                .on_click(move |_, _, _| {
-                    crate::android::open_link(generation, &url);
-                });
-        }
-        line = line.child(span.child(styled_run(piece, run, metrics)));
-    }
-    line
+/// Text, style runs and tappable byte ranges for one painted row.
+struct GridRow {
+    text: SharedString,
+    runs: Vec<TextRun>,
+    links: Vec<(Range<usize>, String)>,
 }
 
-/// One terminal run painted with the palette's colors and its attributes.
-fn styled_run(text: &str, run: &model::StyledRun, metrics: DisplayMetrics) -> StyledText {
-    let base = Font {
+/// The layout a linked row painted, kept so a tap resolves against it.
+type PaintedLine = Rc<RefCell<Option<(Point<Pixels>, ShapedLine)>>>;
+
+impl GridRow {
+    /// `fill` is the colour behind the row; runs on that colour paint nothing.
+    fn styled(
+        row: &model::StyledRow,
+        links: &[String],
+        palette: &model::Palette,
+        fill: u32,
+    ) -> Self {
+        Self {
+            text: row.text.clone().into(),
+            runs: row
+                .runs
+                .iter()
+                .map(|run| text_run(run, palette, fill))
+                .collect(),
+            links: row
+                .runs
+                .iter()
+                .filter_map(|run| {
+                    let url = links.get(usize::from(run.link?))?.clone();
+                    Some((run.start..run.start + run.len, url))
+                })
+                .collect(),
+        }
+    }
+
+    fn plain(line: &Arc<str>, palette: &model::Palette) -> Self {
+        Self {
+            text: SharedString::from(line.clone()),
+            runs: vec![TextRun {
+                len: line.len(),
+                font: mono_font(),
+                color: rgb(palette.foreground).into(),
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            }],
+            links: Vec::new(),
+        }
+    }
+
+    /// Paints the row on the cell grid: every glyph starts at its own column,
+    /// including glyphs a proportional system font supplies, so box borders
+    /// and columns line up across rows. Linked rows resolve a tap against the
+    /// same glyph positions they painted.
+    fn into_element(
+        self,
+        generation: i64,
+        row_index: usize,
+        font_size: Pixels,
+        cell_width: Pixels,
+    ) -> AnyElement {
+        if self.text.is_empty() {
+            return div().into_any_element();
+        }
+        let Self { text, runs, links } = self;
+        let painted: PaintedLine = Rc::default();
+        let keep = (!links.is_empty()).then(|| painted.clone());
+        let line = canvas(
+            move |_, window, _| {
+                window
+                    .text_system()
+                    .shape_line(text, font_size, &runs, Some(cell_width))
+            },
+            move |bounds, line, window, cx| {
+                let height = bounds.size.height;
+                let _ =
+                    line.paint_background(bounds.origin, height, TextAlign::Left, None, window, cx);
+                let _ = line.paint(bounds.origin, height, TextAlign::Left, None, window, cx);
+                if let Some(keep) = keep {
+                    *keep.borrow_mut() = Some((bounds.origin, line));
+                }
+            },
+        )
+        .size_full();
+        if links.is_empty() {
+            return line.into_any_element();
+        }
+        div()
+            .id(("terminal-row", row_index))
+            .size_full()
+            .cursor_pointer()
+            .child(line)
+            .on_click(move |event, _, _cx| {
+                let url = painted.borrow().as_ref().and_then(|(origin, line)| {
+                    link_at(line, &links, event.position().x - origin.x).map(str::to_owned)
+                });
+                let Some(url) = url else {
+                    return;
+                };
+                #[cfg(target_os = "android")]
+                crate::android::open_link(generation, &url);
+                #[cfg(not(target_os = "android"))]
+                {
+                    let state = model::mailbox().state();
+                    if state.active && state.generation == generation {
+                        _cx.open_url(&url);
+                    }
+                }
+            })
+            .into_any_element()
+    }
+}
+
+/// The link under a tap `x` pixels into a painted row, if any.
+fn link_at<'a>(
+    line: &ShapedLine,
+    links: &'a [(Range<usize>, String)],
+    x: Pixels,
+) -> Option<&'a str> {
+    let index = line.index_for_x(x)?;
+    links
+        .iter()
+        .find(|(range, _)| range.contains(&index))
+        .map(|(_, url)| url.as_str())
+}
+
+fn mono_font() -> Font {
+    Font {
         family: crate::fonts::MONO_FAMILY.into(),
         features: Default::default(),
         fallbacks: None,
         weight: FontWeight::NORMAL,
         style: FontStyle::Normal,
-    };
-    let palette = model::palette();
-    let mut font = base;
+    }
+}
+
+/// One terminal run painted with the palette's colors and its attributes. Its
+/// background is left to the surface only when the surface already shows it.
+fn text_run(run: &model::StyledRun, palette: &model::Palette, fill: u32) -> TextRun {
+    let mut font = mono_font();
     if run.modifier & model::BOLD != 0 {
         font.weight = FontWeight::BOLD;
     }
     if run.modifier & model::ITALIC != 0 {
         font.style = FontStyle::Italic;
     }
-    let (fg, bg) = model::styled_colors(run, &palette);
+    let (fg, bg) = model::styled_colors(run, palette);
     let color = rgb(fg).into();
-    let _ = metrics;
-    StyledText::new(text.to_owned()).with_runs(vec![TextRun {
-        len: text.len(),
+    // The daemon's frame on the default background is part of the surround.
+    let surround = run.modifier & model::FRAME != 0 && bg == palette.background;
+    TextRun {
+        len: run.len,
         font,
         color,
-        background_color: (bg != palette.background).then(|| rgb(bg).into()),
+        background_color: (bg != fill && !surround).then(|| rgb(bg).into()),
         underline: (run.modifier & model::UNDERLINE != 0).then(|| UnderlineStyle {
             thickness: px(1.),
             color: Some(color),
@@ -207,7 +371,7 @@ fn styled_run(text: &str, run: &model::StyledRun, metrics: DisplayMetrics) -> St
             thickness: px(1.),
             color: Some(color),
         }),
-    }])
+    }
 }
 
 impl Render for TerminalView {
@@ -222,6 +386,11 @@ impl Render for TerminalView {
             .clone()
             .unwrap_or_else(|| snapshot.status.clone());
         let viewport = window.viewport_size();
+        #[cfg(unix)]
+        let shell = self.shell_element(viewport.width, cx);
+        #[cfg(not(unix))]
+        let shell: Option<AnyElement> = None;
+        let shell_mode = shell.is_some();
         let metrics = DisplayMetrics::fit(
             self.state.display_preferences,
             viewport.width.into(),
@@ -235,21 +404,40 @@ impl Render for TerminalView {
             }
         }
         let row_width = px(metrics.row_width(snapshot.widest_line_chars));
-        // The daemon's pane is its own height, usually shorter than a phone
-        // surface. Spreading its rows over the surface removes the dead band
-        // without depending on row identity the daemon does not provide, and
-        // without shrinking the number of readable columns.
-        // Natural leading: a terminal's rhythm is information. Spare height goes
-        // above the block, never into the line spacing.
-        let fit = 1.0f32;
-        let pan = self.state.pan;
-        let row_height = px(metrics.row_height);
+        // Panning ends at the last cell; a step past it would only show blank.
+        let overflow =
+            (metrics.row_width(snapshot.widest_line_chars) - f32::from(viewport.width)).max(0.);
+        model::mailbox().set_pan_limit(overflow);
+        let pan = self.state.pan.min(overflow);
+        // The bars under the body have one fixed height, so the body's height is
+        // known before layout: the viewport less the header and visible bars.
+        let notice_height = (metrics.font_size * 1.5 + 8.).ceil();
+        let notices = usize::from(snapshot.truncated) + usize::from(!self.marked.is_empty());
+        let surface_height = f32::from(viewport.height)
+            - if shell_mode {
+                0.
+            } else {
+                metrics.header_height
+            }
+            - notices as f32 * notice_height;
+        // Herdr fixes a pane's rows, usually fewer than a phone panel shows.
+        // Their pitch grows until they fill the body, up to twice the natural
+        // pitch, so the type size and every column stay as they are.
+        let pitch =
+            model::spread_row_height(metrics.row_height, snapshot.lines.len(), surface_height);
+        let row_height = px(pitch);
         let font_size = px(metrics.font_size);
-        // A pane whose grid is shorter than the surface used to paint from the
-        // top, leaving a dead band under the last row. Anchor those rows to the
-        // bottom the way a terminal does.
-        let surface_height = viewport.height.to_f64() - f64::from(metrics.header_height);
-        let content_height = f64::from(metrics.row_height * fit) * snapshot.lines.len() as f64;
+        let cell_width = px(metrics.cell_width());
+        let row_inset = px(metrics.row_inset());
+        let palette = model::palette();
+        let chrome = model::ChromeRoles::of(&palette);
+        // A program that paints its own background fills the letterbox with it,
+        // so its pane is not a dark card in a light frame, or the reverse.
+        let letterbox = model::letterbox(&snapshot.edge_colors, &palette, self.letterbox_filled);
+        self.letterbox_filled = letterbox.is_some();
+        let fill = letterbox.unwrap_or(palette.background);
+        // Past the spread cap a pane still falls short; it keeps even margins.
+        let content_height = pitch * snapshot.lines.len() as f32;
         let short_pane = content_height < surface_height - 1.;
         // An empty pane must say why it is empty: a bare surface reads as a crash.
         let empty_card = div()
@@ -288,54 +476,55 @@ impl Render for TerminalView {
             .when(false, |root| root)
             .font_family(crate::fonts::SANS_FAMILY)
             .track_focus(&self.focus)
-            .child(
-                div()
-                    .flex_none()
-                    .min_w_0()
-                    .h(px(metrics.header_height))
-                    // Fixed dark frame: the Java rail and toolbar cannot follow a
-                    // palette, so the header joins them instead of the page.
-                    .bg(rgb(0x1e222a))
-                    .text_color(rgb(0xdce5ef))
-                    .flex()
-                    .items_center()
-                    .gap(px(metrics.gap))
-                    .px(px(metrics.padding + 4.))
-                    .border_b_1()
-                    .border_color(rgb(model::palette().border))
-                    // Chrome keeps its own scale: the pane title must stay legible
-                    // on the cover, where the fitted terminal type drops to 11 px.
-                    .text_size(px(metrics.font_size.clamp(13., 16.)))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(snapshot.title.clone()),
-                    )
-                    .child(
-                        // The status is a short state word, not a second title: give
-                        // the pane identity the rest of the row instead of half of it.
-                        div()
-                            .flex_none()
-                            .max_w(px(metrics.font_size * 14.))
-                            .min_w_0()
-                            .truncate()
-                            .text_right()
-                            .text_color({
-                                let palette = model::palette();
-                                rgb(if self.error.is_some() {
-                                    palette.ansi[1]
+            // A shell has no pane title or agent state to show: its rows take
+            // the header's height, and its exit or failure shows in the banner.
+            .when(!shell_mode, |root| {
+                root.child(
+                    div()
+                        .flex_none()
+                        .min_w_0()
+                        .h(px(metrics.header_height))
+                        // The Java toolbar, rail and system bars take the same roles,
+                        // so a light theme gets light chrome around its light page.
+                        .bg(rgb(chrome.surface))
+                        .text_color(rgb(chrome.on_surface))
+                        .flex()
+                        .items_center()
+                        .gap(px(metrics.gap))
+                        .px(row_inset)
+                        .border_b_1()
+                        .border_color(rgb(chrome.outline))
+                        // Chrome keeps its own scale: the pane title must stay legible
+                        // on the cover, where the fitted terminal type drops to 11 px.
+                        .text_size(px(metrics.font_size.clamp(13., 16.)))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(snapshot.title.clone()),
+                        )
+                        .child(
+                            // The status is a short state word, not a second title: give
+                            // the pane identity the rest of the row instead of half of it.
+                            div()
+                                .flex_none()
+                                .max_w(px(metrics.font_size * 14.))
+                                .min_w_0()
+                                .truncate()
+                                .text_right()
+                                .text_color(rgb(if self.error.is_some() {
+                                    chrome.danger
                                 } else if active {
-                                    palette.accent
+                                    chrome.primary
                                 } else {
-                                    palette.ansi[3]
-                                })
-                            })
-                            .child(status),
-                    ),
-            )
+                                    chrome.warning
+                                }))
+                                .child(status),
+                        ),
+                )
+            })
             .child({
                 let mut body = div()
                     .flex_1()
@@ -343,126 +532,141 @@ impl Render for TerminalView {
                     .min_w_0()
                     .relative()
                     .overflow_hidden()
+                    .bg(rgb(fill))
                     .flex()
                     .flex_col();
                 // A horizontal drag pans the pane; vertical deltas stay with the
                 // list so scrolling keeps working exactly as before.
-                body = body.on_scroll_wheel(move |event, _, _| {
-                    let (dx, dy) = match event.delta {
-                        ScrollDelta::Pixels(point) => (f32::from(point.x), f32::from(point.y)),
-                        ScrollDelta::Lines(point) => (point.x, point.y),
-                    };
-                    if let Some(delta) = model::pan_from_wheel(dx, dy) {
-                        model::mailbox().pan(delta);
-                    }
-                });
-                body
-                    .when(snapshot.lines.is_empty(), |body| {
-                        body.items_center().justify_center()
-                    })
-                    .when(pan > 0., |body| {
-                        // A panned pane has no visible left edge; mark it so a cut
-                        // line is never mistaken for a broken render.
-                        body.child(
-                            div()
-                                .absolute()
-                                .left_0()
-                                .top_0()
-                                .bottom_0()
-                                .w(px(2.))
-                                .bg(rgb(model::palette().accent)),
-                        )
-                    })
-                    .when(!snapshot.lines.is_empty(), |body| {
-                        // A pane shorter than the surface gets even margins above
-                        // and below; one tall band over the text reads as a fault.
-                        body.when(short_pane, |body| body.justify_center())
-                    .child(
+                // A shell fits its own width and scrolls its own history.
+                if !shell_mode {
+                    body = body.on_scroll_wheel(move |event, _, _| {
+                        let (dx, dy) = match event.delta {
+                            ScrollDelta::Pixels(point) => (f32::from(point.x), f32::from(point.y)),
+                            ScrollDelta::Lines(point) => (point.x, point.y),
+                        };
+                        if let Some(delta) = model::pan_from_wheel(dx, dy) {
+                            model::mailbox().pan(delta);
+                        }
+                    });
+                }
+                body.when(snapshot.lines.is_empty() && !shell_mode, |body| {
+                    body.items_center().justify_center()
+                })
+                .when_some(shell, |body, shell| body.child(shell))
+                .when(pan > 0. && !shell_mode, |body| {
+                    // A panned pane has no visible left edge; mark it so a cut
+                    // line is never mistaken for a broken render.
+                    body.child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top_0()
+                            .bottom_0()
+                            .w(px(2.))
+                            .bg(rgb(model::palette().accent)),
+                    )
+                })
+                .when(!snapshot.lines.is_empty() && !shell_mode, |body| {
+                    // A pane shorter than the surface gets even margins above
+                    // and below; one tall band over the text reads as a fault.
+                    body.when(short_pane, |body| body.justify_center()).child(
                         div()
                             .min_w_0()
-                            .when(short_pane, |box_| {
-                                box_.h(px(content_height.max(0.) as f32))
-                            })
+                            .when(short_pane, |box_| box_.h(px(content_height.max(0.))))
                             .when(!short_pane, |box_| box_.size_full())
                             .child(
-                                div()
-                                    .h_full()
-                                    .w(row_width)
-                                    .ml(px(-pan))
-                                    .child(uniform_list(
-                            "terminal-lines",
-                            snapshot.lines.len(),
-                            move |range, _, _| {
-                                range
-                                    .map(|index| {
-                                        let line = div()
-                                            .h(row_height)
-                                            .w(row_width)
-                                            // Match the header's inset so the terminal and
-                                            // the pane title share one left edge.
-                                            .px(px(metrics.padding + 4.))
-                                            .font_family(crate::fonts::MONO_FAMILY)
-                                            .text_size(font_size)
-                                            .line_height(row_height)
-                                            .whitespace_nowrap();
-                                        // Painted cells win when their runs tile the
-                                        // plain line; otherwise keep the plain text.
-                                        match rows.styled.as_ref().and_then(|styled| styled.get(index)) {
-                                            Some(styled_line) => line.child(styled_row_element(
-                                                styled_line,
-                                                &rows.links,
-                                                generation,
-                                                index,
-                                                metrics,
-                                            )),
-                                            None => line.child(SharedString::from(rows.lines[index].clone())),
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
-                            },
-                        )
-                        .size_full()
-                        .with_horizontal_sizing_behavior(
-                            ListHorizontalSizingBehavior::Unconstrained,
-                        )
-                        .track_scroll(&self.scroll),
-                            ),
+                                div().h_full().w(row_width).ml(px(-pan)).child(
+                                    uniform_list(
+                                        "terminal-lines",
+                                        snapshot.lines.len(),
+                                        move |range, _, _| {
+                                            range
+                                                .map(|index| {
+                                                    let line = div()
+                                                        .h(row_height)
+                                                        .w(row_width)
+                                                        // Match the header's inset so the terminal and
+                                                        // the pane title share one left edge.
+                                                        .px(row_inset)
+                                                        .font_family(crate::fonts::MONO_FAMILY)
+                                                        .text_size(font_size)
+                                                        .line_height(row_height)
+                                                        .whitespace_nowrap();
+                                                    // Painted cells win when their runs tile the
+                                                    // plain line; otherwise keep the plain text.
+                                                    let row = match rows
+                                                        .styled
+                                                        .as_ref()
+                                                        .and_then(|styled| styled.get(index))
+                                                    {
+                                                        Some(styled) => GridRow::styled(
+                                                            styled,
+                                                            &rows.links,
+                                                            &palette,
+                                                            fill,
+                                                        ),
+                                                        None => GridRow::plain(
+                                                            &rows.lines[index],
+                                                            &palette,
+                                                        ),
+                                                    };
+                                                    line.child(row.into_element(
+                                                        generation, index, font_size, cell_width,
+                                                    ))
+                                                })
+                                                .collect::<Vec<_>>()
+                                        },
+                                    )
+                                    .size_full()
+                                    .with_horizontal_sizing_behavior(
+                                        ListHorizontalSizingBehavior::Unconstrained,
+                                    )
+                                    .track_scroll(&self.scroll),
+                                ),
                             ),
                     )
-                    })
-                    .when(snapshot.lines.is_empty(), |body| body.child(empty_card))
-                    .child(
-                        canvas(
-                            |_, _, _| (),
-                            move |bounds, _, window, cx| {
-                                entity.update(cx, |this, cx| {
-                                    let height = row_height.min(bounds.size.height);
-                                    this.input_bounds = Bounds::new(
-                                        point(bounds.left(), bounds.bottom() - height),
-                                        size(px(2.).min(bounds.size.width), height),
-                                    );
-                                    window.handle_input(
-                                        &this.focus,
-                                        ElementInputHandler::new(this.input_bounds, cx.entity()),
-                                        cx,
-                                    );
-                                });
-                            },
-                        )
-                        .absolute()
-                        .size_full(),
+                })
+                .when(snapshot.lines.is_empty() && !shell_mode, |body| {
+                    body.child(empty_card)
+                })
+                .child(
+                    canvas(
+                        |_, _, _| (),
+                        move |bounds, _, window, cx| {
+                            entity.update(cx, |this, cx| {
+                                let height = row_height.min(bounds.size.height);
+                                this.input_bounds = Bounds::new(
+                                    point(bounds.left(), bounds.bottom() - height),
+                                    size(px(2.).min(bounds.size.width), height),
+                                );
+                                window.handle_input(
+                                    &this.focus,
+                                    ElementInputHandler::new(this.input_bounds, cx.entity()),
+                                    cx,
+                                );
+                            });
+                        },
                     )
-                    .into_any_element()
+                    .absolute()
+                    .size_full(),
+                )
+                .into_any_element()
             })
             .when(snapshot.truncated, |root| {
                 root.child(
                     div()
                         .flex_none()
                         .px(px(metrics.padding + 4.))
-                        .py_1()
+                        .h(px(notice_height))
+                        .line_height(px(notice_height))
                         .text_size(px(metrics.font_size))
                         .truncate()
-                        .text_color(rgb(model::palette().ansi[3]))
+                        .text_color(rgb(model::readable(
+                            palette.ansi[3],
+                            palette.background,
+                            palette.foreground,
+                            model::TEXT_CONTRAST,
+                        )))
                         .child(if self.state.display_preferences.compact {
                             "Display limit reached"
                         } else {
@@ -475,7 +679,8 @@ impl Render for TerminalView {
                     div()
                         .flex_none()
                         .px(px(metrics.padding + 4.))
-                        .py_1()
+                        .h(px(notice_height))
+                        .line_height(px(notice_height))
                         .text_size(px(metrics.font_size))
                         .truncate()
                         .bg(rgb(model::palette().border))
@@ -588,10 +793,125 @@ impl EntityInputHandler for TerminalView {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use super::DisplayMetrics;
+    use super::{DisplayMetrics, GridRow, link_at, text_run};
     use crate::model;
     use gpui::{TextRun, TextSystem, WindowTextSystem, font, px};
     use std::sync::Arc;
+
+    #[test]
+    fn grid_rows_keep_every_cell_in_its_column_across_styles_and_fallbacks() {
+        let text_system = Arc::new(TextSystem::new(Arc::new(
+            gpui_wgpu::CosmicTextSystem::new_without_system_fonts("Roboto"),
+        )));
+        crate::fonts::install(&text_system).unwrap();
+        let window_text = WindowTextSystem::new(text_system);
+        // A wide glyph plus its placeholder, a box-drawing glyph the bundled
+        // font lacks, and a decorated cell: columns 0, 1, 2, 3 and 4.
+        let (rows, _) = model::parse_surface(
+            r#"{"rows":[{"t":"a界 ─Z","r":[[0,1,0,0,0,4294967295],[1,4,16777217,0,8,4294967295],[5,3,0,0,0,4294967295],[8,1,0,33554448,256,4294967295]]}]}"#,
+        ).unwrap();
+        let row = &rows[0];
+        let palette = model::PALETTES[0];
+        let runs: Vec<_> = row
+            .runs
+            .iter()
+            .map(|run| text_run(run, &palette, palette.background))
+            .collect();
+        for font_size in [11., 14., 18., 36.] {
+            let cell = font_size * model::MONO_ADVANCE_EM;
+            let line = window_text.shape_line(
+                row.text.clone().into(),
+                px(font_size),
+                &runs,
+                Some(px(cell)),
+            );
+            for (byte, column) in [(0, 0.), (1, 1.), (4, 2.), (5, 3.), (8, 4.)] {
+                let x = f32::from(line.x_for_index(byte));
+                assert!(
+                    (x - column * cell).abs() < 0.01,
+                    "{font_size}: byte {byte} at {x}"
+                );
+                assert_eq!(line.index_for_x(px(column * cell + 0.1)), Some(byte));
+            }
+        }
+        // The cell is the bundled font's real advance: forcing the grid moves no
+        // ASCII glyph, so ordinary text looks exactly as it did unforced.
+        let ascii = "Terminal 0123 ~|".repeat(5);
+        let run = [TextRun {
+            len: ascii.len(),
+            font: font(crate::fonts::MONO_FAMILY),
+            ..TextRun::default()
+        }];
+        let natural = window_text.shape_line(ascii.clone().into(), px(14.), &run, None);
+        let forced = window_text.shape_line(
+            ascii.into(),
+            px(14.),
+            &run,
+            Some(px(14. * model::MONO_ADVANCE_EM)),
+        );
+        for byte in [1, 40, 79] {
+            let drift = f32::from(natural.x_for_index(byte)) - f32::from(forced.x_for_index(byte));
+            assert!(drift.abs() < 0.5, "byte {byte} drifted {drift}");
+        }
+    }
+
+    #[test]
+    fn linked_cells_resolve_taps_on_the_grid_and_nothing_else() {
+        let text_system = Arc::new(TextSystem::new(Arc::new(
+            gpui_wgpu::CosmicTextSystem::new_without_system_fonts("Roboto"),
+        )));
+        crate::fonts::install(&text_system).unwrap();
+        let window_text = WindowTextSystem::new(text_system);
+        let (rows, links) = model::parse_surface(
+            r#"{"links":["https://example.com/界"],"rows":[{"t":"see ─docs here","r":[[0,4,0,0,0,4294967295],[4,7,0,0,8,0],[11,5,0,0,0,4294967295]]}]}"#,
+        ).unwrap();
+        let latte = model::PALETTES[3];
+        let row = GridRow::styled(&rows[0], &links, &latte, latte.background);
+        assert_eq!(
+            row.links,
+            vec![(4..11, "https://example.com/界".to_owned())]
+        );
+        let cell = 14. * model::MONO_ADVANCE_EM;
+        let line = window_text.shape_line(row.text.clone(), px(14.), &row.runs, Some(px(cell)));
+        // Columns 4 to 8 are "─docs"; the fallback glyph does not shift them.
+        for column in [4., 5., 8.] {
+            assert_eq!(
+                link_at(&line, &row.links, px(column * cell + 1.)),
+                Some("https://example.com/界")
+            );
+        }
+        for column in [0., 3., 9., 12.] {
+            assert_eq!(link_at(&line, &row.links, px(column * cell + 1.)), None);
+        }
+    }
+
+    #[test]
+    fn cells_keep_their_own_background_over_a_filled_letterbox() {
+        // A painted cell, a default content cell and a default scrollbar cell
+        // of the daemon's frame. The content cell keeps the palette's light
+        // background over a dark fill; the frame cell shows whatever is behind.
+        let (rows, _) = model::parse_surface(
+            r#"{"rows":[{"t":"ab│","r":[[0,1,0,35528238,0,4294967295],[1,1,0,0,0,4294967295],[2,3,0,0,16384,4294967295]]}]}"#,
+        )
+        .unwrap();
+        let latte = model::PALETTES[3];
+        let dark = 0x1e1e2e;
+        let backgrounds = |fill: u32| -> Vec<_> {
+            GridRow::styled(&rows[0], &[], &latte, fill)
+                .runs
+                .iter()
+                .map(|run| run.background_color)
+                .collect()
+        };
+        assert_eq!(
+            backgrounds(dark),
+            vec![None, Some(gpui::rgb(latte.background).into()), None]
+        );
+        assert_eq!(
+            backgrounds(latte.background),
+            vec![Some(gpui::rgb(dark).into()), None, None]
+        );
+    }
 
     #[test]
     fn bundled_control_labels_fit_at_all_supported_sizes_in_320_dp() {

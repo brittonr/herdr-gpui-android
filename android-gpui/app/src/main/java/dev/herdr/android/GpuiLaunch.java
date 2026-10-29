@@ -49,6 +49,24 @@ public final class GpuiLaunch {
         }
     }
 
+    /** The host's own login shell instead of a Herdr pane; the terminal connects it. */
+    static void launchShell(Activity activity, SavedRemoteHost host) {
+        if (activity == null || host == null) throw new IllegalArgumentException("Remote host is required");
+        RemoteNative.ensureLoaded(activity);
+        final Session grant;
+        synchronized (GpuiLaunch.class) {
+            discardExpired(System.nanoTime());
+            if (pending != null || active != null) throw new IllegalStateException("Close the open GPUI terminal first");
+            grant = new Session(host, GpuiTerminalProtocol.title(host.name), System.nanoTime());
+            pending = grant;
+        }
+        try { activity.startActivity(new Intent(activity, GpuiTerminalActivity.class)); }
+        catch (RuntimeException failure) {
+            release(grant);
+            throw failure;
+        }
+    }
+
     private static void validatePane(String paneId) {
         if (paneId == null || paneId.length() > 128
                 || !paneId.matches("[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)*")) {
@@ -95,6 +113,8 @@ public final class GpuiLaunch {
         final String paneId;
         final String title;
         final long createdAt;
+        /** A raw SSH shell: no Herdr daemon, panes or agent status. */
+        final boolean shell;
 
         Session(SavedHost host, String paneId, String title, long createdAt) {
             this.host = host;
@@ -102,6 +122,7 @@ public final class GpuiLaunch {
             this.paneId = paneId;
             this.title = title;
             this.createdAt = createdAt;
+            this.shell = false;
         }
 
         Session(SavedRemoteHost host, long handle, String paneId, String title, long now) {
@@ -111,6 +132,16 @@ public final class GpuiLaunch {
             this.paneId = paneId;
             this.title = title;
             this.createdAt = now;
+            this.shell = false;
+        }
+
+        Session(SavedRemoteHost host, String title, long now) {
+            this.host = null;
+            this.remoteHost = host;
+            this.paneId = "";
+            this.title = title;
+            this.createdAt = now;
+            this.shell = true;
         }
 
         synchronized long takeRemoteHandle() {

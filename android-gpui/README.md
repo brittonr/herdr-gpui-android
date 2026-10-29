@@ -25,11 +25,33 @@ the terminal activity is rendered by **Rust GPUI and its wgpu Android backend**.
 It is not a WebView. The original `android/` application can still be built
 without the GPUI native library.
 
+## Raw SSH shell
+
+A trusted host's ⋮ menu in **Remote hosts** offers **Open shell** when a device
+SSH key is saved. It opens the host's own login shell on a remote PTY instead
+of a Herdr pane, through the same pinned host key and transport. A modified
+copy of [gpui-rio](https://github.com/cachix/agentaps) and
+[rio-vt](https://github.com/raphamorim/rio) under `rust/vendor/` parses and
+draws it; their READMEs list what changed. The terminal reports
+`xterm-256color` and uses the whole surface: no header, the font's own line
+height, and auto type at the app's 13 px default, smaller on narrow panels down
+to 11 px to keep close to 80 columns. The PTY gets every size it lays out
+(47 × 109 on the inner panel, 60 × 67 on the cover). It follows the theme and
+scrolls its own 10,000-line history with a drag. Typing, the on-screen keyboard,
+physical keys, the toolbar keys and quick commands use the same ordered input
+path as a pane. **Session** offers Copy screen text, Remote hosts and Save
+screenshot.
+
+There is no Herdr behind a shell: no rail, Panes, pane actions or agent status,
+and leaving the terminal ends the shell. When the shell exits, its last screen
+stays and **Reconnect** opens a new one.
+
 ## Quick commands
 
 Version 0.4.0 adds a per-host Oh My Pi command palette with editable previews,
-pinning, Insert, and separately confirmed Send + Enter. Tap **Cmds** in a GPUI
-terminal. See [usage and verified presets](QUICK-COMMANDS.md) and
+pinning, Insert, and separately confirmed Send + Enter. Tap **Commands** (the
+lightning-bolt icon; **Cmds** in earlier builds) in a GPUI terminal. See
+[usage and verified presets](QUICK-COMMANDS.md) and
 [0.4.0 validation](QUICK-COMMANDS-VALIDATION.md). That Compact release updated
 0.3.0 in place. Its command palette is also available per host in Remote 0.5.0.
 
@@ -54,6 +76,7 @@ Native Android host manager (encrypted profiles)
      -> RemoteNative (Rust background workers)
         -> embedded russh over TCP or Iroh /iroh/ssh
         -> Herdr remote-client-bridge -> generation-1 client/protocol
+        -> or a raw PTY shell -> vendored gpui-rio session + rio-vt grid
      -> existing HTTPS CompanionClient (Java worker)
         -> authenticated herdr-companion from this source
            -> Herdr pane.read / pane.send_text / pane.send_keys
@@ -92,36 +115,61 @@ named colors, indexed and truecolor cells, bold, dim, italic, underline, reverse
 strikethrough, hidden text and a block cursor, with every run bounded and
 validated before it reaches the renderer. Split panes and their borders are
 painted together and the panes' focused border carries the accent ring.
+Every row is painted on one cell grid at the bundled Noto Mono advance, so
+characters the bundled font lacks and Android draws from a proportional system
+font - box drawing, blocks, braille, arrows - stay in their columns, and the
+second cell of a wide character keeps its own column without entering copied
+text. Horizontal pan stops when the pane's last column reaches the screen edge.
+When at least three quarters of the pane's outer cells are painted in colours
+clearly unlike the palette background - an agent drawing its own background,
+for instance - the commonest of them fills the area around the pane. Once it
+fills, it holds until under half, so scrolling cannot make the surround flicker.
+The daemon's borders and scrollbar on the default background take that colour
+too; cells inside the pane keep their own.
 Terminal hyperlinks in the daemon's table become tappable runs; only `http(s)`
 targets are forwarded, to the platform browser, never to files or custom
 schemes. Launching the app reopens the remembered host and pane directly, skipping the
-**Remote Herdr** list; **Tab > Remote hosts…** opens the list from a terminal, and
+**Remote Herdr** list; **Session > Remote hosts…** opens the list from a terminal, and
 its **Reopen the last session at launch** checkbox turns the behaviour off. The
 rail opens by default on panels 600 dp and wider (so the inner fold display, not
-the cover) and remembers whether you hid it.
-Measured on the Pixel 9 Pro Fold: cold start is 177 ms to the host list and
-109 ms to the terminal activity (`am start -W`), the process idles at 0.0 % CPU
-per thread once connected, and connecting to the daemon costs a couple of
-seconds of SSH and pane selection. A `dumpsys SurfaceFlinger --latency` read on
+the cover) and remembers whether you hid it. On a narrower window **Hosts** opens
+it as a modal drawer over the terminal instead; Back, a tap outside it or a
+choice closes it, and it never changes that remembered preference.
+Half-open with the fold across the screen (tabletop), the terminal ends at the
+fold and the host's keys move from the toolbar strip to a deck of large keys
+below it, over the unchanged toolbar. An open keyboard leaves no room under the
+fold, so the normal layout returns until it closes. A fold down the screen (book
+posture) keeps the normal layout: splitting there would halve the terminal.
+Hidden or automatically collapsed rails do not open background mirror sessions,
+including at startup. Returning to a wide window restores mirrors only when the
+sidebar is wanted; leaving the activity closes them.
+Activity startup timing (`am start -W`) does not include SSH and pane readiness,
+and a quiet single session is not representative of a busy multi-host sidebar.
+See the [Pixel measurements](docs/pixel-fold-notes.md) for the measured workload,
+APK identities and verification scope. A `dumpsys SurfaceFlinger --latency` read on
 the GPUI SurfaceView layer comes back empty while the surface is idle, so frame
 cadence has to be sampled during interaction rather than at rest.
 Terminal type follows the pane's own wrap width and Android's system font scale;
 pick a fixed size in **View** to override it. A lost transport offers **Hosts**
-and **Reconnect** instead of leaving the surface frozen. It starts with **Hosts** - every saved machine expanded with its own workspaces
-and agents, kept fresh by one background session per host - so you can see and
-jump into any of them from one tree.: every saved SSH host, with the current
-one marked. Tapping another host reconnects in place with the saved device key
+and **Reconnect** instead of leaving the surface frozen. **Hosts** opens one tree
+of saved hosts, workspaces and agents, with the current host marked. Background
+mirrors negotiate inactive surface interest in their initial hello: they keep
+receiving metadata without requesting terminal frames they never display.
+The active host's navigation has a separate change token, so terminal output and
+scrolling do not rebuild the sidebar or recalculate pane titles. Confirmed pane
+selection and pane/workspace/tab metadata changes still refresh navigation.
+Tapping another host opens a surface-active connection with the saved device key
 and the rail switches to that host's workspaces and agents; the GPUI surface and
 your scroll position stay in the app. The terminal opens the pane you last used
 on that host, otherwise an agent that is doing something, so a switch never
 lands on an idle shell and looks blank. The header names the pane and host.
 
-Swipe down on the terminal to read scrollback and up to return; **Tab > Jump to
+Swipe down on the terminal to read scrollback and up to return; **Session > Jump to
 live output** returns to the newest line. The activity converts a drag into
 `pane.scroll` offsets bounded by the daemon's own `max_offset_from_bottom`, and
 a short tap still reaches the terminal.
 
-**Tab** controls the focused session through allowlisted daemon methods: new
+**Session** controls the focused session through allowlisted daemon methods: new
 tab, split right or down, zoom toggle, close pane and close tab (both confirmed).
 The client follows whichever pane the daemon focuses afterwards.
 
@@ -187,14 +235,18 @@ requested.
 
 1. Use an existing SSH account and compatible running Herdr session on the host.
    Iroh additionally needs its SSH receiver. See [remote setup](REMOTE.md).
-2. Install the Remote preview and add a TCP or Iroh profile.
+2. Install the Remote preview and add a TCP or Iroh profile. Each host shows one
+   **Connect** action; its ⋮ menu holds **Edit profile**, **Edit extra keys**,
+   **Forget SSH trust** and **Delete profile**, and the last two still ask for
+   confirmation.
 3. Independently verify its SSH fingerprint, authenticate, and select a pane.
-4. Use **List** for the workspace/agent rail (it opens by default where width
-   allows) or **Panes** for the same session tree as a sheet. Workspace, tab and
-   pane rows carry the agent status dot (idle, working, blocked, done); a tap
-   switches workspace or tab, or focuses that pane, without leaving the
-   terminal. **Cmds** opens editable OMP commands and **View** the compact
-   display options.
+4. Use **Hosts**, the first toolbar icon, for the workspace/agent rail (it opens
+   by default where width allows) or **Panes** for the same session tree as a
+   sheet. Workspace, tab and pane rows carry the agent status dot (idle,
+   working, blocked, done); a tap switches workspace or tab, or focuses that
+   pane, without leaving the terminal. **Commands** opens editable OMP commands
+   and **View** the compact display options. Below 600 dp, **View**, **Session**
+   and **Close** move into the **More** menu. Long-press an icon for its name.
 
 For the optional HTTPS workflow, open **Companion hosts** and use the
 [companion setup](../android/README.md#host-prerequisites), then tap **GPUI** from

@@ -15,7 +15,10 @@
         tools:ignore="DataExtractionRules"
         android:usesCleartextTraffic="false" android:hardwareAccelerated="true"
         android:supportsRtl="true">
+        <!-- The device's fold reports (tabletop posture); absent on most phones. -->
+        <uses-library android:name="androidx.window.extensions" android:required="false" />
         <activity android:name="dev.herdr.android.RemoteHostsActivity" android:exported="true"
+            android:theme="@style/GpuiTheme"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -31,6 +34,7 @@
         <activity android:name="dev.herdr.android.MainActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name="dev.herdr.android.GpuiTerminalActivity" android:exported="false"
+            android:theme="@style/GpuiTheme"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density|fontScale"
             android:windowSoftInputMode="adjustResize">
             <meta-data android:name="android.app.lib_name" android:value="herdr_gpui_android" />

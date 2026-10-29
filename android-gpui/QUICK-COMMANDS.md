@@ -1,8 +1,9 @@
 # Oh My Pi quick commands — 0.4.0
 
-Open a GPUI terminal and tap **Cmds**. Pinned commands appear first. Tap one to
-preview and edit it; opening the palette, pinning, saving, deleting and canceling
-do not send terminal input.
+Open a GPUI terminal and tap **Commands**, the lightning-bolt icon (**Cmds** in
+earlier builds). Pinned commands appear first, marked with a star after the
+name. Tap one to preview and edit it; opening the palette, pinning, saving,
+deleting and canceling do not send terminal input.
 
 The initial pinned entries are Context (`/context`), Usage (`/usage`), Model
 (`/switch`), Effort (`/effort`) and Tasks (`/todo`). Jobs, Session info, Compact

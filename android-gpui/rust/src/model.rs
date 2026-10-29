@@ -26,6 +26,10 @@ pub const HIDDEN: u16 = 1 << 7;
 pub const STRIKETHROUGH: u16 = 1 << 8;
 /// Renderer-only bit: paint this cell with the palette accent (focused pane border).
 pub const FOCUS_RING: u16 = 1 << 15;
+/// Renderer-only bit: a cell of the daemon's frame - a border or scrollbar,
+/// outside every pane's content. On the default background it shows the
+/// surround, so a filled letterbox continues through it.
+pub const FRAME: u16 = 1 << 14;
 
 /// A terminal palette: the 16 ANSI colors plus the default pair and chrome.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,8 +103,7 @@ pub const PALETTES: [Palette; 4] = [
 static PALETTE_INDEX: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 pub fn palette() -> Palette {
-    PALETTES[PALETTE_INDEX.load(std::sync::atomic::Ordering::Relaxed) as usize
-        % PALETTES.len()]
+    PALETTES[PALETTE_INDEX.load(std::sync::atomic::Ordering::Relaxed) as usize % PALETTES.len()]
 }
 
 /// Selects a built-in palette. Returns whether the choice changed.
@@ -123,6 +126,9 @@ pub fn set_palette(index: u8) -> bool {
     }
     PALETTE_INDEX.swap(index, std::sync::atomic::Ordering::Relaxed) != index
 }
+
+/// Wire value for the terminal's default color, which the palette supplies.
+const DEFAULT_COLOR: u32 = 0;
 
 /// Resolves a wire color (named 1..=16, indexed 0x01xxxxxx, RGB 0x02RRGGBB).
 pub fn resolve_color(value: u32, default: u32, palette: &Palette) -> u32 {
@@ -172,6 +178,139 @@ pub fn styled_colors(run: &StyledRun, palette: &Palette) -> (u32, u32) {
         fg = bg;
     }
     (fg, bg)
+}
+
+/// WCAG AA contrast for normal-size text.
+#[cfg(any(feature = "android-ui", test))]
+pub(crate) const TEXT_CONTRAST: f32 = 4.5;
+
+/// WCAG 2 relative luminance of an opaque 0xRRGGBB color.
+#[cfg(any(feature = "android-ui", test))]
+fn relative_luminance(color: u32) -> f32 {
+    let channel = |shift: u32| {
+        let value = ((color >> shift) & 0xff) as f32 / 255.;
+        if value <= 0.039_28 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+}
+
+/// WCAG 2 contrast ratio between two opaque 0xRRGGBB colors.
+#[cfg(any(feature = "android-ui", test))]
+pub(crate) fn contrast(a: u32, b: u32) -> f32 {
+    let (a, b) = (relative_luminance(a), relative_luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// `amount` of `over` mixed into `base`, per channel.
+#[cfg(any(feature = "android-ui", test))]
+fn mix(base: u32, over: u32, amount: f32) -> u32 {
+    let channel = |shift: u32| {
+        let from = ((base >> shift) & 0xff) as f32;
+        let to = ((over >> shift) & 0xff) as f32;
+        ((from + (to - from) * amount).round().clamp(0., 255.) as u32) << shift
+    };
+    channel(16) | channel(8) | channel(0)
+}
+
+/// The palette color itself when it is legible on `background`, else the least
+/// blend toward `fallback` that reaches `minimum` contrast.
+#[cfg(any(feature = "android-ui", test))]
+pub(crate) fn readable(color: u32, background: u32, fallback: u32, minimum: f32) -> u32 {
+    (0..=20)
+        .map(|step| mix(color, fallback, step as f32 / 20.))
+        .find(|candidate| contrast(*candidate, background) >= minimum)
+        .unwrap_or(fallback)
+}
+
+/// Colors for everything outside the terminal grid: the GPUI header and the
+/// Android system bars, toolbar, rail and sheets. One palette drives them all,
+/// so a light theme gets light chrome, and every text role meets WCAG AA on
+/// the surface it is drawn on.
+#[cfg(any(feature = "android-ui", test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ChromeRoles {
+    pub background: u32,
+    pub surface: u32,
+    pub on_surface: u32,
+    pub on_surface_variant: u32,
+    pub outline: u32,
+    pub primary: u32,
+    /// Tonal container for keycaps and secondary buttons.
+    pub control: u32,
+    /// Container for the selected rail row or toggled control.
+    pub selected: u32,
+    pub danger: u32,
+    pub warning: u32,
+    /// Status dots: paired with a word, so they carry no text contrast duty.
+    pub success: u32,
+    pub info: u32,
+    pub working: u32,
+    /// Black text reads better than white on this surface.
+    pub light: bool,
+}
+
+#[cfg(any(feature = "android-ui", test))]
+impl ChromeRoles {
+    pub(crate) fn of(palette: &Palette) -> Self {
+        let surface = palette.chrome;
+        let text = palette.foreground;
+        // Above this luminance black contrasts more than white does.
+        let light = relative_luminance(surface) > 0.179;
+        let strongest = if light { 0 } else { 0xff_ffff };
+        let on_surface = readable(text, surface, strongest, TEXT_CONTRAST);
+        let container = |over: u32, amount: f32| {
+            let fill = mix(surface, over, amount);
+            // Keep the label readable on the container, not just on the bar.
+            if contrast(on_surface, fill) >= TEXT_CONTRAST {
+                fill
+            } else {
+                mix(surface, over, amount / 2.)
+            }
+        };
+        Self {
+            background: palette.background,
+            surface,
+            on_surface,
+            on_surface_variant: readable(palette.muted, surface, on_surface, TEXT_CONTRAST),
+            outline: palette.border,
+            primary: readable(palette.accent, surface, on_surface, TEXT_CONTRAST),
+            control: container(text, 0.12),
+            selected: container(palette.accent, 0.22),
+            danger: readable(palette.ansi[1], surface, on_surface, TEXT_CONTRAST),
+            warning: readable(palette.ansi[3], surface, on_surface, TEXT_CONTRAST),
+            success: palette.ansi[2],
+            info: palette.ansi[4],
+            working: palette.ansi[3],
+            light,
+        }
+    }
+
+    /// ARGB ints in the order `GpuiChrome` reads them; the final slot is 1 for
+    /// a light surface.
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn to_argb(self) -> [i32; 14] {
+        let argb = |color: u32| (0xff00_0000 | color) as i32;
+        [
+            argb(self.background),
+            argb(self.surface),
+            argb(self.on_surface),
+            argb(self.on_surface_variant),
+            argb(self.outline),
+            argb(self.primary),
+            argb(self.control),
+            argb(self.selected),
+            argb(self.danger),
+            argb(self.warning),
+            argb(self.success),
+            argb(self.info),
+            argb(self.working),
+            i32::from(self.light),
+        ]
+    }
 }
 
 /// One contiguous span of cells that share fg, bg and attribute bits.
@@ -232,7 +371,11 @@ impl DisplayPreferences {
         if !scale.is_finite() || !(1.0..=3.0).contains(&scale) {
             return Err(Error::InvalidDisplayPreferences);
         }
-        Ok(Self { font_size, compact, scale })
+        Ok(Self {
+            font_size,
+            compact,
+            scale,
+        })
     }
 }
 
@@ -253,14 +396,53 @@ pub(crate) struct DisplayMetrics {
     pub stacked_controls: bool,
 }
 
-/// Monospace advance as a fraction of the em. Measured on this device's font:
-/// 0.60 and 0.66 both still clipped the pane's last column, so the fit now
-/// reserves visibly more than the nominal advance.
+/// Advance of every glyph in the bundled Noto Mono: 1229 of 2048 units per em.
+/// Rows are painted on cells of exactly this width, so glyphs that fall back to
+/// a proportional system font can no longer widen a row.
 #[cfg(any(feature = "android-ui", test))]
-const CELL_ADVANCE_EM: f32 = 0.70;
+pub(crate) const MONO_ADVANCE_EM: f32 = 1229. / 2048.;
+
+/// The default terminal type size in logical pixels: what the client grid
+/// assumes and what chrome around an empty pane is measured with.
+#[cfg(any(feature = "android-ui", test))]
+const DEFAULT_FONT: f32 = 13.;
+
+/// A classic terminal width, which a raw shell keeps on narrow panels.
+#[cfg(any(feature = "android-ui", test))]
+const SHELL_COLUMNS: f32 = 80.;
+
+/// Type size for a raw shell, whose grid follows the surface rather than a
+/// daemon's pane. A chosen size wins. Auto uses the default size, so a large
+/// panel shows more of the shell instead of larger text; where 80 columns do
+/// not fit at that size it shrinks toward them, down to the readable floor.
+#[cfg(any(feature = "android-ui", test))]
+pub(crate) fn shell_font_size(preferences: DisplayPreferences, viewport_width: f32) -> f32 {
+    if preferences.font_size > 0. {
+        return preferences.font_size;
+    }
+    let classic = viewport_width.max(0.) / (SHELL_COLUMNS * MONO_ADVANCE_EM);
+    (classic.min(DEFAULT_FONT) * preferences.scale).clamp(11., 36.)
+}
+
+/// Most a pane's row pitch may be spread. Past this, rows read as islands and
+/// the remaining height is better left as even margins.
+#[cfg(any(feature = "android-ui", test))]
+const MAX_SPREAD: f32 = 2.;
+
+/// Row pitch for a pane whose row count Herdr fixes: a pane shorter than the
+/// surface spreads its rows over it, never closer than the natural pitch and
+/// never past twice it. The type size and columns are not changed.
+#[cfg(any(feature = "android-ui", test))]
+pub(crate) fn spread_row_height(natural: f32, rows: usize, surface_height: f32) -> f32 {
+    if rows == 0 || surface_height.is_nan() || surface_height <= 0. {
+        return natural;
+    }
+    (surface_height / rows as f32).clamp(natural, natural * MAX_SPREAD)
+}
 
 #[cfg(any(feature = "android-ui", test))]
 impl DisplayMetrics {
+    #[cfg(test)]
     pub fn new(preferences: DisplayPreferences, viewport_width: f32) -> Self {
         Self::fit(preferences, viewport_width, 0)
     }
@@ -268,19 +450,25 @@ impl DisplayMetrics {
     /// `widest_line_chars` is the pane's own wrapping width in cells. Auto type
     /// takes the largest size whose line fits the surface, so a narrow pane on a
     /// wide panel grows instead of leaving the right half empty.
-    pub fn fit(preferences: DisplayPreferences, viewport_width: f32, widest_line_chars: usize) -> Self {
+    pub fn fit(
+        preferences: DisplayPreferences,
+        viewport_width: f32,
+        widest_line_chars: usize,
+    ) -> Self {
+        let padding = if preferences.compact { 4. } else { 8. };
+        let inset = padding + ROW_GUTTER;
         let font_size = if preferences.font_size > 0. {
             preferences.font_size
         } else if widest_line_chars > 0 && viewport_width > 0. {
-            // Measured: even 10 px does not fit a 90-character pane on the 494 dp
-            // cover, and fitting it would need about 8 px, which is unreadable.
-            // The floor stays at 11 and panning covers the tail.
-            (viewport_width / (widest_line_chars as f32 * CELL_ADVANCE_EM) * preferences.scale)
+            // The widest row fills the surface between both gutters. An 80-cell
+            // pane on the 443 dp cover would need about 8.7 px, which is
+            // unreadable, so the floor stays at 11 and panning covers the tail.
+            ((viewport_width - 2. * inset).max(0.) / (widest_line_chars as f32 * MONO_ADVANCE_EM)
+                * preferences.scale)
                 .clamp(11., 36.)
         } else {
-            13.
+            DEFAULT_FONT
         };
-        let padding = if preferences.compact { 4. } else { 8. };
         let gap = padding;
         // The longest control label is Keyboard. At larger accessibility sizes
         // it gets its own row; Follow and Back share a second row. Labels never
@@ -297,13 +485,26 @@ impl DisplayMetrics {
         }
     }
 
+    /// Width of one terminal cell in logical pixels.
+    pub fn cell_width(self) -> f32 {
+        self.font_size * MONO_ADVANCE_EM
+    }
+
+    /// Horizontal inset on each side of a row, shared with the header.
+    pub fn row_inset(self) -> f32 {
+        self.padding + ROW_GUTTER
+    }
+
     pub fn row_width(self, widest_line_chars: usize) -> f32 {
-        // Reserve space for fallback wide glyphs as before, and include both
-        // row gutters so the last glyph remains reachable by horizontal scroll.
-        (widest_line_chars.min(MAX_LINE_CHARS) as f32 * (self.font_size * 1.25).ceil() + 16.)
+        // Exactly the grid plus both gutters, so panning stops at the last cell.
+        (widest_line_chars.min(MAX_LINE_CHARS) as f32 * self.cell_width() + 2. * self.row_inset())
             .max(200.)
     }
 }
+
+/// Extra space between a row's edge and its first cell, beyond the padding.
+#[cfg(any(feature = "android-ui", test))]
+const ROW_GUTTER: f32 = 4.;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
@@ -493,6 +694,9 @@ pub struct Snapshot {
     pub shortcuts: Vec<Shortcut>,
     pub truncated: bool,
     pub widest_line_chars: usize,
+    /// Background cells on the pane's outer ring, by wire colour, from which
+    /// the renderer decides what fills the area around the pane.
+    pub edge_colors: Vec<(u32, usize)>,
 }
 
 impl Default for Snapshot {
@@ -506,6 +710,7 @@ impl Default for Snapshot {
             shortcuts: Vec::new(),
             truncated: false,
             widest_line_chars: 1,
+            edge_colors: Vec::new(),
         }
     }
 }
@@ -542,6 +747,7 @@ impl Snapshot {
             shortcuts,
             truncated,
             widest_line_chars,
+            edge_colors: Vec::new(),
         })
     }
 
@@ -559,6 +765,16 @@ impl Snapshot {
         if let Some(raw) = surface.filter(|raw| !raw.is_empty()) {
             let (rows, links) = parse_surface(raw)?;
             if rows.len() == snapshot.lines.len() {
+                // Styled rows keep a placeholder for each wide glyph's second
+                // cell, so their length is the pane's width in cells. Plain
+                // lines omit it to keep Copy faithful.
+                snapshot.widest_line_chars = rows
+                    .iter()
+                    .map(|row| row.text.chars().count())
+                    .max()
+                    .unwrap_or(1)
+                    .max(snapshot.widest_line_chars);
+                snapshot.edge_colors = edge_colors(&rows, snapshot.widest_line_chars);
                 snapshot.styled = Some(Arc::new(rows));
                 snapshot.links = Arc::new(links);
             } else {
@@ -569,16 +785,123 @@ impl Snapshot {
     }
 }
 
-/// Parses `{"rows":[{"t":text,"r":[[start,len,fg,bg,modifier],…]},…]}`. Runs must
+/// Background cells on the pane's outer ring of cells, by wire colour. Cells
+/// past a row's end show the default background. Reversed cells show their
+/// foreground there and frame cells belong to the daemon, not the program, so
+/// neither votes.
+fn edge_colors(rows: &[StyledRow], width: usize) -> Vec<(u32, usize)> {
+    let mut tally: Vec<(u32, usize)> = Vec::new();
+    let Some(last) = rows.len().checked_sub(1) else {
+        return tally;
+    };
+    let mut add = |background: u32, cells: usize| {
+        if cells == 0 {
+            return;
+        }
+        match tally.iter_mut().find(|(color, _)| *color == background) {
+            Some((_, count)) => *count += cells,
+            None => tally.push((background, cells)),
+        }
+    };
+    let run_cells = |row: &StyledRow, run: &StyledRun| {
+        row.text
+            .get(run.start..run.start + run.len)
+            .map_or(0, |text| text.chars().count())
+    };
+    for (index, row) in rows.iter().enumerate() {
+        if index == 0 || index == last {
+            let mut covered = 0;
+            for run in &row.runs {
+                let cells = run_cells(row, run);
+                covered += cells;
+                if run.modifier & (REVERSED | FRAME) == 0 {
+                    add(run.bg, cells);
+                }
+            }
+            add(DEFAULT_COLOR, width.saturating_sub(covered));
+            continue;
+        }
+        let cells = row.text.chars().count();
+        let first = row.runs.first().filter(|run| run.start == 0);
+        let end = row
+            .runs
+            .last()
+            .filter(|run| run.start + run.len == row.text.len() && cells >= width);
+        for edge in [first, end] {
+            match edge {
+                Some(run) if run.modifier & (REVERSED | FRAME) != 0 => {}
+                Some(run) => add(run.bg, 1),
+                None => add(DEFAULT_COLOR, 1),
+            }
+        }
+    }
+    tally
+}
+
+/// What fills the area around the pane: `Some` colour when most of its edge is
+/// painted visibly unlike the palette background - a program drawing its own
+/// background - so the pane is not a dark card in a light frame, or the
+/// reverse. The commonest such colour wins, as tool panes mix close shades.
+/// It takes three quarters of the edge to start filling and half to keep
+/// going, so content scrolling past the edge cannot make the surround flicker.
+pub fn letterbox(edge: &[(u32, usize)], palette: &Palette, filled: bool) -> Option<u32> {
+    let total: usize = edge.iter().map(|&(_, cells)| cells).sum();
+    let mut painted: Vec<(u32, usize)> = Vec::new();
+    for &(wire, cells) in edge {
+        let color = resolve_color(wire, palette.background, palette);
+        if !visibly_different(color, palette.background) {
+            continue;
+        }
+        match painted.iter_mut().find(|(seen, _)| *seen == color) {
+            Some((_, count)) => *count += cells,
+            None => painted.push((color, cells)),
+        }
+    }
+    let share: usize = painted.iter().map(|&(_, cells)| cells).sum();
+    let (part, whole) = if filled { (1, 2) } else { (3, 4) };
+    if total == 0 || share * whole < total * part {
+        return None;
+    }
+    painted
+        .into_iter()
+        .max_by_key(|&(_, cells)| cells)
+        .map(|(color, _)| color)
+}
+
+/// Any channel more than 32 levels apart: near shades read as one background.
+fn visibly_different(a: u32, b: u32) -> bool {
+    [16, 8, 0]
+        .into_iter()
+        .any(|shift| ((a >> shift) & 0xff).abs_diff((b >> shift) & 0xff) > 32)
+}
+
+/// Shared row format for native projection, history and the renderer boundary.
+#[derive(Serialize, Deserialize)]
+pub(crate) struct WireSurfaceRow {
+    #[serde(rename = "t")]
+    pub text: String,
+    #[serde(rename = "r")]
+    pub runs: Vec<[u32; 6]>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct WireSurface {
+    // Preserve the optional link table's decoding policy without building a
+    // generic JSON tree for every row and run in the much larger surface.
+    #[serde(default)]
+    pub links: serde_json::Value,
+    pub rows: Vec<WireSurfaceRow>,
+}
+
+/// Parses `{"rows":[{"t":text,"r":[[start,len,fg,bg,modifier,link],…]},…]}`. Runs must
 /// tile every row exactly, so the renderer can index bytes without guessing.
 pub fn parse_surface(raw: &str) -> Result<(Vec<StyledRow>, Vec<String>)> {
     if raw.len() > MAX_SNAPSHOT_BYTES {
         return Err(Error::InvalidText);
     }
-    let value: serde_json::Value =
-        serde_json::from_str(raw).map_err(|_| Error::InvalidText)?;
+    let value: WireSurface = serde_json::from_str(raw).map_err(|_| Error::InvalidText)?;
     let mut links = Vec::new();
-    if let Some(values) = value.get("links").and_then(serde_json::Value::as_array) {
+    if let Some(values) = value.links.as_array() {
         if values.len() > 256 {
             return Err(Error::InvalidText);
         }
@@ -593,20 +916,14 @@ pub fn parse_surface(raw: &str) -> Result<(Vec<StyledRow>, Vec<String>)> {
             links.push(url.to_owned());
         }
     }
-    let rows = value
-        .get("rows")
-        .and_then(serde_json::Value::as_array)
-        .ok_or(Error::InvalidText)?;
+    let rows = value.rows;
     if rows.len() > MAX_LINES {
         return Err(Error::InvalidText);
     }
     let mut styled = Vec::with_capacity(rows.len());
     let mut bytes = 0usize;
     for row in rows {
-        let text = row
-            .get("t")
-            .and_then(serde_json::Value::as_str)
-            .ok_or(Error::InvalidText)?;
+        let text = row.text;
         if text.chars().count() > MAX_LINE_CHARS {
             return Err(Error::InvalidText);
         }
@@ -614,28 +931,15 @@ pub fn parse_surface(raw: &str) -> Result<(Vec<StyledRow>, Vec<String>)> {
         if bytes > MAX_SNAPSHOT_BYTES {
             return Err(Error::InvalidText);
         }
-        let spans = row
-            .get("r")
-            .and_then(serde_json::Value::as_array)
-            .ok_or(Error::InvalidText)?;
+        let spans = row.runs;
         if spans.len() > MAX_RUNS_PER_LINE {
             return Err(Error::InvalidText);
         }
         let mut runs = Vec::with_capacity(spans.len());
         let mut offset = 0usize;
-        for span in spans {
-            let fields = span.as_array().ok_or(Error::InvalidText)?;
-            if fields.len() != 6 {
-                return Err(Error::InvalidText);
-            }
-            let number = |index: usize| -> Result<u32> {
-                fields[index]
-                    .as_u64()
-                    .and_then(|value| u32::try_from(value).ok())
-                    .ok_or(Error::InvalidText)
-            };
-            let start = number(0)? as usize;
-            let len = number(1)? as usize;
+        for [start, len, fg, bg, modifier, link] in spans {
+            let start = start as usize;
+            let len = len as usize;
             if start != offset || len == 0 {
                 return Err(Error::InvalidText);
             }
@@ -643,10 +947,10 @@ pub fn parse_surface(raw: &str) -> Result<(Vec<StyledRow>, Vec<String>)> {
             if end > text.len() || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
                 return Err(Error::InvalidText);
             }
-            if number(4)? > u16::MAX.into() {
+            if modifier > u16::MAX.into() {
                 return Err(Error::InvalidText);
             }
-            let link = match number(5)? {
+            let link = match link {
                 u32::MAX => None,
                 index => Some(u16::try_from(index).map_err(|_| Error::InvalidText)?),
             };
@@ -656,9 +960,9 @@ pub fn parse_surface(raw: &str) -> Result<(Vec<StyledRow>, Vec<String>)> {
             runs.push(StyledRun {
                 start,
                 len,
-                fg: number(2)?,
-                bg: number(3)?,
-                modifier: number(4)? as u16,
+                fg,
+                bg,
+                modifier: modifier as u16,
                 link,
             });
             offset = end;
@@ -666,10 +970,7 @@ pub fn parse_surface(raw: &str) -> Result<(Vec<StyledRow>, Vec<String>)> {
         if offset != text.len() {
             return Err(Error::InvalidText);
         }
-        styled.push(StyledRow {
-            text: text.to_owned(),
-            runs,
-        });
+        styled.push(StyledRow { text, runs });
     }
     Ok((styled, links))
 }
@@ -766,9 +1067,12 @@ pub struct Mailbox {
     preedit: Arc<str>,
     display_preferences: DisplayPreferences,
     pan: f32,
+    /// Furthest useful pan: the painted row width beyond the surface.
+    pan_limit: f32,
     pub follow: bool,
+    /// Raw SSH shell drawn instead of a Herdr pane, or 0.
+    shell: u64,
 }
-
 
 /// Horizontal pan requested by a wheel or drag delta, if the gesture is
 /// horizontal. Vertical deltas stay with the list so scrolling is untouched.
@@ -797,6 +1101,8 @@ pub struct ViewState {
     /// Client-local horizontal offset in logical pixels; the daemon owns the
     /// wrap width, so panning is how a wide pane stays readable.
     pub pan: f32,
+    /// Handle of the raw SSH shell this generation draws, or 0 for Herdr's pane.
+    pub shell: u64,
 }
 
 impl Default for Mailbox {
@@ -811,8 +1117,10 @@ impl Default for Mailbox {
             preedit: Arc::from(""),
             display_preferences: DisplayPreferences::default(),
             pan: 0.,
+            pan_limit: MAX_PAN,
             // A fresh session tails its pane until the user scrolls back.
             follow: true,
+            shell: 0,
         }
     }
 }
@@ -831,6 +1139,8 @@ impl Mailbox {
             self.commands.clear();
             self.ime_session = 0;
             self.preedit = Arc::from("");
+            self.pan = 0.;
+            self.shell = 0;
         }
         if !active {
             self.commands.clear();
@@ -860,6 +1170,9 @@ impl Mailbox {
             return Ok(false);
         }
         self.display_preferences = preferences;
+        // Insets reapply unchanged preferences. Only new typography resets the
+        // reading position, atomically with its single render notification.
+        self.pan = 0.;
         self.revision = self.revision.wrapping_add(1);
         #[cfg(feature = "android-ui")]
         signal_change();
@@ -872,6 +1185,18 @@ impl Mailbox {
             return false;
         }
         self.follow = follow;
+        self.revision = self.revision.wrapping_add(1);
+        #[cfg(feature = "android-ui")]
+        signal_change();
+        true
+    }
+
+    /// Draws `shell` (0 for none) for the current generation only.
+    pub fn set_shell(&mut self, generation: i64, shell: u64) -> bool {
+        if generation <= 0 || generation != self.generation || shell == self.shell {
+            return false;
+        }
+        self.shell = shell;
         self.revision = self.revision.wrapping_add(1);
         #[cfg(feature = "android-ui")]
         signal_change();
@@ -891,6 +1216,37 @@ impl Mailbox {
         true
     }
 
+    /// Updates pane chrome without replacing or copying its terminal body.
+    /// Stale generations are ignored before parsing caller-provided metadata.
+    pub fn set_snapshot_chrome(
+        &mut self,
+        generation: i64,
+        title: &str,
+        status: &str,
+        shortcuts: &str,
+    ) -> Result<bool> {
+        if generation <= 0 || generation != self.generation {
+            return Ok(false);
+        }
+        let title = plain_label(title, 256);
+        let status = plain_label(status, 1024);
+        let shortcuts = parse_shortcuts(shortcuts)?;
+        if self.snapshot.title == title
+            && self.snapshot.status == status
+            && self.snapshot.shortcuts == shortcuts
+        {
+            return Ok(false);
+        }
+        let mut snapshot = (*self.snapshot).clone();
+        snapshot.title = title;
+        snapshot.status = status;
+        snapshot.shortcuts = shortcuts;
+        self.snapshot = Arc::new(snapshot);
+        self.revision = self.revision.wrapping_add(1);
+        #[cfg(feature = "android-ui")]
+        signal_change();
+        Ok(true)
+    }
 
     /// Horizontal pan in logical pixels, bounded. Returns whether it moved, so
     /// callers only repaint on a real change.
@@ -898,7 +1254,7 @@ impl Mailbox {
         if !delta.is_finite() {
             return false;
         }
-        let next = (self.pan + delta).clamp(0., MAX_PAN);
+        let next = (self.pan + delta).clamp(0., self.pan_limit);
         if (next - self.pan).abs() < 0.5 {
             return false;
         }
@@ -907,6 +1263,17 @@ impl Mailbox {
         #[cfg(feature = "android-ui")]
         signal_change();
         true
+    }
+
+    /// Records how far the painted rows extend beyond the surface, so a pan
+    /// stops at the last cell and the next opposite step moves immediately.
+    /// The renderer already draws the clamped offset, so this never wakes it.
+    pub fn set_pan_limit(&mut self, limit: f32) {
+        if !limit.is_finite() {
+            return;
+        }
+        self.pan_limit = limit.clamp(0., MAX_PAN);
+        self.pan = self.pan.min(self.pan_limit);
     }
 
     /// Drops the horizontal offset, e.g. when the pane or the type size changes,
@@ -921,6 +1288,16 @@ impl Mailbox {
         signal_change();
     }
 
+    /// Capture the held body without requiring an active input connection.
+    /// The caller joins its lines after releasing the mailbox lock.
+    #[cfg(any(all(target_os = "android", feature = "android-ui"), test))]
+    pub(crate) fn snapshot_for_copy(&self, generation: i64) -> Result<Arc<Snapshot>> {
+        if generation <= 0 || generation != self.generation {
+            return Err(Error::StaleGeneration);
+        }
+        Ok(self.snapshot.clone())
+    }
+
     pub fn state(&self) -> ViewState {
         ViewState {
             generation: self.generation,
@@ -931,6 +1308,7 @@ impl Mailbox {
             preedit: self.preedit.clone(),
             display_preferences: self.display_preferences,
             follow: self.follow,
+            shell: self.shell,
         }
     }
 
@@ -1093,9 +1471,136 @@ mod tests {
     fn text(value: &str) -> Command {
         Command::Text { text: value.into() }
     }
+
+    #[test]
+    fn shell_type_fills_wide_panels_and_keeps_classic_width_on_narrow_ones() {
+        let auto = DisplayPreferences::default();
+        // The inner panel shows more of the shell, not 80 columns of larger text.
+        assert_eq!(shell_font_size(auto, 852.), DEFAULT_FONT);
+        // Between: exactly 80 columns.
+        let mid = 600.;
+        assert!((shell_font_size(auto, mid) * MONO_ADVANCE_EM * SHELL_COLUMNS - mid).abs() < 0.01);
+        // The cover: the readable floor, as close to 80 columns as it allows.
+        assert_eq!(shell_font_size(auto, 443.), 11.);
+        // Before the first layout there is no width; the floor holds.
+        assert_eq!(shell_font_size(auto, 0.), 11.);
+        // Android's font scale enlarges auto type; a chosen size is used as given.
+        let scaled = DisplayPreferences::scaled(0., false, 1.5).unwrap();
+        assert_eq!(shell_font_size(scaled, 852.), DEFAULT_FONT * 1.5);
+        let chosen = DisplayPreferences::new(16., false).unwrap();
+        assert_eq!(shell_font_size(chosen, 852.), 16.);
+    }
+
+    #[test]
+    fn short_panes_spread_their_rows_up_to_twice_their_pitch() {
+        // Herdr's 24 rows fill the inner panel's surface exactly.
+        assert_eq!(spread_row_height(16., 24, 696.), 29.);
+        // A pane taller than the surface keeps its pitch and scrolls.
+        assert_eq!(spread_row_height(16., 60, 696.), 16.);
+        // A few rows stop at twice their pitch; even margins hold the rest.
+        assert_eq!(spread_row_height(16., 5, 696.), 32.);
+        // Nothing to lay out, or no surface yet: the natural pitch.
+        assert_eq!(spread_row_height(16., 0, 696.), 16.);
+        assert_eq!(spread_row_height(16., 24, 0.), 16.);
+        assert_eq!(spread_row_height(16., 24, f32::NAN), 16.);
+    }
     fn submit(value: &str) -> Command {
         Command::Submit { text: value.into() }
     }
+
+    #[test]
+    fn surface_runs_preserve_unicode_styles_and_links() {
+        let raw = serde_json::json!({
+            "links": ["https://example.com/terminal"],
+            "rows": [{
+                "t": "a\"\\界😀",
+                "r": [
+                    [0, 3, 0x0100_0001u32, 0, BOLD, u32::MAX],
+                    [3, 3, 0, 0x0200_0010u32, UNDERLINE, 0],
+                    [6, 4, 0, 0, REVERSED, u32::MAX]
+                ]
+            }]
+        })
+        .to_string();
+        let (rows, links) = parse_surface(&raw).unwrap();
+        assert_eq!(links, ["https://example.com/terminal"]);
+        assert_eq!(
+            rows,
+            [StyledRow {
+                text: "a\"\\界😀".into(),
+                runs: vec![
+                    StyledRun {
+                        start: 0,
+                        len: 3,
+                        fg: 0x0100_0001,
+                        bg: 0,
+                        modifier: BOLD,
+                        link: None
+                    },
+                    StyledRun {
+                        start: 3,
+                        len: 3,
+                        fg: 0,
+                        bg: 0x0200_0010,
+                        modifier: UNDERLINE,
+                        link: Some(0)
+                    },
+                    StyledRun {
+                        start: 6,
+                        len: 4,
+                        fg: 0,
+                        bg: 0,
+                        modifier: REVERSED,
+                        link: None
+                    },
+                ],
+            }]
+        );
+    }
+
+    #[test]
+    fn surface_rejects_invalid_spans_links_and_bounds() {
+        for run in [
+            "[0,0,0,0,0,4294967295]",
+            "[1,3,0,0,0,4294967295]",
+            "[0,2,0,0,0,4294967295]",
+            "[0,4,0,0,0,4294967295]",
+            "[0,3,0,0,65536,4294967295]",
+            "[0,3,0,0,0,0]",
+            "[0,3,0,0,0,65536]",
+            "[0,3,4294967296,0,0,4294967295]",
+            "[0,3,-1,0,0,4294967295]",
+            "[0,3,0.0,0,0,4294967295]",
+            "[0,3,false,0,0,4294967295]",
+            "[0,3,0,0,0]",
+            "[0,3,0,0,0,4294967295,0]",
+        ] {
+            let raw = format!("{{\"rows\":[{{\"t\":\"界\",\"r\":[{run}]}}]}}");
+            assert!(
+                matches!(parse_surface(&raw), Err(Error::InvalidText)),
+                "{run}"
+            );
+        }
+        for value in [
+            serde_json::json!({"links": ["file:///private"], "rows": []}),
+            serde_json::json!({"links": ["https://example.com/\n"], "rows": []}),
+            serde_json::json!({"links": [format!("https://{}", "x".repeat(2048))], "rows": []}),
+            serde_json::json!({"links": vec!["https://example.com"; 257], "rows": []}),
+            serde_json::json!({"rows": vec![serde_json::json!({"t":"", "r": []}); MAX_LINES + 1]}),
+            serde_json::json!({"rows": [{"t": "x".repeat(MAX_LINE_CHARS + 1), "r": []}]}),
+            serde_json::json!({"rows": [{"t": "x".repeat(MAX_RUNS_PER_LINE + 1), "r": vec![[0,1,0,0,0,u32::MAX]; MAX_RUNS_PER_LINE + 1]}]}),
+        ] {
+            assert!(matches!(
+                parse_surface(&value.to_string()),
+                Err(Error::InvalidText)
+            ));
+        }
+        assert!(matches!(
+            parse_surface(&" ".repeat(MAX_SNAPSHOT_BYTES + 1)),
+            Err(Error::InvalidText)
+        ));
+    }
+
     #[test]
     fn lifecycle_and_delayed_generations_are_fenced() {
         let mut box_ = Mailbox::default();
@@ -1143,6 +1648,150 @@ mod tests {
         assert_eq!(box_.state().generation, 11);
         assert!(box_.state().snapshot.lines.is_empty());
     }
+
+    #[test]
+    fn copy_snapshot_keeps_visible_unicode_and_rejects_stale_generations() {
+        let mut box_ = Mailbox::default();
+        assert!(matches!(
+            box_.snapshot_for_copy(0),
+            Err(Error::StaleGeneration)
+        ));
+        box_.set_active(10, true);
+        box_.set_snapshot(
+            10,
+            Snapshot::new("pane", "é\n\n界😀", "Live", "[]").unwrap(),
+        );
+        box_.enqueue(10, text("queued")).unwrap();
+        let revision = box_.state().revision;
+        let copy = box_.snapshot_for_copy(10).unwrap();
+        assert_eq!(copy.lines.join("\n"), "é\n\n界😀");
+        assert_eq!(box_.state().revision, revision);
+        assert_eq!(box_.take_command(10), Some(text("queued")));
+        box_.set_active(10, false);
+        assert_eq!(
+            box_.snapshot_for_copy(10).unwrap().lines.join("\n"),
+            "é\n\n界😀"
+        );
+        box_.set_active(11, true);
+        assert!(matches!(
+            box_.snapshot_for_copy(10),
+            Err(Error::StaleGeneration)
+        ));
+        assert_eq!(box_.snapshot_for_copy(11).unwrap().lines.join("\n"), "");
+        assert_eq!(copy.lines.join("\n"), "é\n\n界😀");
+    }
+
+    #[test]
+    fn chrome_updates_preserve_colored_linked_unicode_body() {
+        let mut box_ = Mailbox::default();
+        box_.set_active(10, true);
+        let surface = serde_json::json!({
+            "links": ["https://example.com/界"],
+            "rows": [{
+                "t": "界😀",
+                "r": [[0, 7, 0x0100_0001u32, 0, BOLD, 0]]
+            }]
+        })
+        .to_string();
+        let snapshot =
+            Snapshot::with_surface("old", "界😀", "old status", "[]", Some(&surface)).unwrap();
+        assert!(box_.set_snapshot(10, snapshot));
+        assert!(box_.set_follow(10, false));
+        assert!(box_.pan(80.));
+        let original = box_.state().snapshot;
+        let original_row = original.styled.as_ref().unwrap()[0].clone();
+        assert!(
+            box_.set_snapshot_chrome(
+                10,
+                "new title",
+                "new status",
+                r#"[{"label":"C-c","keys":["ctrl+c"]}]"#,
+            )
+            .unwrap()
+        );
+        let state = box_.state();
+        assert_eq!(state.snapshot.title, "new title");
+        assert_eq!(state.snapshot.status, "new status");
+        assert_eq!(state.snapshot.shortcuts.len(), 1);
+        assert_eq!(state.snapshot.lines, original.lines);
+        assert_eq!(state.snapshot.styled.as_ref().unwrap()[0], original_row);
+        assert_eq!(state.snapshot.links, original.links);
+        assert_eq!(state.snapshot.truncated, original.truncated);
+        assert_eq!(state.snapshot.widest_line_chars, original.widest_line_chars);
+        assert!(!state.follow);
+        assert_eq!(state.pan, 80.);
+    }
+
+    #[test]
+    fn a_shell_belongs_to_one_generation() {
+        let mut box_ = Mailbox::default();
+        box_.set_active(10, true);
+        // A delayed attach from a replaced terminal is ignored.
+        assert!(!box_.set_shell(9, 7));
+        assert!(box_.set_shell(10, 7));
+        assert!(
+            !box_.set_shell(10, 7),
+            "unchanged attach does not wake the view"
+        );
+        let attached = box_.state();
+        assert_eq!(attached.shell, 7);
+        // Pausing keeps the last screen; only a new generation drops the shell.
+        box_.set_active(10, false);
+        assert_eq!(box_.state().shell, 7);
+        box_.set_active(11, true);
+        assert_eq!(box_.state().shell, 0);
+        assert!(box_.state().revision != attached.revision);
+    }
+
+    #[test]
+    fn chrome_update_rejects_stale_generation_without_mutation() {
+        let mut box_ = Mailbox::default();
+        box_.set_active(10, true);
+        let before = box_.state();
+        assert!(
+            !box_
+                .set_snapshot_chrome(9, "stale", "stale", "invalid")
+                .unwrap()
+        );
+        let after = box_.state();
+        assert_eq!(after.revision, before.revision);
+        assert!(Arc::ptr_eq(&after.snapshot, &before.snapshot));
+    }
+
+    #[test]
+    fn unchanged_chrome_does_not_revise_or_replace_snapshot() {
+        let mut box_ = Mailbox::default();
+        box_.set_active(10, true);
+        let snapshot = Snapshot::new("title", "body", "status", "[]").unwrap();
+        assert!(box_.set_snapshot(10, snapshot));
+        let before = box_.state();
+        assert!(
+            !box_
+                .set_snapshot_chrome(10, "title", "status", "[]")
+                .unwrap()
+        );
+        let after = box_.state();
+        assert_eq!(after.revision, before.revision);
+        assert!(Arc::ptr_eq(&after.snapshot, &before.snapshot));
+    }
+
+    #[test]
+    fn invalid_chrome_shortcuts_fail_atomically() {
+        let mut box_ = Mailbox::default();
+        box_.set_active(10, true);
+        assert!(box_.set_snapshot(10, Snapshot::new("title", "body", "status", "[]").unwrap()));
+        let before = box_.state();
+        assert!(
+            box_.set_snapshot_chrome(10, "changed", "changed", r#"[{"label":"bad","keys":[]}]"#)
+                .is_err()
+        );
+        let after = box_.state();
+        assert_eq!(after.revision, before.revision);
+        assert!(Arc::ptr_eq(&after.snapshot, &before.snapshot));
+        assert_eq!(after.snapshot.title, "title");
+        assert_eq!(after.snapshot.status, "status");
+    }
+
     #[test]
     fn horizontal_wheel_pans_and_vertical_wheel_does_not() {
         assert_eq!(pan_from_wheel(-300., 0.), Some(300.));
@@ -1173,6 +1822,39 @@ mod tests {
     }
 
     #[test]
+    fn pan_survives_unchanged_layout_but_not_new_type_or_session() {
+        let mut box_ = Mailbox::default();
+        box_.set_active(10, true);
+        box_.pan(96.);
+        let before = box_.state();
+        assert!(!box_.set_display_preferences_scaled(0., false, 1.).unwrap());
+        assert_eq!(box_.state().pan, 96.);
+        assert_eq!(box_.state().revision, before.revision);
+        assert!(
+            box_.set_display_preferences_scaled(f32::NAN, false, 1.)
+                .is_err()
+        );
+        assert_eq!(box_.state().pan, 96.);
+
+        assert!(box_.set_display_preferences_scaled(16., false, 1.).unwrap());
+        assert_eq!(box_.state().pan, 0.);
+        assert_eq!(box_.state().revision, before.revision + 1);
+        box_.pan(96.);
+        assert!(
+            box_.set_display_preferences_scaled(16., false, 1.3)
+                .unwrap()
+        );
+        assert_eq!(box_.state().pan, 0.);
+        box_.pan(96.);
+        assert!(!box_.set_active(9, true));
+        assert_eq!(box_.state().pan, 96.);
+        assert!(box_.set_active(10, false));
+        assert_eq!(box_.state().pan, 96.);
+        assert!(box_.set_active(11, false));
+        assert_eq!(box_.state().pan, 0.);
+    }
+
+    #[test]
     fn auto_type_fills_a_narrow_pane_and_stays_on_screen_for_a_wide_one() {
         let auto = DisplayPreferences::default();
         // A 70-cell pane on a 798 dp panel grows instead of leaving the row half empty.
@@ -1181,7 +1863,11 @@ mod tests {
         assert!(roomy.font_size <= 20., "{}", roomy.font_size);
         // A 150-cell pane clamps down so the last cell still fits.
         let dense = DisplayMetrics::fit(auto, 798., 150);
-        assert!((11.0..=13.0).contains(&dense.font_size), "{}", dense.font_size);
+        assert!(
+            (11.0..=13.0).contains(&dense.font_size),
+            "{}",
+            dense.font_size
+        );
         // An explicit choice always wins over the fit.
         let chosen = DisplayPreferences::new(17., false).unwrap();
         assert_eq!(DisplayMetrics::fit(chosen, 798., 70).font_size, 17.);
@@ -1192,6 +1878,185 @@ mod tests {
         let big = DisplayMetrics::fit(scaled, 798., 70);
         assert!(big.font_size > roomy.font_size, "{}", big.font_size);
         assert!(big.font_size <= 36., "{}", big.font_size);
+        // Unclamped auto type fills the surface exactly: the widest row plus
+        // its gutters never needs a pan, and leaves no reserved slack either.
+        for (width, cells) in [(852., 80), (798., 70), (600., 48)] {
+            for compact in [false, true] {
+                let preferences = DisplayPreferences::new(0., compact).unwrap();
+                let metrics = DisplayMetrics::fit(preferences, width, cells);
+                let painted = metrics.row_width(cells);
+                assert!(painted <= width + 0.01, "{width}/{cells}: {painted}");
+                assert!(painted >= width - 0.5, "{width}/{cells}: {painted}");
+            }
+        }
+    }
+
+    #[test]
+    fn chrome_roles_follow_the_palette_and_keep_text_legible() {
+        for palette in PALETTES {
+            let roles = ChromeRoles::of(&palette);
+            assert_eq!(roles.surface, palette.chrome, "{}", palette.name);
+            assert_eq!(roles.light, palette.name == "Latte", "{}", palette.name);
+            for (role, color, under) in [
+                ("text", roles.on_surface, roles.surface),
+                ("secondary", roles.on_surface_variant, roles.surface),
+                ("primary", roles.primary, roles.surface),
+                ("danger", roles.danger, roles.surface),
+                ("warning", roles.warning, roles.surface),
+                ("keycap", roles.on_surface, roles.control),
+                ("selection", roles.on_surface, roles.selected),
+            ] {
+                assert!(
+                    contrast(color, under) >= TEXT_CONTRAST,
+                    "{} {role}: {:.2}",
+                    palette.name,
+                    contrast(color, under)
+                );
+            }
+            // Containers stay distinguishable from the bar they sit on.
+            assert_ne!(roles.control, roles.surface, "{}", palette.name);
+            assert_ne!(roles.selected, roles.surface, "{}", palette.name);
+            let exported = roles.to_argb();
+            assert_eq!(exported[1], (0xff00_0000 | palette.chrome) as i32);
+            assert_eq!(exported[13], i32::from(roles.light));
+        }
+        // A color that already passes keeps its hue; only failures are blended.
+        let default = PALETTES[0];
+        assert_eq!(ChromeRoles::of(&default).primary, default.accent);
+        let latte = PALETTES[3];
+        assert_ne!(ChromeRoles::of(&latte).warning, latte.ansi[3]);
+    }
+
+    #[test]
+    fn pan_stops_at_the_painted_edge_and_reverses_immediately() {
+        let mut box_ = Mailbox::default();
+        box_.set_pan_limit(150.);
+        assert!(box_.pan(96.));
+        assert!(box_.pan(96.));
+        assert_eq!(box_.state().pan, 150.);
+        assert!(!box_.pan(96.), "a step past the last cell is not a move");
+        let revision = box_.state().revision;
+        assert!(box_.pan(-96.), "the first step back moves at once");
+        assert_eq!(box_.state().pan, 54.);
+        assert_eq!(box_.state().revision, revision + 1);
+        // A narrower layout clamps the offset without waking the renderer.
+        let revision = box_.state().revision;
+        box_.set_pan_limit(20.);
+        assert_eq!(box_.state().pan, 20.);
+        assert_eq!(box_.state().revision, revision);
+        for invalid in [f32::NAN, f32::INFINITY] {
+            box_.set_pan_limit(invalid);
+            assert_eq!(box_.state().pan, 20.);
+        }
+        box_.set_pan_limit(MAX_PAN * 2.);
+        assert!(box_.pan(MAX_PAN * 2.));
+        assert_eq!(box_.state().pan, MAX_PAN);
+    }
+
+    /// One fixture row: its text and `(bytes, background, modifier)` runs.
+    type PaintedRow<'a> = (&'a str, &'a [(u32, u32, u16)]);
+
+    fn painted_pane(rows: &[PaintedRow<'_>]) -> Snapshot {
+        let wire: Vec<_> = rows
+            .iter()
+            .map(|(text, runs)| {
+                let mut start = 0;
+                let runs: Vec<_> = runs
+                    .iter()
+                    .map(|&(len, bg, modifier)| {
+                        let run = [start, len, 0x02cd_d6f4, bg, u32::from(modifier), u32::MAX];
+                        start += len;
+                        run
+                    })
+                    .collect();
+                serde_json::json!({ "t": text, "r": runs })
+            })
+            .collect();
+        let surface = serde_json::json!({ "rows": wire }).to_string();
+        let text: Vec<&str> = rows.iter().map(|(text, _)| *text).collect();
+        let snapshot =
+            Snapshot::with_surface("pane", &text.join("\n"), "", "[]", Some(&surface)).unwrap();
+        assert!(snapshot.styled.is_some(), "fixture must be a valid surface");
+        snapshot
+    }
+
+    const LATTE: usize = 3;
+    const MOCHA: usize = 2;
+    /// The two backgrounds an agent pane paints: its own and its tool boxes.
+    const BASE: u32 = 0x021e_1e2e;
+    const BOX: u32 = 0x020f_1117;
+
+    #[test]
+    fn a_program_painting_its_own_background_fills_the_letterbox() {
+        // Tool boxes and the base in close shades, an inner accent, a reversed
+        // cursor and the daemon's default-background scrollbar on the edge:
+        // the commonest painted shade fills.
+        let agent = painted_pane(&[
+            ("abcd│", &[(4, BOX, 0), (3, DEFAULT_COLOR, FRAME)]),
+            (
+                "a  d│",
+                &[
+                    (1, BOX, 0),
+                    (2, 0x02f3_8ba8, 0),
+                    (1, BOX, 0),
+                    (3, DEFAULT_COLOR, FRAME),
+                ],
+            ),
+            ("a  d│", &[(4, BASE, 0), (3, DEFAULT_COLOR, FRAME)]),
+            (
+                "abcd┃",
+                &[(1, BASE, REVERSED), (3, BASE, 0), (3, DEFAULT_COLOR, FRAME)],
+            ),
+        ]);
+        let latte = PALETTES[LATTE];
+        assert_eq!(letterbox(&agent.edge_colors, &latte, false), Some(0x0f1117));
+        // On a palette already that dark the pane needs no frame of its own.
+        assert_eq!(letterbox(&agent.edge_colors, &PALETTES[MOCHA], false), None);
+        // A shell on the palette's own background never fills, in any theme.
+        let shell = painted_pane(&[
+            ("abcd", &[(4, DEFAULT_COLOR, 0)]),
+            ("a  d", &[(4, DEFAULT_COLOR, 0)]),
+        ]);
+        for palette in PALETTES {
+            assert_eq!(
+                letterbox(&shell.edge_colors, &palette, false),
+                None,
+                "{}",
+                palette.name
+            );
+        }
+        // A chrome-only update keeps the body, and with it the edge.
+        let mut box_ = Mailbox::default();
+        box_.set_active(3, true);
+        let edge = agent.edge_colors.clone();
+        assert!(box_.set_snapshot(3, agent));
+        assert!(box_.set_snapshot_chrome(3, "renamed", "", "[]").unwrap());
+        assert_eq!(box_.state().snapshot.edge_colors, edge);
+    }
+
+    #[test]
+    fn the_letterbox_starts_at_three_quarters_and_holds_until_half() {
+        let latte = PALETTES[LATTE];
+        // Cells past a short row's end show the default background.
+        let full: PaintedRow<'_> = ("abcdef", &[(6, BASE, 0)]);
+        let short: PaintedRow<'_> = ("ab", &[(2, BASE, 0)]);
+        let mostly = painted_pane(&[full, short, short, short, short, full]);
+        assert_eq!(
+            letterbox(&mostly.edge_colors, &latte, false),
+            Some(0x1e1e2e)
+        );
+        // 20 painted cells of 28: too few to start filling, enough to keep it.
+        let half = painted_pane(&[
+            full, short, short, short, short, short, short, short, short, full,
+        ]);
+        assert_eq!(letterbox(&half.edge_colors, &latte, false), None);
+        assert_eq!(letterbox(&half.edge_colors, &latte, true), Some(0x1e1e2e));
+        // Below half (12 painted cells of 28), a filled letterbox lets go.
+        let blank: PaintedRow<'_> = ("ab", &[(2, DEFAULT_COLOR, 0)]);
+        let sparse = painted_pane(&[
+            full, blank, blank, blank, blank, blank, blank, blank, blank, full,
+        ]);
+        assert_eq!(letterbox(&sparse.edge_colors, &latte, true), None);
     }
 
     #[test]

@@ -9,8 +9,9 @@ A Herdr pane renders at the daemon's own row and column count. On a foldable
 the client's surface is much larger than that grid: the Pixel 9 Pro Fold inner
 panel is 2076×2152 px (798×828 dp) and fits roughly 45 rows of terminal text at
 a comfortable size, while panes arrive with 24 rows. The client can only
-letterbox the pane or lie about its geometry, so a large part of a large screen
-is empty and the terminal never looks native to the device.
+letterbox the pane, spread its rows (what it now does, up to twice their pitch)
+or lie about its geometry, so a large screen shows few, widely spaced lines and
+the terminal never looks native to the device.
 
 Columns have the same shape of problem in reverse: a pane that wraps at 90
 characters is wider than a 494 dp cover panel at readable type, so the client
@@ -74,5 +75,5 @@ column problem, but it needs a reflow decision that should be made deliberately.
    `max_offset_from_bottom` and the rendered row count agree.
 3. Attach a second client at 24 rows and confirm the defined behaviour
    (last writer wins, or per-client viewports once option 3 lands).
-4. Re-run on the fold: the pane should fill the panel with no letterboxing and
-   no clipping at the fit width.
+4. Re-run on the fold: the pane should fill the panel at its natural row pitch,
+   with no spreading or letterboxing, and no clipping at the fit width.

@@ -29,6 +29,10 @@ public final class RemoteHostsActivity extends Activity {
     // Same tokens as the terminal chrome and the desktop palette.
     private static final int BG = Color.rgb(16, 21, 29), TEXT = Color.rgb(220, 229, 239);
     private static final int MUTED = Color.rgb(159, 176, 198);
+    /** The app accent (the theme's colorAccent): one filled action per host. */
+    private static final int ACCENT = Color.rgb(229, 172, 85);
+    /** Destructive actions keep the warm tint they always had. */
+    private static final int DANGER = 0xffe0a0a0;
     private final Handler main = new Handler();
     private final ThreadPoolExecutor worker = new ThreadPoolExecutor(1, 1, 0L,
             TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(8));
@@ -104,15 +108,26 @@ public final class RemoteHostsActivity extends Activity {
         // every line flush to the rounded edge; the inset belongs on the content.
         root.setFitsSystemWindows(true);
         privateView(root);
+        // A wide panel keeps a readable column instead of stretching every row.
+        int width = readableWidth();
         status = label("", 14, MUTED);
         status.setPadding(dp(16), dp(12), dp(16), 0);
-        root.addView(status);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(width, -2);
+        statusParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        root.addView(status, statusParams);
         ScrollView scroll = new ScrollView(this);
         content = column();
         content.setPadding(dp(16), dp(12), dp(16), dp(12));
-        scroll.addView(content);
+        scroll.addView(content, new android.widget.FrameLayout.LayoutParams(
+                width, -2, android.view.Gravity.CENTER_HORIZONTAL));
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
+    }
+
+    /** The whole width up to 720 dp, then a centred column of that width. */
+    private int readableWidth() {
+        return getResources().getConfiguration().screenWidthDp > 720
+                ? dp(720) : LinearLayout.LayoutParams.MATCH_PARENT;
     }
 
     private static final String STARTUP = "remote-startup";
@@ -325,11 +340,18 @@ public final class RemoteHostsActivity extends Activity {
         } else {
             setStatus("SSH · credentials are used once and cleared on close or pause");
         }
-        content.addView(button(identityPresent ? "Replace device-wide saved SSH key" : "Save device-wide SSH key", this::editIdentity));
-        if (identityPresent) {
-            content.addView(label("An encrypted SSH identity is saved in Android Keystore-backed storage on this device.", 13, MUTED));
-            content.addView(button("Remove saved SSH key", this::removeIdentity));
-        }
+        // The hosts are why this screen exists, so they lead; settings follow.
+        content.addView(button("Add remote host", () -> editProfile(null)));
+        if (hosts.isEmpty()) content.addView(label("No remote profiles saved yet", 18, TEXT));
+        for (SavedRemoteHost host : hosts) content.addView(hostCard(host));
+        content.addView(sectionLabel("This device"));
+        content.addView(label(identityPresent
+                ? "An encrypted SSH identity is saved in Android Keystore-backed storage on this device."
+                : "No device-wide SSH key is saved.", 13, MUTED));
+        LinearLayout keys = row();
+        keys.addView(weighted(button(identityPresent ? "Replace device-wide saved SSH key" : "Save device-wide SSH key", this::editIdentity)));
+        if (identityPresent) keys.addView(weighted(button("Remove saved SSH key", this::removeIdentity)));
+        content.addView(keys);
         android.widget.CheckBox reopen = new android.widget.CheckBox(this);
         reopen.setText("Reopen the last session at launch");
         reopen.setTextColor(TEXT);
@@ -347,37 +369,88 @@ public final class RemoteHostsActivity extends Activity {
                     ? "The app opens the remembered host and pane instead of this list."
                     : "The app opens this host list every time.");
         });
-        content.addView(button("Add remote host", () -> editProfile(null)));
-        content.addView(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class))));
-        content.addView(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
-        if (hosts.isEmpty()) content.addView(label("No remote profiles saved yet", 18, TEXT));
-        for (SavedRemoteHost host : hosts) {
-            LinearLayout card = column();
-            card.setPadding(0, dp(18), 0, dp(10));
-            card.addView(label(host.name, 21, TEXT));
-            card.addView(label("tcp".equals(host.transport)
-                    ? host.username + "@" + host.host + ":" + host.port + " · " + host.session
-                    : "Iroh · " + host.endpointId + " · " + host.session, 14, MUTED));
-            card.addView(label(host.expectedFingerprint.isEmpty() ? "Host key not trusted yet" : host.expectedFingerprint, 12, MUTED));
-            card.addView(button("Connect", () -> inspectHost(host)));
-            // One primary action; secondary and destructive actions share rows so
-            // "Delete profile" never carries the same weight as "Connect".
-            LinearLayout secondary = row();
-            secondary.addView(weighted(button("Edit profile", () -> editProfile(host))));
-            secondary.addView(weighted(button("Edit extra keys", () -> editShortcuts(host))));
-            card.addView(secondary);
-            LinearLayout destructive = row();
-            if (!host.expectedFingerprint.isEmpty()) {
-                Button forget = button("Forget SSH trust", () -> forgetTrust(host));
-                forget.setTextColor(0xffe0a0a0);
-                destructive.addView(weighted(forget));
-            }
-            Button delete = button("Delete profile", () -> deleteProfile(host));
-            delete.setTextColor(0xffe0a0a0);
-            destructive.addView(weighted(delete));
-            card.addView(destructive);
-            content.addView(card);
+        LinearLayout elsewhere = row();
+        elsewhere.addView(weighted(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class)))));
+        elsewhere.addView(weighted(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class)))));
+        content.addView(elsewhere);
+    }
+
+    /**
+     * One host: who it is, one filled primary action, and everything else in its
+     * overflow menu, so "Delete profile" never sits beside "Connect".
+     */
+    private LinearLayout hostCard(SavedRemoteHost host) {
+        LinearLayout card = column();
+        card.setPadding(0, dp(18), 0, dp(10));
+        card.addView(label(host.name, 21, TEXT));
+        card.addView(label("tcp".equals(host.transport)
+                ? host.username + "@" + host.host + ":" + host.port + " · " + host.session
+                : "Iroh · " + host.endpointId + " · " + host.session, 14, MUTED));
+        card.addView(label(host.expectedFingerprint.isEmpty() ? "Host key not trusted yet" : host.expectedFingerprint, 12, MUTED));
+        LinearLayout actions = row();
+        actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        Button connect = button("Connect", () -> inspectHost(host));
+        connect.setTextColor(BG);
+        connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        actions.addView(weighted(connect));
+        android.widget.ImageButton more = new android.widget.ImageButton(this);
+        more.setImageResource(R.drawable.ic_bar_more);
+        more.setImageTintList(android.content.res.ColorStateList.valueOf(TEXT));
+        more.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff1e222a));
+        more.setContentDescription("More actions for " + host.name);
+        more.setTooltipText("More");
+        privateView(more);
+        more.setOnClickListener(view -> showHostActions(view, host));
+        actions.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        card.addView(actions);
+        return card;
+    }
+
+    /** Every secondary action keeps its own confirmation; the menu only gathers them. */
+    private void showHostActions(View anchor, SavedRemoteHost host) {
+        android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
+        // A raw shell needs the same pinned key and saved identity as Connect.
+        if (!host.expectedFingerprint.isEmpty() && identityPresent) {
+            menu.getMenu().add(0, 5, 0, "Open shell");
         }
+        menu.getMenu().add(0, 1, 0, "Edit profile");
+        menu.getMenu().add(0, 2, 1, "Edit extra keys");
+        if (!host.expectedFingerprint.isEmpty()) menu.getMenu().add(0, 3, 2, destructive("Forget SSH trust"));
+        menu.getMenu().add(0, 4, 3, destructive("Delete profile"));
+        menu.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 5: openShell(host); break;
+                case 1: editProfile(host); break;
+                case 2: editShortcuts(host); break;
+                case 3: forgetTrust(host); break;
+                default: deleteProfile(host); break;
+            }
+            return true;
+        });
+        menu.show();
+    }
+
+    /** The host's own login shell, without Herdr's panes or agent status. */
+    private void openShell(SavedRemoteHost host) {
+        try {
+            GpuiLaunch.launchShell(this, host);
+        } catch (RuntimeException | LinkageError failure) {
+            String message = failure.getMessage();
+            setStatus(host.name + ": " + (message == null || message.isEmpty() ? "could not open a shell" : message));
+        }
+    }
+
+    private static CharSequence destructive(String title) {
+        android.text.SpannableString text = new android.text.SpannableString(title);
+        text.setSpan(new android.text.style.ForegroundColorSpan(DANGER), 0, title.length(), 0);
+        return text;
+    }
+
+    private TextView sectionLabel(String text) {
+        TextView label = label(text, 15, TEXT);
+        label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        label.setPadding(0, dp(28), 0, dp(2));
+        return label;
     }
 
     private static final class ProfilesSnapshot {

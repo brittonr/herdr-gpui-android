@@ -88,13 +88,15 @@ def verify_elf(data, *, runtime=False, expected_api=None, abi='arm64-v8a'):
         required_jni = {
             'Java_dev_gpui_mobile_GpuiInputActivity_nativeIme',
             *('Java_dev_herdr_android_RemoteNative_' + name for name in (
-                'initialize', 'inspect', 'connect', 'poll', 'input', 'focus', 'close',
+                'initialize', 'inspect', 'connect', 'poll', 'pollTerminal', 'input', 'focus', 'close',
+                'openShell', 'shellInput', 'shellAlive', 'shellText', 'closeShell',
             )),
             *('Java_dev_herdr_android_GpuiTerminalActivity_' + name for name in (
                 'nativeStart', 'nativeSurfaceCreated', 'nativeSurfaceDestroyed',
                 'nativeResumed', 'nativePaused', 'nativeTouch', 'nativeKey',
-                'nativeSetSnapshot', 'nativeSetActive', 'nativeTakeCommand', 'nativeSendKey',
+                'nativeSetSnapshot', 'nativeSetSnapshotChrome', 'nativeCopyText', 'nativeThemeColors', 'nativeSetActive', 'nativeTakeCommand', 'nativeSendKey',
                 'nativeSetImeSession', 'nativeImeEvent', 'nativeSendCommand', 'nativeSetDisplayPreferences',
+                'nativeAttachShell',
             )),
         }
         require(required_jni <= exports, 'JNI bridge exports missing: ' + ', '.join(sorted(required_jni - exports)))

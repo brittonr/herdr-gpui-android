@@ -27,7 +27,9 @@ This builds the pinned standalone Rust workspace with `--locked`,
 `--features android-ui`, Android API 29 (Android 10+), release optimization, 16KB ELF segment alignment,
 and `--no-undefined` linker validation. It copies the verified library into
 `app/src/main/jniLibs/arm64-v8a/libherdr_gpui_android.so`. A dependent NDK shared
-C++ runtime is included only if the built ELF declares it. Rust tools and
+C++ runtime is included only if the built ELF declares it; it currently does,
+because the raw shell's terminal parser (rio-vt) uses the C++ `simdutf`
+library. Rust tools and
 `CARGO_HOME` may be task-local; no global Cargo configuration is written.
 `CARGO_TARGET_DIR` optionally overrides the default `build/rust` output. The application
 link rejects unresolved symbols; GPUI Mobile’s intermediate dependency cdylib is

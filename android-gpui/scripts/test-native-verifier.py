@@ -28,12 +28,14 @@ def host_elf_fixture(api=29, machine=183):
         'Java_dev_herdr_android_GpuiTerminalActivity_' + name for name in (
             'nativeStart', 'nativeSurfaceCreated', 'nativeSurfaceDestroyed',
             'nativeResumed', 'nativePaused', 'nativeTouch', 'nativeKey',
-            'nativeSetSnapshot', 'nativeSetActive', 'nativeTakeCommand', 'nativeSendKey',
+            'nativeSetSnapshot', 'nativeSetSnapshotChrome', 'nativeCopyText', 'nativeThemeColors', 'nativeSetActive', 'nativeTakeCommand', 'nativeSendKey',
                 'nativeSetImeSession', 'nativeImeEvent', 'nativeSendCommand', 'nativeSetDisplayPreferences',
+            'nativeAttachShell',
         )
     ]
     names.extend('Java_dev_herdr_android_RemoteNative_' + name for name in
-                 ('initialize', 'inspect', 'connect', 'poll', 'input', 'focus', 'close'))
+                 ('initialize', 'inspect', 'connect', 'poll', 'pollTerminal', 'input', 'focus', 'close',
+                  'openShell', 'shellInput', 'shellAlive', 'shellText', 'closeShell'))
     strings = bytearray(b'\0')
     symbols = bytearray(24)
     for name in names:
@@ -61,7 +63,20 @@ class VerifyNativeTests(unittest.TestCase):
     def test_full_host_export_and_api_structure(self):
         result = checker.verify_elf(host_elf_fixture(), expected_api=29)
         self.assertEqual(result['android_api'], 29)
-        self.assertEqual(len(result['exports']), 23)
+
+    def test_rejects_missing_terminal_presentation_entrypoints(self):
+        for name in ('Java_dev_herdr_android_RemoteNative_pollTerminal',
+                     'Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnapshotChrome',
+                     'Java_dev_herdr_android_GpuiTerminalActivity_nativeCopyText',
+                     'Java_dev_herdr_android_GpuiTerminalActivity_nativeThemeColors',
+                     'Java_dev_herdr_android_RemoteNative_openShell',
+                     'Java_dev_herdr_android_GpuiTerminalActivity_nativeAttachShell'):
+            with self.subTest(export=name):
+                data = host_elf_fixture()
+                data[data.index(name.encode() + b'\0')] = ord('X')
+                with self.assertRaises(ValueError) as failure:
+                    checker.verify_elf(data)
+                self.assertIn(name, str(failure.exception))
 
     def test_rejects_old_api(self):
         with self.assertRaisesRegex(ValueError, 'requires Android API 29'):
@@ -114,7 +129,6 @@ class VerifyNativeTests(unittest.TestCase):
         result = checker.verify_elf(host_elf_fixture(machine=62), abi='x86_64', expected_api=29)
         self.assertEqual(result['abi'], 'x86_64')
         self.assertEqual(result['android_api'], 29)
-        self.assertEqual(len(result['exports']), 23)
 
     def test_x86_64_rejects_arm64(self):
         with self.assertRaisesRegex(ValueError, 'Expected x86_64'):
