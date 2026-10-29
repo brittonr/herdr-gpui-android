@@ -1,6 +1,6 @@
 use crate::{Error, Result};
 use herdr_client::protocol::SemanticNotificationSound as Sound;
-use rodio::{Decoder, DeviceSinkBuilder, Player, Source};
+use rodio::{Decoder, DeviceSinkBuilder, Player, Source, cpal::ErrorKind};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::{
@@ -44,9 +44,7 @@ pub(super) fn play(
     // default device, including after unplug/sleep. Failed jobs are never replayed.
     let (errors, receiver) = mpsc::sync_channel(1);
     let mut output = DeviceSinkBuilder::from_default_device()?
-        .with_error_callback(move |error| {
-            let _ = errors.try_send(error);
-        })
+        .with_error_callback(forward_fatal(errors))
         .open_sink_or_fallback()?;
     output.log_on_drop(false);
     check(deadline, cancel, stop, Instant::now())?;
@@ -63,6 +61,23 @@ pub(super) fn play(
             std::thread::sleep(Duration::from_millis(25));
         },
     )
+}
+
+/// The stream's error callback. cpal also reports what it recovers from itself -
+/// an underrun, a rerouted default device, refused real-time priority - while
+/// the sound keeps playing, so only the rest end the job. A recovered report must
+/// not take the one slot a device loss needs.
+fn forward_fatal(
+    errors: mpsc::SyncSender<rodio::cpal::Error>,
+) -> impl FnMut(rodio::cpal::Error) + Clone + Send + 'static {
+    move |error| {
+        if !matches!(
+            error.kind(),
+            ErrorKind::Xrun | ErrorKind::DeviceChanged | ErrorKind::RealtimeDenied
+        ) {
+            let _ = errors.try_send(error);
+        }
+    }
 }
 
 fn decode(sound: Sound, custom: Option<&Path>) -> Result<SoundDecoder> {
@@ -120,7 +135,7 @@ fn check(deadline: Instant, cancel: &[&AtomicBool], stop: &AtomicBool, now: Inst
 
 fn wait(
     player: &Player,
-    errors: &mpsc::Receiver<rodio::cpal::StreamError>,
+    errors: &mpsc::Receiver<rodio::cpal::Error>,
     deadline: Instant,
     cancel: &[&AtomicBool],
     stop: &AtomicBool,
@@ -255,7 +270,7 @@ mod tests {
                     2 => now.set(start + MAX_DURATION),
                     4 => connection_cancel.store(true, Ordering::Release),
                     _ => sender
-                        .try_send(rodio::cpal::StreamError::DeviceNotAvailable)
+                        .try_send(ErrorKind::DeviceNotAvailable.into())
                         .unwrap(),
                 },
             );
@@ -274,6 +289,32 @@ mod tests {
             }
             assert!(player.empty());
         }
+    }
+
+    #[test]
+    fn only_stream_errors_cpal_cannot_recover_from_end_playback() {
+        let (sender, errors) = mpsc::sync_channel(1);
+        let mut forward = forward_fatal(sender);
+        for kind in [
+            ErrorKind::Xrun,
+            ErrorKind::DeviceChanged,
+            ErrorKind::RealtimeDenied,
+        ] {
+            forward(kind.into());
+            assert!(errors.try_recv().is_err(), "{kind:?} ended playback");
+        }
+        // An underrun just before a device loss leaves the loss its slot.
+        forward(ErrorKind::Xrun.into());
+        forward(ErrorKind::DeviceNotAvailable.into());
+        assert_eq!(
+            errors.try_recv().unwrap().kind(),
+            ErrorKind::DeviceNotAvailable
+        );
+        forward(ErrorKind::StreamInvalidated.into());
+        assert_eq!(
+            errors.try_recv().unwrap().kind(),
+            ErrorKind::StreamInvalidated
+        );
     }
 
     #[test]

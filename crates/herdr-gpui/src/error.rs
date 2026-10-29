@@ -49,7 +49,7 @@ pub enum Error {
     #[error("Could not open audio output: {0}")]
     SoundDevice(#[from] rodio::DeviceSinkError),
     #[error("Audio output failed: {0}")]
-    SoundStream(#[from] rodio::cpal::StreamError),
+    SoundStream(#[from] rodio::cpal::Error),
     #[error("Could not decode MP3 sound: {0}")]
     SoundDecode(#[from] rodio::decoder::DecoderError),
     #[error("Could not read sound file {}: {source}", path.display())]
