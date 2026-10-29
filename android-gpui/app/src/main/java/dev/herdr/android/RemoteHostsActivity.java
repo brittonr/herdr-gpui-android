@@ -24,38 +24,62 @@ import java.util.concurrent.TimeUnit;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** SSH login and pane selection. Passwords never enter a profile, Intent or saved state. */
+/** SSH login and pane selection. Credentials never enter a profile, Intent or saved state. */
 public final class RemoteHostsActivity extends Activity {
-    private static final int BG = Color.rgb(16, 18, 22), TEXT = Color.rgb(231, 234, 240);
-    private static final int MUTED = Color.rgb(155, 167, 185);
+    // Same tokens as the terminal chrome and the desktop palette.
+    private static final int BG = Color.rgb(16, 21, 29), TEXT = Color.rgb(220, 229, 239);
+    private static final int MUTED = Color.rgb(159, 176, 198);
+    /** The app accent (the theme's colorAccent): one filled action per host. */
+    private static final int ACCENT = Color.rgb(229, 172, 85);
+    /** Destructive actions keep the warm tint they always had. */
+    private static final int DANGER = 0xffe0a0a0;
     private final Handler main = new Handler();
     private final ThreadPoolExecutor worker = new ThreadPoolExecutor(1, 1, 0L,
             TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(8));
     private volatile int generation;
     private volatile boolean visible;
     private RemoteHostStore store;
+    private RemoteIdentityStore identityStore;
+    private boolean identityPresent;
     private LinearLayout content;
     private TextView status;
     private AlertDialog dialog;
     private EditText password;
     private EditText keyPassphrase;
+    private EditText identityInput;
     private char[] pendingSecret;
     private char[] pendingPassphrase;
     private SavedRemoteHost selected;
     private volatile long ownedHandle;
     private boolean openingPane;
+    private boolean reopenedThisVisit;
+    /** A message that must survive the asynchronous profile render. */
+    private String pendingStatus;
     private String paneSnapshot = "";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(null);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        // Matches the terminal: only a debuggable build that opts in may be captured.
+        boolean capturable = (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && "1".equals(android.provider.Settings.Global.getString(
+                        getContentResolver(), "herdr_probe"));
+        if (!capturable) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new RemoteHostStore(this);
+        identityStore = new RemoteIdentityStore(this);
         shell();
     }
 
     @Override protected void onResume() {
         super.onResume();
         visible = true;
+        // Reopening should land in the terminal, not this list; the list is the
+        // fallback when the remembered session cannot be restored.
+        boolean skip = getIntent() != null && getIntent().getBooleanExtra("skip_reopen", false);
+        if (!skip && !reopenedThisVisit && reopenEnabled() && queueReopen()) {
+            reopenedThisVisit = true;
+            return;
+        }
         showProfiles();
     }
 
@@ -80,17 +104,186 @@ public final class RemoteHostsActivity extends Activity {
     private void shell() {
         LinearLayout root = column();
         root.setBackgroundColor(BG);
-        root.setPadding(dp(16), dp(12), dp(16), dp(12));
+        // fitSystemWindows overwrites any padding set on the same view, which left
+        // every line flush to the rounded edge; the inset belongs on the content.
         root.setFitsSystemWindows(true);
         privateView(root);
-        root.addView(label("Remote Herdr", 24, TEXT));
+        // A wide panel keeps a readable column instead of stretching every row.
+        int width = readableWidth();
         status = label("", 14, MUTED);
-        root.addView(status);
+        status.setPadding(dp(16), dp(12), dp(16), 0);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(width, -2);
+        statusParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        root.addView(status, statusParams);
         ScrollView scroll = new ScrollView(this);
         content = column();
-        scroll.addView(content);
+        content.setPadding(dp(16), dp(12), dp(16), dp(12));
+        scroll.addView(content, new android.widget.FrameLayout.LayoutParams(
+                width, -2, android.view.Gravity.CENTER_HORIZONTAL));
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
+    }
+
+    /** The whole width up to 720 dp, then a centred column of that width. */
+    private int readableWidth() {
+        return getResources().getConfiguration().screenWidthDp > 720
+                ? dp(720) : LinearLayout.LayoutParams.MATCH_PARENT;
+    }
+
+    private static final String STARTUP = "remote-startup";
+
+    static boolean reopenEnabled(android.content.Context context) {
+        return context.getSharedPreferences(STARTUP, MODE_PRIVATE).getBoolean("reopen", true);
+    }
+
+    private boolean reopenEnabled() { return reopenEnabled(this); }
+
+    /** Remembered host and pane for the next launch, written when a pane opens. */
+    static void rememberLastSession(android.content.Context context, SavedRemoteHost host, String paneId) {
+        if (host == null || paneId == null || paneId.isEmpty()) return;
+        context.getSharedPreferences(STARTUP, MODE_PRIVATE).edit()
+                .putString("last_host", host.id)
+                .putString("last_pane", paneId)
+                .apply();
+    }
+
+    /** Starts the remembered session on the worker; returns false when nothing is remembered. */
+    private boolean queueReopen() {
+        android.content.SharedPreferences prefs = getSharedPreferences(STARTUP, MODE_PRIVATE);
+        String hostId = prefs.getString("last_host", "");
+        String paneId = prefs.getString("last_pane", "");
+        if (hostId.isEmpty() || paneId.isEmpty()) return false;
+        setStatus("Reopening the last session…");
+        int token = generation;
+        submit(() -> {
+            if (!current(token)) return;
+            SavedRemoteHost host = null;
+            try {
+                for (SavedRemoteHost candidate : store.read()) {
+                    if (candidate.id.equals(hostId)) host = candidate;
+                }
+            } catch (Exception unreadable) {
+                host = null;
+            }
+            if (host == null || host.expectedFingerprint.isEmpty() || !identityStore.exists()) {
+                String reason = host == null ? "The remembered host is gone"
+                        : host.expectedFingerprint.isEmpty() ? "The remembered host is no longer trusted"
+                        : "No saved SSH identity on this device";
+                main.post(() -> {
+                    if (!current(token)) return;
+                    pendingStatus = reason + "; pick a host to continue";
+                    showProfiles();
+                });
+                return;
+            }
+            // A remembered host can miss a single network hiccup; retry once, then
+            // fall back to another saved host so the app still lands in a terminal.
+            java.util.List<SavedRemoteHost> candidates = new java.util.ArrayList<>();
+            candidates.add(host);
+            candidates.add(host);
+            try {
+                for (SavedRemoteHost other : store.read()) {
+                    if (!other.id.equals(host.id) && !other.expectedFingerprint.isEmpty()) {
+                        candidates.add(other);
+                    }
+                }
+            } catch (Exception ignored) { }
+            String failureReason = "the host did not answer";
+            for (int attempt = 0; attempt < candidates.size(); attempt++) {
+                if (!current(token)) return;
+                SavedRemoteHost candidate = candidates.get(attempt);
+                String wanted = candidate.id.equals(host.id) ? paneId : "";
+                if (attempt > 0) {
+                    try { Thread.sleep(1200); } catch (InterruptedException stopped) { return; }
+                }
+                String outcome = openCandidate(candidate, wanted, token);
+                if (outcome == null) return;
+                failureReason = outcome;
+            }
+            final String reason = failureReason;
+            main.post(() -> {
+                if (!current(token)) return;
+                pendingStatus = "No session could be opened (" + reason + "); pick a host to continue";
+                showProfiles();
+            });
+        });
+        return true;
+    }
+
+    /** Tries one host. Returns null once the terminal is launched, else the reason. */
+    private String openCandidate(SavedRemoteHost host, String wantedPane, int token) {
+        long handle = 0;
+        try {
+            RemoteNative.ensureLoaded(this);
+            JSONObject inspection = result(RemoteNative.inspect(host.connectionJson()));
+            String key = SavedRemoteHost.fingerprint(inspection.getString("fingerprint"));
+            if (!host.expectedFingerprint.equals(key)) throw new IllegalStateException("host key changed");
+            char[] secret = identityStore.read();
+            String credential;
+            try {
+                credential = new JSONObject().put("private_key", new String(secret)).toString();
+            } finally {
+                Arrays.fill(secret, '\0');
+            }
+            handle = RemoteNative.connect(host.connectionJson(), credential);
+            if (handle <= 0) throw new IllegalStateException("connect refused");
+            String focused = reopenPane(handle, wantedPane);
+            final long readyHandle = handle;
+            final String readyPane = focused;
+            main.post(() -> {
+                if (!current(token)) {
+                    RemoteNative.close(readyHandle);
+                    return;
+                }
+                try {
+                    GpuiLaunch.launchRemote(this, host, readyHandle, readyPane, readyPane);
+                    rememberLastSession(this, host, readyPane);
+                    // Stay on the back stack: the terminal's Back button and the
+                    // system gesture both promise a return to this host list.
+                } catch (Exception | LinkageError failure) {
+                    RemoteNative.close(readyHandle);
+                }
+            });
+            handle = 0;
+            return null;
+        } catch (Exception | LinkageError failure) {
+            if (handle != 0) RemoteNative.close(handle);
+            String message = failure.getMessage();
+            return host.name + ": " + (message == null || message.isEmpty() ? "unreachable" : message);
+        }
+    }
+
+    /** Waits for the session and focuses the remembered pane, or a live one. */
+    private String reopenPane(long handle, String remembered) throws Exception {
+        long until = System.currentTimeMillis() + 30_000;
+        JSONObject state = null;
+        while (System.currentTimeMillis() < until) {
+            state = new JSONObject(RemoteNative.poll(handle, 0, false));
+            String phase = state.optString("state");
+            if ("closed".equals(phase)) throw new IllegalStateException("closed");
+            org.json.JSONArray panes = state.optJSONArray("panes");
+            if ("ready".equals(phase) || panes != null && panes.length() > 0) break;
+            Thread.sleep(150);
+        }
+        org.json.JSONArray panes = state == null ? null : state.optJSONArray("panes");
+        if (panes == null || panes.length() == 0) throw new IllegalStateException("no panes");
+        String pane = "";
+        for (int i = 0; i < panes.length(); i++) {
+            if (remembered.equals(panes.getJSONObject(i).optString("id", ""))) pane = remembered;
+        }
+        for (int i = 0; i < panes.length() && pane.isEmpty(); i++) {
+            String status = panes.getJSONObject(i).optString("status", "");
+            if (!"unknown".equals(status) && !"idle".equals(status)) pane = panes.getJSONObject(i).optString("id", "");
+        }
+        if (pane.isEmpty()) pane = panes.getJSONObject(0).optString("id", "");
+        RemoteNative.focus(handle, pane);
+        until = System.currentTimeMillis() + 20_000;
+        while (System.currentTimeMillis() < until) {
+            state = new JSONObject(RemoteNative.poll(handle, 0, false));
+            if (pane.equals(state.optString("pane_id")) && "ready".equals(state.optString("state"))) break;
+            Thread.sleep(150);
+        }
+        return pane;
     }
 
     private void cancelConnection() {
@@ -113,6 +306,7 @@ public final class RemoteHostsActivity extends Activity {
         pendingPassphrase = null;
         if (password != null) password.setText("");
         if (keyPassphrase != null) keyPassphrase.setText("");
+        if (identityInput != null) identityInput.setText("");
     }
 
     private void dismissDialog() {
@@ -131,32 +325,212 @@ public final class RemoteHostsActivity extends Activity {
         content.removeAllViews();
         setStatus("Loading encrypted profiles…");
         int token = generation;
-        run(token, () -> store.read(), hosts -> renderProfiles(hosts));
+        run(token, () -> new ProfilesSnapshot(store.read(), identityStore.exists()), snapshot -> {
+            identityPresent = snapshot.identityPresent;
+            renderProfiles(snapshot.hosts);
+        });
     }
 
     private void renderProfiles(List<SavedRemoteHost> hosts) {
         content.removeAllViews();
-        setStatus("SSH · credentials are used once and never saved");
-        content.addView(label("Connect to an existing Herdr daemon through SSH. Verify its host key before entering credentials.", 15, MUTED));
-        content.addView(button("Add remote host", () -> editProfile(null)));
-        content.addView(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class))));
-        content.addView(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
-        if (hosts.isEmpty()) content.addView(label("No remote profiles saved yet", 18, TEXT));
-        for (SavedRemoteHost host : hosts) {
-            LinearLayout card = column();
-            card.setPadding(0, dp(18), 0, dp(10));
-            card.addView(label(host.name, 21, TEXT));
-            card.addView(label("tcp".equals(host.transport)
-                    ? host.username + "@" + host.host + ":" + host.port + " · " + host.session
-                    : "Iroh · " + host.endpointId + " · " + host.session, 14, MUTED));
-            card.addView(label(host.expectedFingerprint.isEmpty() ? "Host key not trusted yet" : host.expectedFingerprint, 12, MUTED));
-            card.addView(button("Connect", () -> inspectHost(host)));
-            card.addView(button("Edit profile", () -> editProfile(host)));
-            card.addView(button("Edit extra keys", () -> editShortcuts(host)));
-            if (!host.expectedFingerprint.isEmpty()) card.addView(button("Forget SSH trust", () -> forgetTrust(host)));
-            card.addView(button("Delete profile", () -> deleteProfile(host)));
-            content.addView(card);
+        if (pendingStatus != null) {
+            String message = pendingStatus;
+            pendingStatus = null;
+            setStatus(message);
+        } else {
+            setStatus("SSH · credentials are used once and cleared on close or pause");
         }
+        // The hosts are why this screen exists, so they lead; settings follow.
+        content.addView(button("Add remote host", () -> editProfile(null)));
+        if (hosts.isEmpty()) content.addView(label("No remote profiles saved yet", 18, TEXT));
+        for (SavedRemoteHost host : hosts) content.addView(hostCard(host));
+        content.addView(sectionLabel("This device"));
+        content.addView(label(identityPresent
+                ? "An encrypted SSH identity is saved in Android Keystore-backed storage on this device."
+                : "No device-wide SSH key is saved.", 13, MUTED));
+        LinearLayout keys = row();
+        keys.addView(weighted(button(identityPresent ? "Replace device-wide saved SSH key" : "Save device-wide SSH key", this::editIdentity)));
+        if (identityPresent) keys.addView(weighted(button("Remove saved SSH key", this::removeIdentity)));
+        content.addView(keys);
+        android.widget.CheckBox reopen = new android.widget.CheckBox(this);
+        reopen.setText("Reopen the last session at launch");
+        reopen.setTextColor(TEXT);
+        reopen.setTextSize(14);
+        reopen.setChecked(reopenEnabled());
+        reopen.setSaveEnabled(false);
+        content.addView(reopen);
+        TextView reopenHint = label(reopen.isChecked()
+                ? "The app opens the remembered host and pane instead of this list."
+                : "The app opens this host list every time.", 13, MUTED);
+        content.addView(reopenHint);
+        reopen.setOnCheckedChangeListener((view, checked) -> {
+            getSharedPreferences(STARTUP, MODE_PRIVATE).edit().putBoolean("reopen", checked).apply();
+            reopenHint.setText(checked
+                    ? "The app opens the remembered host and pane instead of this list."
+                    : "The app opens this host list every time.");
+        });
+        LinearLayout elsewhere = row();
+        elsewhere.addView(weighted(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class)))));
+        elsewhere.addView(weighted(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class)))));
+        content.addView(elsewhere);
+    }
+
+    /**
+     * One host: who it is, one filled primary action, and everything else in its
+     * overflow menu, so "Delete profile" never sits beside "Connect".
+     */
+    private LinearLayout hostCard(SavedRemoteHost host) {
+        LinearLayout card = column();
+        card.setPadding(0, dp(18), 0, dp(10));
+        card.addView(label(host.name, 21, TEXT));
+        card.addView(label("tcp".equals(host.transport)
+                ? host.username + "@" + host.host + ":" + host.port + " · " + host.session
+                : "Iroh · " + host.endpointId + " · " + host.session, 14, MUTED));
+        card.addView(label(host.expectedFingerprint.isEmpty() ? "Host key not trusted yet" : host.expectedFingerprint, 12, MUTED));
+        LinearLayout actions = row();
+        actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        Button connect = button("Connect", () -> inspectHost(host));
+        connect.setTextColor(BG);
+        connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+        actions.addView(weighted(connect));
+        android.widget.ImageButton more = new android.widget.ImageButton(this);
+        more.setImageResource(R.drawable.ic_bar_more);
+        more.setImageTintList(android.content.res.ColorStateList.valueOf(TEXT));
+        more.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff1e222a));
+        more.setContentDescription("More actions for " + host.name);
+        more.setTooltipText("More");
+        privateView(more);
+        more.setOnClickListener(view -> showHostActions(view, host));
+        actions.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        card.addView(actions);
+        return card;
+    }
+
+    /** Every secondary action keeps its own confirmation; the menu only gathers them. */
+    private void showHostActions(View anchor, SavedRemoteHost host) {
+        android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
+        // A raw shell needs the same pinned key and saved identity as Connect.
+        if (!host.expectedFingerprint.isEmpty() && identityPresent) {
+            menu.getMenu().add(0, 5, 0, "Open shell");
+        }
+        menu.getMenu().add(0, 1, 0, "Edit profile");
+        menu.getMenu().add(0, 2, 1, "Edit extra keys");
+        if (!host.expectedFingerprint.isEmpty()) menu.getMenu().add(0, 3, 2, destructive("Forget SSH trust"));
+        menu.getMenu().add(0, 4, 3, destructive("Delete profile"));
+        menu.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 5: openShell(host); break;
+                case 1: editProfile(host); break;
+                case 2: editShortcuts(host); break;
+                case 3: forgetTrust(host); break;
+                default: deleteProfile(host); break;
+            }
+            return true;
+        });
+        menu.show();
+    }
+
+    /** The host's own login shell, without Herdr's panes or agent status. */
+    private void openShell(SavedRemoteHost host) {
+        try {
+            GpuiLaunch.launchShell(this, host);
+        } catch (RuntimeException | LinkageError failure) {
+            String message = failure.getMessage();
+            setStatus(host.name + ": " + (message == null || message.isEmpty() ? "could not open a shell" : message));
+        }
+    }
+
+    private static CharSequence destructive(String title) {
+        android.text.SpannableString text = new android.text.SpannableString(title);
+        text.setSpan(new android.text.style.ForegroundColorSpan(DANGER), 0, title.length(), 0);
+        return text;
+    }
+
+    private TextView sectionLabel(String text) {
+        TextView label = label(text, 15, TEXT);
+        label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        label.setPadding(0, dp(28), 0, dp(2));
+        return label;
+    }
+
+    private static final class ProfilesSnapshot {
+        final List<SavedRemoteHost> hosts;
+        final boolean identityPresent;
+        ProfilesSnapshot(List<SavedRemoteHost> hosts, boolean identityPresent) {
+            this.hosts = hosts;
+            this.identityPresent = identityPresent;
+        }
+    }
+
+    private void editIdentity() {
+        generation++;
+        dismissDialog();
+        LinearLayout fields = column();
+        fields.setPadding(dp(16), 0, dp(16), 0);
+        fields.addView(label("Save one device-wide existing OpenSSH or PEM private key, encrypted with Android Keystore. It is not added to any host profile. A key passphrase is requested only for a connection and is never saved.", 14, MUTED));
+        identityInput = field(fields, "Paste existing OpenSSH / PEM private key", "", true);
+        identityInput.setSingleLine(false);
+        identityInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        identityInput.setMinLines(5);
+        identityInput.setMaxLines(10);
+        TextView error = label("", 13, MUTED);
+        fields.addView(error);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(fields);
+        AlertDialog editing = new AlertDialog.Builder(this).setTitle(identityPresent ? "Replace saved SSH key" : "Save SSH key")
+                .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save key", null).create();
+        editing.setOnDismissListener(ignored -> {
+            if (identityInput != null) identityInput.setText("");
+            identityInput = null;
+            if (dialog == editing) dialog = null;
+        });
+        showDialog(editing);
+        editing.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            if (identityInput == null || identityInput.length() == 0) {
+                error.setText("Paste a nonempty OpenSSH or PEM private key.");
+                return;
+            }
+            if (!boundedSecret(identityInput.getText(), 64 * 1024)) {
+                error.setText("SSH key must be valid text and at most 64 KiB.");
+                return;
+            }
+            final char[] identity = characters(identityInput);
+            synchronized (this) { pendingSecret = identity; pendingPassphrase = null; }
+            identityInput.setText("");
+            identityInput = null;
+            editing.dismiss();
+            dialog = null;
+            int token = generation;
+            run(token, () -> {
+                try {
+                    identityStore.save(identity);
+                    return true;
+                } finally {
+                    Arrays.fill(identity, '\0');
+                    synchronized (this) { if (pendingSecret == identity) pendingSecret = null; }
+                }
+            }, ignored -> {
+                identityPresent = true;
+                dismissDialog();
+                showProfiles();
+            }, failure -> {
+                setStatus(failure);
+            });
+        });
+    }
+
+    private void removeIdentity() {
+        generation++;
+        showDialog(new AlertDialog.Builder(this).setTitle("Remove saved SSH key?")
+                .setMessage("Permanently remove the device-wide encrypted SSH key and its Android Keystore key. Saved SSH profiles and host fingerprints are unchanged.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Remove key", (which, index) -> {
+                    int token = generation;
+                    run(token, () -> { identityStore.delete(); return true; }, ignored -> {
+                        identityPresent = false;
+                        showProfiles();
+                    });
+                }).create());
     }
 
     private void editProfile(SavedRemoteHost old) {
@@ -282,7 +656,7 @@ public final class RemoteHostsActivity extends Activity {
                 setStatus("Verify this SSH fingerprint before trusting the host");
                 showDialog(new AlertDialog.Builder(this).setTitle("Trust this SSH host key?")
                         .setMessage(destination(host) + "\n\n" + key
-                                + "\n\nCompare this SHA-256 fingerprint with a trusted source. No password has been sent.")
+                                + "\n\nCompare this SHA-256 fingerprint with a trusted source. No credentials have been sent.")
                         .setNegativeButton("Cancel", (which, index) -> showProfiles())
                         .setPositiveButton("Trust fingerprint", (which, index) -> run(token,
                                 () -> store.trust(host, key), trusted -> { selected = trusted; showPassword(trusted); }))
@@ -291,68 +665,95 @@ public final class RemoteHostsActivity extends Activity {
         });
     }
 
-    private void showPassword(SavedRemoteHost host) { showCredentials(host, false); }
+    private enum CredentialMode { PASSWORD, ONE_USE_KEY, SAVED_KEY }
 
-    private void showCredentials(SavedRemoteHost host, boolean privateKey) {
+    private void showPassword(SavedRemoteHost host) { showCredentials(host, CredentialMode.PASSWORD); }
+
+    private void showCredentials(SavedRemoteHost host, CredentialMode mode) {
         dismissDialog();
         LinearLayout fields = column();
         fields.setPadding(dp(16), 0, dp(16), 0);
         fields.addView(label(destination(host), 16, TEXT));
         fields.addView(label("Trusted " + host.expectedFingerprint
-                + "\nCredentials are used once and cleared on close or pause.", 13, MUTED));
+                + (mode == CredentialMode.SAVED_KEY
+                    ? "\nThe saved private key is decrypted only for this connection. Its passphrase is one-use."
+                    : "\nPasswords and passphrases are used once and cleared on close or pause."), 13, MUTED));
         fields.addView(label("The app checks for a running Herdr session. Herdr’s bridge may start it if it stops while connecting.", 13, MUTED));
-        password = field(fields, privateKey ? "Existing OpenSSH / PEM private key" : "SSH password", "", true);
-        if (privateKey) {
-            password.setSingleLine(false);
-            password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                    | InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-            password.setMinLines(3); password.setMaxLines(6);
+        password = null;
+        keyPassphrase = null;
+        if (mode != CredentialMode.SAVED_KEY) {
+            boolean privateKey = mode == CredentialMode.ONE_USE_KEY;
+            password = field(fields, privateKey ? "Existing OpenSSH / PEM private key" : "SSH password", "", true);
+            if (privateKey) {
+                password.setSingleLine(false);
+                password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                        | InputType.TYPE_TEXT_VARIATION_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+                password.setMinLines(3); password.setMaxLines(6);
+            }
+        }
+        if (mode != CredentialMode.PASSWORD) {
             keyPassphrase = field(fields, "Key passphrase (optional)", "", true);
-            fields.addView(label("Paste an existing key. This app does not create or save SSH keys.", 13, MUTED));
+        }
+        if (mode == CredentialMode.ONE_USE_KEY) {
+            fields.addView(label("This key is used once and is not saved. To save a device-wide encrypted key, return to Remote hosts.", 13, MUTED));
+        }
+        if (mode == CredentialMode.SAVED_KEY) {
+            fields.addView(label("Uses the device-wide encrypted identity. No automatic password or pasted-key fallback is attempted.", 13, MUTED));
+        }
+        if (mode != CredentialMode.PASSWORD) fields.addView(button("Use password", () -> showCredentials(host, CredentialMode.PASSWORD)));
+        if (mode != CredentialMode.ONE_USE_KEY) fields.addView(button("Use one-use private key", () -> showCredentials(host, CredentialMode.ONE_USE_KEY)));
+        if (identityPresent && mode != CredentialMode.SAVED_KEY) {
+            fields.addView(button("Use saved SSH key", () -> showCredentials(host, CredentialMode.SAVED_KEY)));
         }
         ScrollView scrolling = new ScrollView(this); scrolling.addView(fields);
         AlertDialog login = new AlertDialog.Builder(this).setTitle("Connect to " + host.name).setView(scrolling)
                 .setNegativeButton("Cancel", (which, index) -> showProfiles())
-                .setNeutralButton(privateKey ? "Use password" : "Use private key", (which, index) -> showCredentials(host, !privateKey))
                 .setPositiveButton("Connect", null).create();
         showDialog(login);
         final int loginGeneration = generation;
         login.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             if (!current(loginGeneration) || dialog != login || !login.isShowing()) return;
-            if (password == null || password.length() == 0) return;
-            int maximum = privateKey ? 65536 : 4096;
-            if (!boundedSecret(password.getText(), maximum)) {
-                password.setError(privateKey ? "Key exceeds 64 KiB" : "Password exceeds 4096 bytes"); return;
+            if (mode != CredentialMode.SAVED_KEY) {
+                if (password == null || password.length() == 0) return;
+                int maximum = mode == CredentialMode.ONE_USE_KEY ? 65536 : 4096;
+                if (!boundedSecret(password.getText(), maximum)) {
+                    password.setError(mode == CredentialMode.ONE_USE_KEY ? "Key exceeds 64 KiB" : "Password exceeds 4096 bytes"); return;
+                }
             }
             if (keyPassphrase != null && !boundedSecret(keyPassphrase.getText(), 4096)) {
                 keyPassphrase.setError("Passphrase exceeds 4096 bytes"); return;
             }
-            final char[] secret = value(password).toCharArray();
-            final char[] phrase = keyPassphrase == null ? new char[0] : value(keyPassphrase).toCharArray();
+            final char[] secret = mode == CredentialMode.SAVED_KEY ? new char[0] : characters(password);
+            final char[] phrase = keyPassphrase == null ? new char[0] : characters(keyPassphrase);
             synchronized (this) { pendingSecret = secret; pendingPassphrase = phrase; }
-            password.setText("");
+            if (password != null) password.setText("");
             if (keyPassphrase != null) keyPassphrase.setText("");
             login.dismiss(); dialog = null; password = null; keyPassphrase = null;
-            connect(host, secret, phrase, privateKey);
+            connect(host, secret, phrase, mode);
         });
         login.setOnCancelListener(ignored -> showProfiles());
     }
 
-    private void connect(SavedRemoteHost host, char[] secret, char[] phrase, boolean privateKey) {
+    private void connect(SavedRemoteHost host, char[] secret, char[] phrase, CredentialMode mode) {
         setStatus("Connecting to " + host.name + "…");
         int token = generation;
         submit(() -> {
             long handle = 0;
+            char[] credentialSecret = secret;
             try {
                 if (!current(token)) return;
                 SavedRemoteHost currentHost = store.requireCurrent(host);
+                if (mode == CredentialMode.SAVED_KEY) credentialSecret = identityStore.read();
                 String credential;
                 synchronized (this) {
-                    if (!current(token) || pendingSecret != secret) return;
-                    JSONObject payload = new JSONObject().put(privateKey ? "private_key" : "password", new String(secret));
+                    if (!current(token) || pendingSecret != secret || pendingPassphrase != phrase) return;
+                    boolean privateKey = mode != CredentialMode.PASSWORD;
+                    JSONObject payload = new JSONObject().put(privateKey ? "private_key" : "password", new String(credentialSecret));
                     if (privateKey && phrase.length > 0) payload.put("passphrase", new String(phrase));
                     credential = payload.toString();
-                    Arrays.fill(secret, '\0'); Arrays.fill(phrase, '\0');
+                    Arrays.fill(credentialSecret, '\0');
+                    if (credentialSecret != secret) Arrays.fill(secret, '\0');
+                    Arrays.fill(phrase, '\0');
                     pendingSecret = null; pendingPassphrase = null;
                 }
                 handle = RemoteNative.connect(currentHost.connectionJson(), credential);
@@ -370,7 +771,9 @@ public final class RemoteHostsActivity extends Activity {
             } finally {
                 if (handle != 0) RemoteNative.close(handle);
                 synchronized (this) {
-                    Arrays.fill(secret, '\0'); Arrays.fill(phrase, '\0');
+                    Arrays.fill(credentialSecret, '\0');
+                    if (credentialSecret != secret) Arrays.fill(secret, '\0');
+                    Arrays.fill(phrase, '\0');
                     if (pendingSecret == secret) pendingSecret = null;
                     if (pendingPassphrase == phrase) pendingPassphrase = null;
                 }
@@ -382,7 +785,7 @@ public final class RemoteHostsActivity extends Activity {
         if (!current(token) || ownedHandle != handle) return;
         run(token, () -> {
             store.requireCurrent(host);
-            return result(RemoteNative.poll(handle));
+            return result(RemoteNative.poll(handle, 0, false));
         }, snapshot -> {
             if (ownedHandle != handle) return;
             setStatus(snapshot.optString("status", "Connecting…"));
@@ -435,6 +838,7 @@ public final class RemoteHostsActivity extends Activity {
         }, currentHost -> {
             if (ownedHandle != handle) return;
             try {
+                rememberLastSession(this, currentHost, id);
                 GpuiLaunch.launchRemote(this, currentHost, handle, id, title);
                 // startActivity succeeded: only the launch grant/terminal now owns the handle.
                 ownedHandle = 0;
@@ -513,6 +917,12 @@ public final class RemoteHostsActivity extends Activity {
         }
         return true;
     }
+    private static char[] characters(EditText field) {
+        CharSequence text = field.getText();
+        char[] result = new char[text.length()];
+        for (int i = 0; i < text.length(); i++) result[i] = text.charAt(i);
+        return result;
+    }
     private static String value(EditText field) { return field.getText().toString(); }
     private void privateView(View view) {
         view.setSaveEnabled(false);
@@ -539,11 +949,38 @@ public final class RemoteHostsActivity extends Activity {
         return label;
     }
     private Button button(String text, Runnable action) {
+        // The desktop chrome is a flat slate bar with the terminal foreground; the
+        // platform button tint reads as a different product beside it.
         Button button = new Button(this);
-        button.setText(text); button.setAllCaps(false); privateView(button);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextColor(0xffdce5ef);
+        button.setTextSize(14);
+        button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff1e222a));
+        button.setMinHeight(dp(48));
+        button.setStateListAnimator(null);
+        privateView(button);
         button.setOnClickListener(view -> action.run());
         return button;
     }
+
+    private LinearLayout row() {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(4), 0, 0);
+        privateView(row);
+        return row;
+    }
+
+    /** Half-width sibling in a row: weight carries the width, margin the gap. */
+    private Button weighted(Button button) {
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        params.setMarginEnd(dp(4));
+        button.setLayoutParams(params);
+        return button;
+    }
+
     private LinearLayout column() {
         LinearLayout result = new LinearLayout(this);
         result.setOrientation(LinearLayout.VERTICAL); privateView(result);

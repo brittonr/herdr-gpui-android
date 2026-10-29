@@ -54,7 +54,7 @@ impl Fixture {
                     _ = task_stop.cancelled() => break,
                     connection = listener.accept() => {
                         let Ok((stream, _)) = connection else { break };
-                        let handler = TestServer { password_attempts: attempts.clone(), publickey_attempts: key_attempts.clone(), disconnected: ended.clone(), echo: false, auth };
+                        let handler = TestServer { password_attempts: attempts.clone(), publickey_attempts: key_attempts.clone(), disconnected: ended.clone(), echo: false, pty: None, auth };
                         let server_config = server_config.clone();
                         let connection_stop = task_stop.clone();
                         sessions.spawn(async move {
@@ -110,6 +110,8 @@ struct TestServer {
     publickey_attempts: Arc<AtomicUsize>,
     disconnected: Arc<tokio::sync::Notify>,
     echo: bool,
+    /// The terminal type and size of the last PTY request.
+    pty: Option<(String, u32, u32)>,
 }
 impl Drop for TestServer {
     fn drop(&mut self) {
@@ -220,6 +222,54 @@ impl server::Handler for TestServer {
         if self.echo {
             session.data(channel, data.to_vec())?;
         }
+        Ok(())
+    }
+    #[allow(clippy::too_many_arguments)]
+    async fn pty_request(
+        &mut self,
+        channel: ChannelId,
+        term: &str,
+        columns: u32,
+        rows: u32,
+        _pix_width: u32,
+        _pix_height: u32,
+        _modes: &[(russh::Pty, u32)],
+        session: &mut server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        self.pty = Some((term.into(), columns, rows));
+        session.channel_success(channel)?;
+        Ok(())
+    }
+    async fn shell_request(
+        &mut self,
+        channel: ChannelId,
+        session: &mut server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        let Some((term, columns, rows)) = self.pty.clone() else {
+            session.channel_failure(channel)?;
+            return Ok(());
+        };
+        session.channel_success(channel)?;
+        self.echo = true;
+        session.data(
+            channel,
+            format!("shell on {term} {columns}x{rows}\r\n$ ").into_bytes(),
+        )?;
+        Ok(())
+    }
+    async fn window_change_request(
+        &mut self,
+        channel: ChannelId,
+        columns: u32,
+        rows: u32,
+        _pix_width: u32,
+        _pix_height: u32,
+        session: &mut server::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        session.data(
+            channel,
+            format!("resized {columns}x{rows}\r\n").into_bytes(),
+        )?;
         Ok(())
     }
 }
@@ -389,6 +439,63 @@ async fn bridge_forwards_binary_bytes_and_guard_drop_disconnects() {
     tokio::time::timeout(Duration::from_secs(2), fixture.disconnected.notified())
         .await
         .unwrap();
+    fixture.finish().await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shell_runs_on_a_pty_forwards_bytes_and_window_changes() {
+    let fixture = Fixture::new().await;
+    let shell = fixture
+        .session()
+        .await
+        .into_shell("xterm-256color", 80, 24)
+        .await
+        .unwrap();
+    let (socket, size, guard) = shell.into_parts();
+    socket.set_nonblocking(true).unwrap();
+    let mut socket = tokio::net::UnixStream::from_std(socket).unwrap();
+    async fn expect(socket: &mut tokio::net::UnixStream, text: &str) {
+        let mut received = vec![0; text.len()];
+        tokio::time::timeout(Duration::from_secs(2), socket.read_exact(&mut received))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&received), text);
+    }
+    // The shell started only after the PTY it was given.
+    expect(&mut socket, "shell on xterm-256color 80x24\r\n$ ").await;
+    socket.write_all(b"ls\r").await.unwrap();
+    expect(&mut socket, "ls\r").await;
+    size.resize(100, 30);
+    expect(&mut socket, "resized 100x30\r\n").await;
+    drop(guard);
+    let mut remaining = Vec::new();
+    tokio::time::timeout(Duration::from_secs(2), socket.read_to_end(&mut remaining))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(remaining.is_empty());
+    tokio::time::timeout(Duration::from_secs(2), fixture.disconnected.notified())
+        .await
+        .unwrap();
+    fixture.finish().await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shell_without_a_pty_is_refused_and_closes_the_session() {
+    let fixture = Fixture::new().await;
+    let session = fixture.session().await;
+    // A bare shell request (no PTY) is what this server refuses.
+    let refused = bounded(&session.guard.0, CHANNEL_TIMEOUT, async {
+        let mut channel = session.handle.channel_open_session().await?;
+        channel.request_shell(true).await?;
+        expect_success(&mut channel).await
+    })
+    .await;
+    assert!(matches!(refused, Err(Error::CommandRejected)));
+    session.shutdown().await;
     fixture.finish().await;
 }
 

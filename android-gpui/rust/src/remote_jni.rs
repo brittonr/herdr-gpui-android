@@ -1,10 +1,10 @@
 //! Small JNI boundary. Networking is owned by remote session workers; inspect
 //! is a bounded background operation invoked by the Java executor.
-use crate::remote;
+use crate::{remote, shell};
 use jni::{
     JNIEnv, JavaVM,
     objects::{GlobalRef, JClass, JObject, JString},
-    sys::{jlong, jstring},
+    sys::{jboolean, jint, jlong, jstring},
 };
 use std::sync::{Mutex, OnceLock};
 use zeroize::Zeroizing;
@@ -124,6 +124,35 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_inspect(
     result_string(&mut env, remote::inspect(&config))
 }
 
+/// Reports the client grid and negotiates surface interest in the initial hello.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_connectGrid(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    config: JString<'_>,
+    credentials: JString<'_>,
+    grid: JString<'_>,
+    surface_active: jboolean,
+) -> jlong {
+    let Some(config) = read(&mut env, &config, 8192) else {
+        return 0;
+    };
+    let Some(credentials) = read(&mut env, &credentials, remote::MAX_CREDENTIAL_JSON) else {
+        return 0;
+    };
+    let Some(grid) = read(&mut env, &grid, 64) else {
+        return 0;
+    };
+    match remote::connect_credentials_grid(&config, &credentials, &grid, surface_active != 0) {
+        Ok(handle) => handle as jlong,
+        Err(error) => {
+            fail(&mut env, &error.to_string());
+            0
+        }
+    }
+}
+
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_RemoteNative_connect(
@@ -153,8 +182,44 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_poll(
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,
     handle: jlong,
+    since: jlong,
+    mirror: jboolean,
 ) -> jstring {
-    result_string(&mut env, remote::poll(handle as u64))
+    result_string(
+        &mut env,
+        remote::poll(handle as u64, since as u64, mirror != 0),
+    )
+}
+#[cfg(feature = "android-ui")]
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_pollTerminal(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    since: jlong,
+    since_chrome: jlong,
+    generation: jlong,
+    host_name: JString<'_>,
+    shortcuts: JString<'_>,
+) -> jstring {
+    let Some(host_name) = read(&mut env, &host_name, 1024) else {
+        return std::ptr::null_mut();
+    };
+    let Some(shortcuts) = read(&mut env, &shortcuts, crate::model::MAX_SHORTCUT_JSON) else {
+        return std::ptr::null_mut();
+    };
+    result_string(
+        &mut env,
+        remote::poll_terminal(
+            handle as u64,
+            since as u64,
+            since_chrome as u64,
+            generation,
+            &host_name,
+            &shortcuts,
+        ),
+    )
 }
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
@@ -188,10 +253,171 @@ pub extern "system" fn Java_dev_herdr_android_RemoteNative_focus(
 }
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_focusTab(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    tab: JString<'_>,
+) -> jstring {
+    let Some(tab) = read(&mut env, &tab, 1024) else {
+        return std::ptr::null_mut();
+    };
+    result_string(&mut env, remote::focus_tab(handle as u64, &tab))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_focusWorkspace(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    workspace: JString<'_>,
+) -> jstring {
+    let Some(workspace) = read(&mut env, &workspace, 1024) else {
+        return std::ptr::null_mut();
+    };
+    result_string(&mut env, remote::focus_workspace(handle as u64, &workspace))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_sessionAction(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    action: JString<'_>,
+) -> jstring {
+    let Some(action) = read(&mut env, &action, 64) else {
+        return std::ptr::null_mut();
+    };
+    result_string(&mut env, remote::session_action(handle as u64, &action))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_scrollLocal(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    delta: jlong,
+    generation: jlong,
+    title: JString<'_>,
+    status: JString<'_>,
+    shortcuts: JString<'_>,
+) -> jstring {
+    let Some(title) = read(&mut env, &title, 1024) else {
+        return std::ptr::null_mut();
+    };
+    let Some(status) = read(&mut env, &status, 4096) else {
+        return std::ptr::null_mut();
+    };
+    let Some(shortcuts) = read(&mut env, &shortcuts, 65536) else {
+        return std::ptr::null_mut();
+    };
+    let paint = remote::UiPaint {
+        generation: generation as i64,
+        title: &title,
+        status: &status,
+        shortcuts: &shortcuts,
+    };
+    result_string(&mut env, remote::scroll_local(handle as u64, delta, paint))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_scrollTo(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    offset: jlong,
+) -> jstring {
+    result_string(&mut env, remote::scroll_to(handle as u64, offset))
+}
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_herdr_android_RemoteNative_close(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
     handle: jlong,
 ) {
     remote::close(handle as u64);
+}
+
+/// Opens a raw login shell. Blocks for the SSH handshake: Java's worker only.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_openShell(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    config: JString<'_>,
+    credentials: JString<'_>,
+    columns: jint,
+    rows: jint,
+) -> jlong {
+    let Some(config) = read(&mut env, &config, 8192) else {
+        return 0;
+    };
+    let Some(credentials) = read(&mut env, &credentials, remote::MAX_CREDENTIAL_JSON) else {
+        return 0;
+    };
+    let columns = columns.clamp(2, 1000) as u16;
+    let rows = rows.clamp(1, 1000) as u16;
+    match shell::open(&config, &credentials, columns, rows) {
+        Ok(handle) => handle as jlong,
+        Err(error) => {
+            fail(&mut env, &error.to_string());
+            0
+        }
+    }
+}
+
+/// Sends one mailbox command; false means the input queue was full.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_shellInput(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    command: JString<'_>,
+) -> jboolean {
+    let Some(command) = read(&mut env, &command, crate::model::MAX_COMMAND_JSON) else {
+        return 0;
+    };
+    match shell::input(handle as u64, &command) {
+        Ok(sent) => u8::from(sent),
+        Err(error) => {
+            fail(&mut env, &error.to_string());
+            0
+        }
+    }
+}
+
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_shellAlive(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jboolean {
+    u8::from(shell::alive(handle as u64))
+}
+
+/// The shell's screen text for copying, or null once it is closed.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_shellText(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jstring {
+    shell::text(handle as u64)
+        .and_then(|text| env.new_string(text).ok())
+        .map_or(std::ptr::null_mut(), |text| text.into_raw())
+}
+
+/// Never blocks: the SSH connection ends on a background thread.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_herdr_android_RemoteNative_closeShell(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) {
+    shell::close(handle as u64);
 }

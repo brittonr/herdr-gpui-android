@@ -2,6 +2,7 @@ package dev.herdr.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
@@ -31,6 +32,8 @@ final class QuickCommandPalette {
     interface Owner {
         void show(AlertDialog dialog);
         boolean isCurrentDialog(AlertDialog dialog);
+        /** Alert theme matching the terminal chrome; fields use the dialog's context. */
+        int dialogTheme();
     }
     interface Sender {
         boolean canSend();
@@ -91,13 +94,24 @@ final class QuickCommandPalette {
         List<Integer> indices = new ArrayList<>();
         for (int i = 0; i < source.size(); i++) indices.add(i);
         Collections.sort(indices, Comparator.comparing((Integer i) -> !source.get(i).isPinned()));
-        String[] labels = new String[indices.size()];
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity, owner.dialogTheme());
+        int caption = themeColor(builder.getContext(), android.R.attr.textColorSecondary);
+        CharSequence[] labels = new CharSequence[indices.size()];
         for (int i = 0; i < labels.length; i++) {
             QuickCommand command = source.get(indices.get(i));
-            labels[i] = (command.isPinned() ? "★ " : "") + command.getLabel() + "\n" + summary(command.getText());
+            // The command is a caption, not a second title: same list pattern as
+            // everywhere else. The pin follows the title, so every title and its
+            // caption share one left edge; spaces never match a star's width.
+            String name = command.getLabel() + (command.isPinned() ? "  ★" : "");
+            String text = name + "\n" + summary(command.getText());
+            android.text.SpannableString styled = new android.text.SpannableString(text);
+            styled.setSpan(new android.text.style.RelativeSizeSpan(0.8f), name.length() + 1, text.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            styled.setSpan(new android.text.style.ForegroundColorSpan(caption), name.length() + 1,
+                    text.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            labels[i] = styled;
         }
-        AlertDialog.Builder builder = new AlertDialog.Builder(activity)
-                .setTitle(presets ? "OMP presets · " + OmpQuickCommands.REFERENCE_VERSION : "Quick commands")
+        builder.setTitle(presets ? "OMP presets · " + OmpQuickCommands.REFERENCE_VERSION : "Quick commands")
                 .setItems(labels, (dialog, selected) -> {
                     if (saving || !owner.isCurrentDialog((AlertDialog) dialog)) return;
                     int index = indices.get(selected);
@@ -121,31 +135,34 @@ final class QuickCommandPalette {
 
     private void preview(Sender sender, int index, QuickCommand original) {
         if (closed || saving) return;
-        LinearLayout body = new LinearLayout(activity);
+        AlertDialog.Builder builder = new AlertDialog.Builder(activity, owner.dialogTheme());
+        Context context = builder.getContext();
+        int caution = themeColor(context, android.R.attr.colorError);
+        LinearLayout body = new LinearLayout(context);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(16), dp(4), dp(16), dp(8));
-        body.addView(label(hostName + " · " + targetTitle));
-        body.addView(label("Use in OMP's input prompt. Insert adds text without Enter. Existing input is never erased."));
-        EditText name = editor("Name", original == null ? "" : original.getLabel());
-        EditText text = editor("Command", original == null ? "" : original.getText());
+        body.setPadding(dp(24), dp(4), dp(24), dp(8));
+        body.addView(label(context, hostName + " · " + targetTitle));
+        body.addView(label(context, "Use in OMP's input prompt. Insert adds text without Enter. Existing input is never erased."));
+        EditText name = editor(context, "Name", original == null ? "" : original.getLabel());
+        EditText text = editor(context, "Command", original == null ? "" : original.getText());
         body.addView(name); body.addView(text);
-        CheckBox pinned = new CheckBox(activity);
+        CheckBox pinned = new CheckBox(context);
         pinned.setText("Pin when saved"); pinned.setChecked(original != null && original.isPinned());
         pinned.setSaveEnabled(false); body.addView(pinned);
-        TextView warning = label(OmpQuickCommands.warningFor(text.getText().toString()));
-        warning.setTextColor(0xffe2a24e); body.addView(warning);
-        CheckBox emptyPrompt = new CheckBox(activity);
+        TextView warning = label(context, OmpQuickCommands.warningFor(text.getText().toString()));
+        warning.setTextColor(caution); body.addView(warning);
+        CheckBox emptyPrompt = new CheckBox(context);
         emptyPrompt.setText("OMP is idle and its input prompt is empty");
         emptyPrompt.setSaveEnabled(false); body.addView(emptyPrompt);
-        TextView error = label(""); error.setTextColor(0xffee7777); body.addView(error);
-        LinearLayout local = new LinearLayout(activity);
-        Button save = new Button(activity); save.setText("Save command"); save.setAllCaps(false);
+        TextView error = label(context, ""); error.setTextColor(caution); body.addView(error);
+        LinearLayout local = new LinearLayout(context);
+        Button save = new Button(context); save.setText("Save command"); save.setAllCaps(false);
         local.addView(save, new LinearLayout.LayoutParams(0, dp(48), 1));
-        Button delete = new Button(activity); delete.setText("Delete"); delete.setAllCaps(false);
+        Button delete = new Button(context); delete.setText("Delete"); delete.setAllCaps(false);
         if (index >= 0) local.addView(delete, new LinearLayout.LayoutParams(0, dp(48), 1));
         body.addView(local);
-        ScrollView scroll = new ScrollView(activity); scroll.addView(body);
-        AlertDialog dialog = new AlertDialog.Builder(activity).setTitle("Command preview")
+        ScrollView scroll = new ScrollView(context); scroll.addView(body);
+        AlertDialog dialog = builder.setTitle("Command preview")
                 .setView(scroll).setNegativeButton("Cancel", null)
                 .setPositiveButton("Insert", null).setNeutralButton("Send + Enter", null).create();
         owner.show(dialog);
@@ -187,7 +204,7 @@ final class QuickCommandPalette {
         });
         delete.setOnClickListener(view -> {
             if (saving || !owner.isCurrentDialog(dialog)) return;
-            AlertDialog confirm = new AlertDialog.Builder(activity).setTitle("Delete quick command?")
+            AlertDialog confirm = new AlertDialog.Builder(activity, owner.dialogTheme()).setTitle("Delete quick command?")
                     .setMessage("Remove this saved command from this host. Nothing is sent to the terminal.")
                     .setNegativeButton("Cancel", (d, w) -> {
                         if (!saving && owner.isCurrentDialog((AlertDialog) d)) preview(sender, index, original);
@@ -223,8 +240,8 @@ final class QuickCommandPalette {
         });
     }
 
-    private EditText editor(String hint, String value) {
-        EditText edit = new EditText(activity);
+    private EditText editor(Context context, String hint, String value) {
+        EditText edit = new EditText(context);
         edit.setHint(hint); edit.setText(value); edit.setSingleLine(true);
         edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         edit.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
@@ -234,9 +251,13 @@ final class QuickCommandPalette {
         edit.setOnKeyListener((view, code, event) -> code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER);
         return edit;
     }
-    private TextView label(String text) {
-        TextView view = new TextView(activity); view.setText(text); view.setTextSize(13);
+    private TextView label(Context context, String text) {
+        TextView view = new TextView(context); view.setText(text); view.setTextSize(13);
         view.setPadding(0, dp(4), 0, dp(4)); view.setSaveEnabled(false); return view;
+    }
+    private static int themeColor(Context context, int attribute) {
+        android.content.res.TypedArray values = context.obtainStyledAttributes(new int[]{attribute});
+        try { return values.getColor(0, 0xff000000); } finally { values.recycle(); }
     }
     private String summary(String value) {
         int count = value.codePointCount(0, value.length());

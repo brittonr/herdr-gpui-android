@@ -20,12 +20,22 @@ Herdr GPUI is a native client of an existing local Herdr daemon, not a terminal
 emulator, server, or TUI wrapper. Herdr owns terminal processes and session state.
 Closing or detaching the GUI must leave the daemon and its terminals running.
 
+One owner-approved exception: `android-gpui`'s raw SSH shell mode (host list
+⋮ > **Open shell**) runs the host's login shell on a remote PTY and renders it
+with vendored, modified Rio code. It is the only terminal emulation here. It has
+no Herdr panes, rail or agent status, and leaving it ends the shell. Herdr mode
+stays the primary path; do not move Herdr features onto the shell or the reverse.
+Its output is untrusted terminal content: keep graphics that name local files or
+shared memory refused.
+
 | Location | Responsibility |
 | --- | --- |
 | `crates/herdr-protocol` | Generation-1 wire types, framing, validation, and atomic surface patches |
 | `crates/herdr-client` | Discovery, socket worker, session transitions, ordered commands, and client-local activity projection |
 | `crates/herdr-companion` | Headless bridge and embedded web app for phones: Claude Code HTTP hooks in; decisions, agent status, transcripts, and a bounded event feed out; replies, keys, and new agents through Herdr's JSON API; never depends on GPUI |
 | `android-gpui/` | GPUI/wgpu Android terminal activity; standalone aligned GPUI 0.3.7 workspace, reuses Android host profiles and HTTPS transport |
+| `android-gpui/rust/vendor/gpui-rio` | Modified gpui-rio: a Rio terminal session over a byte stream and its GPUI canvas, for raw SSH shell mode |
+| `android-gpui/rust/vendor/rio-vt` | Modified rio-vt: VT parser and grid, refusing graphics that name local files; its own workspace keeps upstream's code, lints and tests |
 | `android/` | Native Android companion client: HTTPS host profiles, terminal/agent screens, and configurable key input; does not depend on GPUI |
 | `crates/herdr-gpui` | Native UI, connection bridge, presentation state, semantic input, geometry, and painting |
 | `crates/test-support/sandbox.rs` | Shared isolated process setup for opt-in integration tests; not a production crate |
@@ -145,6 +155,9 @@ just ci
   as `just ci`: a macOS run cannot see a Linux-only gate, and neither can the
   Windows cross-check.
 - Documentation-only changes need command/path/link review and `git diff --check`; do not claim a code test run that did not happen.
+- In `android-gpui/rust`, format with `cargo fmt -p herdr-gpui-android -p gpui-rio`
+  and test with `--workspace`. `cargo fmt --all` would reformat vendored rio-vt,
+  and without `--workspace` the gpui-rio tests do not run.
 - Add deterministic tests for invariants: ordering, cancellation, fragmentation, revision fencing, error paths, geometry, and cleanup. Prefer explicit coordination and bounded waits over timing guesses.
 - Test pure session/CLI/geometry logic without a socket or window where possible. Exercise public behavior with mock peers and headless GPUI tests where integration matters.
 - Fix flaky tests rather than hiding them with retries or new ignores. Existing live/native tests are ignored because they require explicit external resources.

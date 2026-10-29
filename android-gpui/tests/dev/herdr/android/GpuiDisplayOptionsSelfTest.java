@@ -7,9 +7,12 @@ public final class GpuiDisplayOptionsSelfTest {
     public static void main(String[] args) {
         GpuiDisplayOptions auto = new GpuiDisplayOptions(0, 0, 0);
         check(auto.compact(432, 480), "1080x1200 at density 400 chooses compact");
+        check(auto.compact(443, 993), "Pixel 9 Pro Fold cover viewport chooses compact");
+        check(!auto.compact(800, 840), "large nearly-square inner viewport stays standard");
+        check(auto.compact(480, 900), "fold-cover width threshold is inclusive");
         check(auto.compact(480, 432), "short wide layout chooses compact");
         check(auto.compact(360, 900), "narrow portrait chooses compact");
-        check(!auto.compact(361, 501), "above both compact thresholds stays standard");
+        check(!auto.compact(481, 501), "above both compact thresholds stays standard");
         check(auto.compact(500, 500), "height threshold is inclusive");
         check(!auto.compact(0, 480), "unmeasured width does not select compact");
         check(!auto.compact(432, 0), "unmeasured height does not select compact");

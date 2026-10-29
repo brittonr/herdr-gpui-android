@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -8,9 +10,15 @@
     <uses-feature android:name="android.hardware.vulkan.level" android:version="0" android:required="false" />
     <application android:label="Herdr GPUI Remote" android:theme="@style/AppTheme"
         android:icon="@drawable/ic_herdr" android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        tools:ignore="DataExtractionRules"
         android:usesCleartextTraffic="false" android:hardwareAccelerated="true"
         android:supportsRtl="true">
+        <!-- The device's fold reports (tabletop posture); absent on most phones. -->
+        <uses-library android:name="androidx.window.extensions" android:required="false" />
         <activity android:name="dev.herdr.android.RemoteHostsActivity" android:exported="true"
+            android:theme="@style/GpuiTheme"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -26,6 +34,7 @@
         <activity android:name="dev.herdr.android.MainActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name="dev.herdr.android.GpuiTerminalActivity" android:exported="false"
+            android:theme="@style/GpuiTheme"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density|fontScale"
             android:windowSoftInputMode="adjustResize">
             <meta-data android:name="android.app.lib_name" android:value="herdr_gpui_android" />
