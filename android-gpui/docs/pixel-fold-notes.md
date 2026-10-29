@@ -105,9 +105,11 @@ changes.
 - Frame cadence is still unmeasured, and `dumpsys SurfaceFlinger --latency` is not
   the tool: on the GPUI `SurfaceView (BLAST)` layer it returns only the refresh
   period (8 333 333 ns, i.e. the panel is at **120 Hz**) and no frame timestamps,
-  idle or while scrolling. Use Perfetto (`gfx`/`sched` categories) or add a
-  debug-only frame counter to the GPUI view; the display itself is not the
-  constraint.
+  idle or while scrolling. A counter inside the view's `render` does not work
+  either: scrolling a `uniform_list` repaints without calling it, so the hook
+  never fires - that experiment was written, measured at zero lines, and
+  reverted. Cadence needs Perfetto (`gfx`/`sched`) or an instrumented GPUI
+  presenter; the display itself is not the constraint at 120 Hz.
 - **Cover-panel typography is settled by measurement, not preference.** At
   494 dp a 70–90 character pane cannot fit at a readable size: the fit floors at
   11 px and clips the tail, and dropping the floor to 10 px still clipped the
