@@ -82,6 +82,8 @@ public class GpuiInputActivity extends Activity {
     private final class InputProxy extends EditText {
         private long session;
         private long epoch;
+        /** Sequence of the newest InputConnection handed to the keyboard. */
+        private long newestConnection;
         private int depth;
         private boolean marked;
 
@@ -144,6 +146,11 @@ public class GpuiInputActivity extends Activity {
             if (connection == null) return null;
             final long connectionSession = session;
             final long connectionEpoch = epoch;
+            // Android can create the next connection (restartInput after
+            // requestFocus) before it closes the previous one. Only the newest
+            // connection's close means the keyboard went away; a superseded one
+            // must not dismiss or reset the live connection.
+            final long connectionId = ++newestConnection;
             return new InputConnectionWrapper(connection, false) {
                 @Override public boolean setComposingText(CharSequence text, int cursor, android.view.inputmethod.TextAttribute attributes) {
                     return setComposingText(text, cursor);
@@ -172,7 +179,8 @@ public class GpuiInputActivity extends Activity {
                         executor.execute(() -> result.accept(InputConnection.HANDWRITING_GESTURE_RESULT_UNSUPPORTED));
                 }
                 @Override public void closeConnection() {
-                    if (connectionSession != session || connectionEpoch != epoch) return;
+                    if (connectionSession != session || connectionEpoch != epoch
+                            || connectionId != newestConnection) return;
                     gpuiIme(session, 4, "", 0, 0);
                     reset(session);
                     super.closeConnection();

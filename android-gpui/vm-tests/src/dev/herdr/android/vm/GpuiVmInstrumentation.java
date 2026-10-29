@@ -241,6 +241,25 @@ public final class GpuiVmInstrumentation extends Instrumentation {
                 "IME suggestions were not disabled");
         pass("Actual IME connection disables personalized learning and suggestions");
         require(ime[0] != null, "IME InputConnection missing");
+        // Android creates the next connection (restartInput after focus) before it
+        // closes the previous one. That close must neither dismiss the keyboard nor
+        // invalidate the connection the keyboard now holds.
+        final InputConnection[] next = new InputConnection[1];
+        int beforeSuperseded = healthy.posts().size();
+        onMain(() -> {
+            next[0] = proxy.onCreateInputConnection(new EditorInfo());
+            ime[0].closeConnection();
+            requireUnchecked(next[0] != null && next[0].commitText("superseded", 1),
+                    "Closing a superseded IME connection invalidated the live one");
+        });
+        await(() -> healthy.posts().size() == beforeSuperseded + 1,
+                "commit on the live IME connection after a superseded close");
+        requirePost(healthy, beforeSuperseded, "text", "superseded");
+        SystemClock.sleep(350);
+        require(first.getWindow().getDecorView().getRootWindowInsets().isVisible(WindowInsets.Type.ime()),
+                "Closing a superseded IME connection hid the keyboard");
+        ime[0] = next[0];
+        pass("A superseded IME connection's close neither hides the keyboard nor drops later commits");
         int beforeOversized = healthy.posts().size();
         StringBuilder oversized = new StringBuilder(65537);
         for (int i = 0; i < 65537; i++) oversized.append('x');
