@@ -385,7 +385,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             int barIndex = terminalContent.getChildCount() - 1;
             terminalContent.addView(banner, barIndex);
         }
-        bannerText.setText(humanReason(message));
+        bannerText.setText(BannerCopy.human(message));
         banner.setVisibility(View.VISIBLE);
     }
 
@@ -402,16 +402,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         return text.toString();
     }
 
-    private String humanReason(String raw) {
-        if (raw == null || raw.isEmpty()) return "Connection lost";
-        String lower = raw.toLowerCase(java.util.Locale.ROOT);
-        if (lower.contains("health check")) return "Connection lost · the host stopped answering";
-        if (lower.contains("timed out")) return "Connection lost · the host timed out";
-        if (lower.contains("closed") || lower.contains("ended") || lower.contains("disconnected")) {
-            return "Connection lost";
-        }
-        return "Connection lost · " + raw;
-    }
 
     private void hideReconnectBanner() {
         if (banner != null) banner.setVisibility(View.GONE);
