@@ -460,6 +460,22 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         });
     }
 
+
+    /** The pane text this client already holds: no daemon round trip, no selection UI. */
+    private void copyPaneText() {
+        String text;
+        synchronized (stateLock) { text = connection == null ? null : connection.text; }
+        if (text == null || text.isEmpty()) {
+            Toast.makeText(this, "No pane text to copy yet", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard == null) return;
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Herdr pane", text));
+        Toast.makeText(this, "Copied " + text.length() + " characters", Toast.LENGTH_SHORT).show();
+    }
+
     private void publishCurrent(String status) {
         Connection target;
         synchronized (stateLock) { target = connection; }
@@ -2082,9 +2098,9 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             return;
         }
         String[] labels = {"New tab", "Split right", "Split down", "Toggle zoom", "Close pane", "Close tab",
-                "Jump to live output", "Remote hosts…", "Save screenshot"};
+                "Jump to live output", "Copy pane text", "Remote hosts…", "Save screenshot"};
         String[] actions = {"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close", "tab.close",
-                "scroll.live", "hosts.list", "capture.screen"};
+                "scroll.live", "copy.text", "hosts.list", "capture.screen"};
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         AlertDialog sheet = new AlertDialog.Builder(this)
@@ -2095,7 +2111,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         for (int i = 0; i < labels.length; i++) {
             // Group create/layout from view/utilities, and mark the closes as
             // destructive instead of styling them like "New tab".
-            if (i == 4 || i == 6) list.addView(sheetDivider());
+            if (i == 4 || i == 6 || i == 8) list.addView(sheetDivider());
             boolean destructive = actions[i].endsWith(".close");
             TextView row = new TextView(this);
             row.setText(labels[i]);
@@ -2127,6 +2143,10 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private void runSessionChoice(Connection target, String label, String action) {
         if ("scroll.live".equals(action)) {
             jumpToLive();
+            return;
+        }
+        if ("copy.text".equals(action)) {
+            copyPaneText();
             return;
         }
         if ("capture.screen".equals(action)) {
