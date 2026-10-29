@@ -24,11 +24,12 @@ def elf_fixture(machine=183):
 
 def host_elf_fixture(api=29, machine=183):
     """Structural data only: no machine code, never written as a library."""
-    names = ['Java_dev_gpui_mobile_GpuiInputActivity_nativeIme'] + [
+    names = ['Java_dev_gpui_mobile_GpuiInputActivity_nativeIme',
+             'Java_dev_herdr_android_GpuiChrome_nativeThemeColors'] + [
         'Java_dev_herdr_android_GpuiTerminalActivity_' + name for name in (
             'nativeStart', 'nativeSurfaceCreated', 'nativeSurfaceDestroyed',
             'nativeResumed', 'nativePaused', 'nativeTouch', 'nativeKey',
-            'nativeSetSnapshot', 'nativeSetSnapshotChrome', 'nativeCopyText', 'nativeThemeColors', 'nativeSetActive', 'nativeTakeCommand', 'nativeSendKey',
+            'nativeSetSnapshot', 'nativeSetSnapshotChrome', 'nativeCopyText', 'nativeSetActive', 'nativeTakeCommand', 'nativeSendKey',
                 'nativeSetImeSession', 'nativeImeEvent', 'nativeSendCommand', 'nativeSetDisplayPreferences',
             'nativeAttachShell',
         )
@@ -68,7 +69,7 @@ class VerifyNativeTests(unittest.TestCase):
         for name in ('Java_dev_herdr_android_RemoteNative_pollTerminal',
                      'Java_dev_herdr_android_GpuiTerminalActivity_nativeSetSnapshotChrome',
                      'Java_dev_herdr_android_GpuiTerminalActivity_nativeCopyText',
-                     'Java_dev_herdr_android_GpuiTerminalActivity_nativeThemeColors',
+                     'Java_dev_herdr_android_GpuiChrome_nativeThemeColors',
                      'Java_dev_herdr_android_RemoteNative_openShell',
                      'Java_dev_herdr_android_GpuiTerminalActivity_nativeAttachShell'):
             with self.subTest(export=name):

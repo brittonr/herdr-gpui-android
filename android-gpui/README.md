@@ -130,7 +130,7 @@ Terminal hyperlinks in the daemon's table become tappable runs; only `http(s)`
 targets are forwarded, to the platform browser, never to files or custom
 schemes. Launching the app reopens the remembered host and pane directly, skipping the
 **Remote Herdr** list; **Session > Remote hosts…** opens the list from a terminal, and
-its **Reopen the last session at launch** checkbox turns the behaviour off. The
+its **Reopen the last session at launch** switch turns the behaviour off. The
 rail opens by default on panels 600 dp and wider (so the inner fold display, not
 the cover) and remembers whether you hid it. On a narrower window **Hosts** opens
 it as a modal drawer over the terminal instead; Back, a tap outside it or a

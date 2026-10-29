@@ -275,9 +275,9 @@ public final class RemoteVmInstrumentation extends Instrumentation {
     private void checkRemoteUi() throws Exception {
         hosts = startActivitySync(new Intent().setClassName(targetPackage, HOSTS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         hostActivities.add(hosts);
-        await(() -> findButton(hosts.getWindow().getDecorView(), "Add remote host") != null, "Remote hosts screen");
+        await(() -> findButton(hosts.getWindow().getDecorView(), "Add host") != null, "Remote hosts screen");
         secure(hosts.getWindow());
-        onMain(() -> button(hosts, "Add remote host").performClick());
+        onMain(() -> button(hosts, "Add host").performClick());
         AlertDialog editor = awaitHostDialog();
         secure(editor.getWindow());
         onMain(() -> {

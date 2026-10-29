@@ -3,8 +3,8 @@ package dev.herdr.android;
 /**
  * Chrome colors for one terminal palette. The native renderer derives them from
  * the palette it paints the header with ({@code ChromeRoles::to_argb}), so the
- * system bars, toolbar, rail and sheets follow the selected theme and every text
- * role keeps WCAG AA contrast on its surface.
+ * host list, system bars, toolbar, rail and sheets follow the selected theme and
+ * every text role keeps WCAG AA contrast on its surface.
  */
 final class GpuiChrome {
     /** Thirteen ARGB colors, then 1 when the surface is light. */
@@ -40,6 +40,15 @@ final class GpuiChrome {
         return new GpuiChrome(roles);
     }
 
+    /**
+     * The roles for a renderer palette; an unknown index falls back to Default.
+     * The caller must already have loaded the native library.
+     */
+    static GpuiChrome load(int palette) {
+        int[] roles = nativeThemeColors(palette);
+        return of(roles != null ? roles : nativeThemeColors(0));
+    }
+
     /** Dot color for an agent state; the state's word always sits beside it. */
     int status(String status) {
         if ("working".equals(status)) return working;
@@ -64,4 +73,7 @@ final class GpuiChrome {
     static int withAlpha(int color, int alpha) {
         return (color & 0x00ffffff) | (alpha << 24);
     }
+
+    /** Roles for a palette in this class's order, or null for an unknown index. */
+    private static native int[] nativeThemeColors(int index);
 }

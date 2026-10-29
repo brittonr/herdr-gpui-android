@@ -423,12 +423,12 @@ pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeSetThem
     }
 }
 
-/// Chrome colors for one built-in palette, in `GpuiChrome`'s order. The Java
-/// toolbar, rail and system bars use these so they follow the same theme as
-/// the painted header; an unknown index returns null.
+/// Chrome colors for one built-in palette, in `GpuiChrome`'s order. The host
+/// list and the terminal's toolbar, rail and system bars use these so they
+/// follow the same theme as the painted header; an unknown index returns null.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_herdr_android_GpuiTerminalActivity_nativeThemeColors(
+pub extern "system" fn Java_dev_herdr_android_GpuiChrome_nativeThemeColors(
     env: JNIEnv<'_>,
     _class: JClass<'_>,
     index: jint,

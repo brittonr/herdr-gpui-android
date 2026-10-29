@@ -45,11 +45,11 @@ host when the phone disconnects.
 
 ## Connecting
 
-1. Open **Remote hosts · SSH**, add a direct TCP profile, and enter the host,
-   SSH port, username and Herdr session
+1. Open **Remote hosts**, tap **Add host** for a direct TCP profile, and enter
+   the host, SSH port, username and Herdr session
 2. Inspect the server key. Compare the displayed SHA-256 fingerprint with a
    trusted copy from the host administrator before explicitly trusting it
-3. Connect and enter the SSH password, choose **Use private key** for a
+3. Connect and enter the SSH password, choose **Use one-use private key** for a
    one-use key, or save a key once from **Remote hosts** and choose
    **Use saved SSH key**. Passwords and pasted keys are used once; only an
    explicitly saved identity is kept
@@ -62,12 +62,20 @@ key separately before using the explicit forget/retrust flow. Changes to the
 profile's connection identity clear its trust, and stale dialogs cannot save a
 pin for a different profile revision.
 
-The host list leads with the saved hosts. Each one has a single **Connect**
-action; its ⋮ menu holds **Edit profile**, **Edit extra keys**, **Forget SSH
-trust** and **Delete profile**, and forgetting trust or deleting still asks for
-confirmation. The device's saved key, **Reopen the last session at launch**,
-**Companion hosts** and **Local device diagnostics** follow under **This
-device**. On panels wider than 720 dp the list keeps a centred 720 dp column.
+The host list leads with the saved hosts, one card each: its name, address and
+session, and either the pinned SHA-256 fingerprint or a warning that the host
+key is not trusted yet. Each card has a single **Connect** action; its ⋮ menu
+holds **Edit profile**, **Edit extra keys**, **Forget SSH trust** and **Delete
+profile**, and forgetting trust or deleting still asks for confirmation.
+**Add host** sits beside the title. The device's saved key, **Reopen the last
+session at launch**, **Companion hosts** and **Local device diagnostics** form
+one group under **This device**. The list is painted in the terminal's theme
+(**View > Theme**, including **Follow system**) and its dialogs use the
+platform's light or dark style to match. While a host key is checked, during
+sign-in and while choosing a pane, the title names the host with a back arrow;
+the arrow and system Back cancel the step and return to the list. On panels
+wider than 720 dp the list keeps a centred 720 dp column, and below 600 dp each
+card moves **Connect** under the host's details.
 
 For a trusted host, with a device SSH key saved, the ⋮ menu also offers **Open
 shell**: the account's login shell on a remote PTY, without Herdr. It needs the

@@ -233,7 +233,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             nativeStart(this);
             appliedPalette = currentPalette();
             nativeSetTheme(appliedPalette);
-            chrome = loadChrome(appliedPalette);
+            chrome = GpuiChrome.load(appliedPalette);
             // Host switching needs the saved hosts before the first rail paint.
             worker.execute(() -> {
                 try {
@@ -257,12 +257,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         }
     }
 
-    /** Palette indices are validated natively; an unknown one falls back to Default. */
-    private static GpuiChrome loadChrome(int index) {
-        int[] roles = nativeThemeColors(index);
-        return GpuiChrome.of(roles != null ? roles : nativeThemeColors(0));
-    }
-
     private int currentPalette() {
         boolean dark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
@@ -275,7 +269,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         if (palette == appliedPalette) return;
         appliedPalette = palette;
         nativeSetTheme(palette);
-        chrome = loadChrome(palette);
+        chrome = GpuiChrome.load(palette);
         applyChrome();
     }
 
@@ -3333,8 +3327,6 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     /** Drops the horizontal offset when a different pane is confirmed. */
     private static native void nativeResetPan();
     private static native void nativeSetTheme(int index);
-    /** Chrome roles for a palette in {@link GpuiChrome}'s order, or null for an unknown index. */
-    private static native int[] nativeThemeColors(int index);
     private static native void nativeSetSnapshot(long generation, String title, String text, String status,
             String shortcutsJson);
     private static native void nativeSetSnapshotChrome(long generation, String title, String status,

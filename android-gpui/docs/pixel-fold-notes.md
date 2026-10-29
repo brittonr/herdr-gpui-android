@@ -37,7 +37,7 @@ explicitly marked unverified. Update it when a behaviour changes.
 | Sheets | View, Panes, Session, Commands: DeviceDefault light or dark dialogs matching the palette, sentence-case buttons, indented hierarchy, current pane marked, destructive actions in the theme's error colour; Panes lists tabs only for multi-tab workspaces; command titles and captions share one edge, pins trailing |
 | Letterbox | Palette background, or the commonest painted edge colour once three quarters of the pane's outer cells are visibly unlike the palette (held until under half); the daemon's default-background borders and scrollbar show the same surround |
 | Tabletop | A half-open fold across the window ends the terminal at the fold, with the host's keys as a deck of 56 dp keys below it over the toolbar; an open keyboard restores the normal layout; a fold down the window (book) is not split |
-| Host list | Hosts first in a 720 dp column on wide panels; one Connect per host, edit, keys, trust and delete in its ⋮ menu; device key, reopen, companion and diagnostics under This device |
+| Host list | Painted in the terminal's theme; a titled header with Add host; a card per host (initial, address, pinned fingerprint or untrusted warning, one Connect, ⋮ for edit, keys, trust and delete) in a 720 dp column; device key, reopen switch, companion and diagnostics as one group under This device; host-key check, sign-in and pane choice show a back arrow that Back also follows |
 | Failure | Banner names the loss in plain language with Hosts and Reconnect; Reconnect opens a fresh session and never replays input |
 | Privacy | Dialogs and the terminal are `FLAG_SECURE`; nothing is backed up on Android 12+ (`data_extraction_rules`) |
 | Cost | See the sidebar and foreground CPU measurements below; a quiet single session does not represent live multi-host cost |
@@ -61,9 +61,10 @@ system** choice that paints Latte in light mode and Mocha in dark and repaints
 on the system switch without a restart. The GPUI surface is fully
 palette-driven, and so is the Android chrome around it: `ChromeRoles`
 derives surface, text, outline, accent, tonal-container and status roles from
-the palette, and the activity reads them through `nativeThemeColors` for the
-system bars, toolbar, rail, banner and sheets. A light palette gets dark
-status-bar icons and the DeviceDefault light dialog theme.
+the palette, and both the host list and the terminal read them through
+`GpuiChrome.load` (`nativeThemeColors`) for the system bars, toolbar, rail,
+banner, cards and sheets. A light palette gets dark status-bar icons and the
+DeviceDefault light dialog theme.
 
 The terminal connection also reports the palette to Herdr as its host terminal
 theme (`ClientShellHostTheme`), which Herdr applies while the phone is its
@@ -664,6 +665,49 @@ both switches: a program repaints only what it redraws, and a terminal never
 recolours cells already drawn. Night mode, the capture switch and the open pane
 were restored afterwards.
 
+## Host list redesign verification
+
+The host list (`RemoteHostsActivity`) was redrawn in the terminal's theme: a
+titled header with **Add host**, one card per host, a grouped **This device**
+card with a switch, a status line that is a spinner, a note or an error banner,
+and back-arrow steps for the key check, sign-in and pane choice. The phone was
+locked and in use, so this was verified on an emulator with the
+`pixel_9_pro_fold` device profile (Android 15, inner 852 x 883 dp, cover
+443 x 994 dp through `adb emu fold`), with three saved hosts, one of them pinned
+through the synthetic SSH fixture.
+
+| Check | Result |
+|---|---|
+| Themes | Default, Nord, Latte and Follow system (Mocha in dark mode) all paint the page, cards, bars and switch from `GpuiChrome`; Latte has dark status-bar icons |
+| Text contrast on the page background | Every text role is at least 4.5:1 in every palette; the lowest are Latte's secondary text (4.91) and accent (4.89). Only the primary text colour is used on tonal fills, where the others drop below 4.5 |
+| Cover width | **Connect** moves under each host's details at full width; the device rows put their buttons under the text |
+| Fingerprint | Shown in full in the text, middle-ellipsized on screen (`SHA256:i67ECjoJGqm…1PTWjt4` on the cover) |
+| Steps | An unreachable host shows a spinner, then the error in a banner; the arrow and system Back both return to the list without leaving the app |
+| Sign-in | The status reads "Host key verified. Sign in to continue." while the dialog waits |
+| Dialogs | Light under Latte, dark under Nord; `screencap` still shows them black, so `FLAG_SECURE` is intact |
+| Empty state and saved key | Both **Add host** buttons open the editor; a non-key is refused in the error banner; a saved key shows **Replace** and **Remove** |
+
+Cold start to first frame (`am start -W`, debuggable build, SwiftShader, host
+load around 14, baseline and new build interleaved, first launch of each round
+dropped):
+
+| Round | Baseline median | New median |
+|---|---:|---:|
+| 1 | 585 ms | 806 ms |
+| 2 | 595 ms | 1176 ms (load spike) |
+
+`dumpsys gfxinfo framestats` puts the difference in the first frame's render
+phase (sync to swap: 21–36 ms before, 178–202 ms after), not in measure and
+layout (122–183 ms before, 97–134 ms after). That phase compiles a GPU program
+the first time each kind of primitive is drawn: stroked rounded cards, circles,
+more text styles. SwiftShader compiles on the CPU, and neither the emulator nor
+the phone kept a persistent shader cache for this debuggable app, so every
+cold start pays it there. The phone's GPU was not measured. On the CPU side the
+renderer library loads in 9–35 ms, and building the platform button and switch
+styles only to replace them cost more than the rest of the list (the switch
+alone 33–45 ms), so the list now constructs those widgets without a default
+style. A launch that reopens the last session draws no host cards at all.
+
 ## Measurement traps (each cost real time)
 
 - **`FLAG_SECURE` masquerades as a black screen.** `screencap` returns black for
@@ -671,6 +715,9 @@ were restored afterwards.
   `settings put global herdr_probe 1`; clear it and restart the activity afterwards
   so the existing window regains `FLAG_SECURE`. Dialogs honour the
   same switch — without it, no sheet can be reviewed at all.
+  The host list's dialogs stay secure even then; on an emulator,
+  `adb emu screenrecord screenshot <file>` records the emulator's own display
+  output, secure layers included.
 - **`adb shell input tap` in the gesture-pill zone does nothing.** The toolbar
   sits at y≈1977–2093 on the inner panel; taps below ~2113 are swallowed by
   navigation. Take coordinates from `uiautomator dump`, not from scaled

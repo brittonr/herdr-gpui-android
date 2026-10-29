@@ -2,16 +2,31 @@ package dev.herdr.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.graphics.Color;
+import android.content.Context;
+import android.content.res.ColorStateList;
+import android.content.res.Configuration;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.InputType;
+import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.View;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -26,13 +41,6 @@ import org.json.JSONObject;
 
 /** SSH login and pane selection. Credentials never enter a profile, Intent or saved state. */
 public final class RemoteHostsActivity extends Activity {
-    // Same tokens as the terminal chrome and the desktop palette.
-    private static final int BG = Color.rgb(16, 21, 29), TEXT = Color.rgb(220, 229, 239);
-    private static final int MUTED = Color.rgb(159, 176, 198);
-    /** The app accent (the theme's colorAccent): one filled action per host. */
-    private static final int ACCENT = Color.rgb(229, 172, 85);
-    /** Destructive actions keep the warm tint they always had. */
-    private static final int DANGER = 0xffe0a0a0;
     private final Handler main = new Handler();
     private final ThreadPoolExecutor worker = new ThreadPoolExecutor(1, 1, 0L,
             TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(8));
@@ -41,8 +49,22 @@ public final class RemoteHostsActivity extends Activity {
     private RemoteHostStore store;
     private RemoteIdentityStore identityStore;
     private boolean identityPresent;
+    /** Colours of the terminal theme, so this list and the terminal look like one app. */
+    private GpuiChrome chrome;
+    private int appliedPalette = -1;
+    private TextView title;
+    private TextView subtitle;
+    private ImageView logo;
+    private ImageButton back;
+    private Button addHost;
+    /** Where Back and the header arrow go; null on the host list itself. */
+    private Runnable backAction;
+    private LinearLayout statusRow;
+    private ProgressBar statusProgress;
+    private ImageView statusIcon;
     private LinearLayout content;
     private TextView status;
+    private Tone statusTone;
     private AlertDialog dialog;
     private EditText password;
     private EditText keyPassphrase;
@@ -55,7 +77,11 @@ public final class RemoteHostsActivity extends Activity {
     private boolean reopenedThisVisit;
     /** A message that must survive the asynchronous profile render. */
     private String pendingStatus;
+    private Tone pendingTone = Tone.NOTE;
     private String paneSnapshot = "";
+
+    /** How a status line reads: work under way, a neutral note, or a failure. */
+    private enum Tone { PROGRESS, NOTE, ERROR }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(null);
@@ -67,12 +93,28 @@ public final class RemoteHostsActivity extends Activity {
         if (!capturable) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new RemoteHostStore(this);
         identityStore = new RemoteIdentityStore(this);
-        shell();
+        try {
+            // The theme's colours come from the renderer, which SSH needs as well.
+            RemoteNative.ensureLoaded(this);
+        } catch (RuntimeException | LinkageError unavailable) {
+            TextView failed = new TextView(this);
+            failed.setText("The GPUI renderer could not be loaded. Reinstall the app to connect to a host.");
+            failed.setPadding(dp(24), dp(48), dp(24), dp(24));
+            failed.setTextSize(16);
+            failed.setFitsSystemWindows(true);
+            setContentView(failed);
+            return;
+        }
+        shell(currentPalette());
     }
 
     @Override protected void onResume() {
         super.onResume();
+        if (content == null) return;
         visible = true;
+        // The theme is chosen in the terminal; coming back must not show the old one.
+        int palette = currentPalette();
+        if (palette != appliedPalette) shell(palette);
         // Reopening should land in the terminal, not this list; the list is the
         // fallback when the remembered session cannot be restored.
         boolean skip = getIntent() != null && getIntent().getBooleanExtra("skip_reopen", false);
@@ -85,6 +127,10 @@ public final class RemoteHostsActivity extends Activity {
 
     @Override protected void onPause() {
         visible = false;
+        if (content == null) {
+            super.onPause();
+            return;
+        }
         cancelConnection();
         dismissDialog();
         content.removeAllViews();
@@ -101,33 +147,171 @@ public final class RemoteHostsActivity extends Activity {
         // Deliberately omit view state, passwords, edit drafts and remote content.
     }
 
-    private void shell() {
-        LinearLayout root = column();
-        root.setBackgroundColor(BG);
+    @SuppressWarnings("deprecation")
+    @Override public void onBackPressed() {
+        // A host check, sign-in or pane choice returns to the list, as its arrow does.
+        if (backAction != null) {
+            backAction.run();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    /** The palette the saved terminal theme paints with now, resolved as the terminal does. */
+    private int currentPalette() {
+        int theme = getSharedPreferences("terminal-display", MODE_PRIVATE).getInt("theme", 0);
+        boolean dark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
+        return GpuiDisplayOptions.palette(theme, dark);
+    }
+
+    /**
+     * Header, status line and scrolling body in the theme's colours. A wide
+     * panel keeps a readable centred column instead of stretching every row.
+     */
+    private void shell(int palette) {
+        appliedPalette = palette;
+        chrome = GpuiChrome.load(palette);
+        getWindow().setBackgroundDrawable(new ColorDrawable(chrome.background));
+        LinearLayout root = column(this);
+        root.setBackgroundColor(chrome.background);
         // fitSystemWindows overwrites any padding set on the same view, which left
         // every line flush to the rounded edge; the inset belongs on the content.
         root.setFitsSystemWindows(true);
-        privateView(root);
-        // A wide panel keeps a readable column instead of stretching every row.
-        int width = readableWidth();
-        status = label("", 14, MUTED);
-        status.setPadding(dp(16), dp(12), dp(16), 0);
-        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(width, -2);
-        statusParams.gravity = android.view.Gravity.CENTER_HORIZONTAL;
-        root.addView(status, statusParams);
+        LinearLayout page = column(this);
+        int gutter = dp(wideWindow() ? 24 : 16);
+        page.setPadding(gutter, 0, gutter, 0);
+        LinearLayout.LayoutParams pageParams = new LinearLayout.LayoutParams(readableWidth(), 0, 1);
+        pageParams.gravity = Gravity.CENTER_HORIZONTAL;
+        root.addView(page, pageParams);
+        page.addView(header());
+        page.addView(statusLine());
         ScrollView scroll = new ScrollView(this);
-        content = column();
-        content.setPadding(dp(16), dp(12), dp(16), dp(12));
-        scroll.addView(content, new android.widget.FrameLayout.LayoutParams(
-                width, -2, android.view.Gravity.CENTER_HORIZONTAL));
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        scroll.setClipToPadding(false);
+        scroll.setVerticalScrollBarEnabled(false);
+        privateView(scroll);
+        content = column(this);
+        content.setPadding(0, dp(4), 0, dp(24));
+        scroll.addView(content, new android.widget.FrameLayout.LayoutParams(-1, -2));
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
+        // The insets controller belongs to the decor view, which exists only now.
+        applySystemBars();
+        // Reopening the last session shows its progress under the list's header.
+        showListHeader();
     }
 
     /** The whole width up to 720 dp, then a centred column of that width. */
     private int readableWidth() {
         return getResources().getConfiguration().screenWidthDp > 720
                 ? dp(720) : LinearLayout.LayoutParams.MATCH_PARENT;
+    }
+
+    /** Room for a host's actions beside its name rather than under it. */
+    private boolean wideWindow() {
+        return getResources().getConfiguration().screenWidthDp >= 600;
+    }
+
+    /**
+     * Edge to edge, the bars show the page behind them; their icons flip with
+     * the theme's lightness to stay visible.
+     */
+    private void applySystemBars() {
+        getWindow().setStatusBarColor(chrome.background);
+        getWindow().setNavigationBarColor(chrome.background);
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            if (controller != null) controller.setSystemBarsAppearance(chrome.light ? light : 0, light);
+        } else {
+            View decor = getWindow().getDecorView();
+            int light = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            decor.setSystemUiVisibility((decor.getSystemUiVisibility() & ~light) | (chrome.light ? light : 0));
+        }
+    }
+
+    /** The app mark or a back arrow, the screen's title, and Add host on the list. */
+    private LinearLayout header() {
+        LinearLayout bar = row(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(0, dp(12), 0, dp(12));
+        logo = new ImageView(this);
+        logo.setImageResource(R.drawable.ic_herdr);
+        logo.setBackground(rounded(chrome.surface, 12));
+        logo.setClipToOutline(true);
+        logo.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        privateView(logo);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(40), dp(40));
+        logoParams.setMarginEnd(dp(16));
+        bar.addView(logo, logoParams);
+        back = iconButton(R.drawable.ic_home_back, chrome.onSurface, "Back", "", view -> {
+            if (backAction != null) backAction.run();
+        });
+        LinearLayout.LayoutParams backParams = new LinearLayout.LayoutParams(dp(48), dp(48));
+        backParams.setMarginStart(-dp(12));
+        backParams.setMarginEnd(dp(4));
+        bar.addView(back, backParams);
+        LinearLayout titles = column(this);
+        title = text(this, "", wideWindow() ? 28 : 24, chrome.onSurface);
+        title.setAccessibilityHeading(true);
+        title.setMaxLines(2);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        subtitle = text(this, "", 14, chrome.onSurfaceVariant);
+        subtitle.setMaxLines(2);
+        subtitle.setEllipsize(TextUtils.TruncateAt.END);
+        titles.addView(title);
+        titles.addView(subtitle);
+        bar.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
+        addHost = tonalButton("Add host", () -> editProfile(null));
+        withIcon(addHost, R.drawable.ic_home_add, chrome.onSurface);
+        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(-2, dp(48));
+        addParams.setMarginStart(dp(12));
+        bar.addView(addHost, addParams);
+        return bar;
+    }
+
+    private void showListHeader() {
+        showHeader("Remote hosts", "SSH credentials are used once and cleared on close or pause.", null);
+    }
+
+    /**
+     * The list's header, or a step's: a step has a back arrow that cancels it
+     * and returns to the list, described for screen readers by {@code backLabel}.
+     */
+    private void showHeader(String heading, String detail, String backLabel) {
+        boolean list = backLabel == null;
+        backAction = list ? null : this::showProfiles;
+        logo.setVisibility(list ? View.VISIBLE : View.GONE);
+        back.setVisibility(list ? View.GONE : View.VISIBLE);
+        back.setContentDescription(backLabel);
+        addHost.setVisibility(list ? View.VISIBLE : View.GONE);
+        title.setText(heading);
+        subtitle.setText(detail);
+        subtitle.setVisibility(detail.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    /**
+     * A progress spinner or an icon beside one line that screen readers
+     * announce. The spinner is made on first use; most visits never need one.
+     */
+    private LinearLayout statusLine() {
+        statusRow = row(this);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        statusRow.setVisibility(View.GONE);
+        statusProgress = null;
+        statusIcon = new ImageView(this);
+        statusIcon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        statusRow.addView(statusIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        status = text(this, "", 14, chrome.onSurfaceVariant);
+        status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, -2, 1);
+        textParams.setMarginStart(dp(12));
+        statusRow.addView(status, textParams);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+        rowParams.bottomMargin = dp(12);
+        statusRow.setLayoutParams(rowParams);
+        return statusRow;
     }
 
     private static final String STARTUP = "remote-startup";
@@ -153,7 +337,7 @@ public final class RemoteHostsActivity extends Activity {
         String hostId = prefs.getString("last_host", "");
         String paneId = prefs.getString("last_pane", "");
         if (hostId.isEmpty() || paneId.isEmpty()) return false;
-        setStatus("Reopening the last session…");
+        setStatus(Tone.PROGRESS, "Reopening the last session…");
         int token = generation;
         submit(() -> {
             if (!current(token)) return;
@@ -172,6 +356,7 @@ public final class RemoteHostsActivity extends Activity {
                 main.post(() -> {
                     if (!current(token)) return;
                     pendingStatus = reason + "; pick a host to continue";
+                    pendingTone = Tone.NOTE;
                     showProfiles();
                 });
                 return;
@@ -204,6 +389,7 @@ public final class RemoteHostsActivity extends Activity {
             main.post(() -> {
                 if (!current(token)) return;
                 pendingStatus = "No session could be opened (" + reason + "); pick a host to continue";
+                pendingTone = Tone.ERROR;
                 showProfiles();
             });
         });
@@ -323,11 +509,20 @@ public final class RemoteHostsActivity extends Activity {
         cancelConnection();
         dismissDialog();
         content.removeAllViews();
-        setStatus("Loading encrypted profiles…");
+        showListHeader();
         int token = generation;
+        // Profiles usually load within a frame; a spinner only for a slow read
+        // keeps the list from jumping down and back on every visit.
+        clearStatus();
+        Runnable slow = () -> { if (current(token)) setStatus(Tone.PROGRESS, "Loading encrypted profiles…"); };
+        main.postDelayed(slow, 300);
         run(token, () -> new ProfilesSnapshot(store.read(), identityStore.exists()), snapshot -> {
+            main.removeCallbacks(slow);
             identityPresent = snapshot.identityPresent;
             renderProfiles(snapshot.hosts);
+        }, failure -> {
+            main.removeCallbacks(slow);
+            setStatus(Tone.ERROR, failure);
         });
     }
 
@@ -336,79 +531,300 @@ public final class RemoteHostsActivity extends Activity {
         if (pendingStatus != null) {
             String message = pendingStatus;
             pendingStatus = null;
-            setStatus(message);
+            setStatus(pendingTone, message);
         } else {
-            setStatus("SSH · credentials are used once and cleared on close or pause");
+            clearStatus();
         }
         // The hosts are why this screen exists, so they lead; settings follow.
-        content.addView(button("Add remote host", () -> editProfile(null)));
-        if (hosts.isEmpty()) content.addView(label("No remote profiles saved yet", 18, TEXT));
-        for (SavedRemoteHost host : hosts) content.addView(hostCard(host));
+        if (hosts.isEmpty()) content.addView(emptyHosts(), cardParams());
+        for (SavedRemoteHost host : hosts) content.addView(hostCard(host), cardParams());
         content.addView(sectionLabel("This device"));
-        content.addView(label(identityPresent
-                ? "An encrypted SSH identity is saved in Android Keystore-backed storage on this device."
-                : "No device-wide SSH key is saved.", 13, MUTED));
-        LinearLayout keys = row();
-        keys.addView(weighted(button(identityPresent ? "Replace device-wide saved SSH key" : "Save device-wide SSH key", this::editIdentity)));
-        if (identityPresent) keys.addView(weighted(button("Remove saved SSH key", this::removeIdentity)));
-        content.addView(keys);
-        android.widget.CheckBox reopen = new android.widget.CheckBox(this);
-        reopen.setText("Reopen the last session at launch");
-        reopen.setTextColor(TEXT);
-        reopen.setTextSize(14);
-        reopen.setChecked(reopenEnabled());
-        reopen.setSaveEnabled(false);
-        content.addView(reopen);
-        TextView reopenHint = label(reopen.isChecked()
-                ? "The app opens the remembered host and pane instead of this list."
-                : "The app opens this host list every time.", 13, MUTED);
-        content.addView(reopenHint);
-        reopen.setOnCheckedChangeListener((view, checked) -> {
-            getSharedPreferences(STARTUP, MODE_PRIVATE).edit().putBoolean("reopen", checked).apply();
-            reopenHint.setText(checked
-                    ? "The app opens the remembered host and pane instead of this list."
-                    : "The app opens this host list every time.");
-        });
-        LinearLayout elsewhere = row();
-        elsewhere.addView(weighted(button("Companion hosts", () -> startActivity(new android.content.Intent(this, MainActivity.class)))));
-        elsewhere.addView(weighted(button("Local device diagnostics", () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class)))));
-        content.addView(elsewhere);
+        content.addView(deviceCard(), cardParams());
+    }
+
+    private LinearLayout.LayoutParams cardParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(12);
+        return params;
+    }
+
+    /** No hosts yet: what one is, and the action that adds it. */
+    private LinearLayout emptyHosts() {
+        LinearLayout card = card();
+        card.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.setPadding(dp(24), dp(32), dp(24), dp(24));
+        ImageView icon = icon(R.drawable.ic_home_dns, chrome.primary);
+        card.addView(icon, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        TextView heading = medium(text(this, "No hosts yet", 18, chrome.onSurface));
+        heading.setGravity(Gravity.CENTER);
+        heading.setPadding(0, dp(16), 0, dp(4));
+        card.addView(heading);
+        TextView body = text(this, "Add a computer that runs Herdr and accepts SSH from this phone.",
+                14, chrome.onSurfaceVariant);
+        body.setGravity(Gravity.CENTER);
+        card.addView(body);
+        Button add = primaryButton("Add host", () -> editProfile(null));
+        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(-2, dp(48));
+        addParams.topMargin = dp(16);
+        card.addView(add, addParams);
+        return card;
     }
 
     /**
-     * One host: who it is, one filled primary action, and everything else in its
-     * overflow menu, so "Delete profile" never sits beside "Connect".
+     * One host: who it is, whether its key is pinned, one filled primary action,
+     * and everything else in its overflow menu, so "Delete profile" never sits
+     * beside "Connect". A narrow panel moves Connect under the name.
      */
     private LinearLayout hostCard(SavedRemoteHost host) {
-        LinearLayout card = column();
-        card.setPadding(0, dp(18), 0, dp(10));
-        card.addView(label(host.name, 21, TEXT));
-        card.addView(label("tcp".equals(host.transport)
+        boolean wide = wideWindow();
+        LinearLayout card = card();
+        card.setPadding(dp(16), dp(16), dp(4), dp(16));
+        LinearLayout top = row(this);
+        top.setGravity(wide ? Gravity.CENTER_VERTICAL : Gravity.TOP);
+        top.addView(avatar(host.name), new LinearLayout.LayoutParams(dp(40), dp(40)));
+        LinearLayout about = column(this);
+        TextView name = medium(text(this, host.name, 18, chrome.onSurface));
+        name.setSingleLine(true);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        about.addView(name);
+        TextView address = text(this, "tcp".equals(host.transport)
                 ? host.username + "@" + host.host + ":" + host.port + " · " + host.session
-                : "Iroh · " + host.endpointId + " · " + host.session, 14, MUTED));
-        card.addView(label(host.expectedFingerprint.isEmpty() ? "Host key not trusted yet" : host.expectedFingerprint, 12, MUTED));
-        LinearLayout actions = row();
-        actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        Button connect = button("Connect", () -> inspectHost(host));
-        connect.setTextColor(BG);
-        connect.setBackgroundTintList(android.content.res.ColorStateList.valueOf(ACCENT));
-        actions.addView(weighted(connect));
-        android.widget.ImageButton more = new android.widget.ImageButton(this);
-        more.setImageResource(R.drawable.ic_bar_more);
-        more.setImageTintList(android.content.res.ColorStateList.valueOf(TEXT));
-        more.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff1e222a));
-        more.setContentDescription("More actions for " + host.name);
-        more.setTooltipText("More");
-        privateView(more);
-        more.setOnClickListener(view -> showHostActions(view, host));
-        actions.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
-        card.addView(actions);
+                : "Iroh · " + host.endpointId + " · " + host.session, 14, chrome.onSurfaceVariant);
+        address.setSingleLine(true);
+        address.setEllipsize(TextUtils.TruncateAt.END);
+        address.setPadding(0, dp(2), 0, dp(6));
+        about.addView(address);
+        about.addView(trustLine(host));
+        LinearLayout.LayoutParams aboutParams = new LinearLayout.LayoutParams(0, -2, 1);
+        aboutParams.setMarginStart(dp(16));
+        top.addView(about, aboutParams);
+        Button connect = primaryButton("Connect", () -> inspectHost(host));
+        connect.setContentDescription("Connect to " + host.name);
+        ImageButton more = iconButton(R.drawable.ic_bar_more, chrome.onSurfaceVariant, "More",
+                "More actions for " + host.name, view -> showHostActions(view, host));
+        if (wide) {
+            LinearLayout.LayoutParams connectParams = new LinearLayout.LayoutParams(-2, dp(48));
+            connectParams.setMarginStart(dp(12));
+            top.addView(connect, connectParams);
+            top.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
+            card.addView(top);
+            return card;
+        }
+        LinearLayout.LayoutParams moreParams = new LinearLayout.LayoutParams(dp(48), dp(48));
+        moreParams.topMargin = -dp(8);
+        top.addView(more, moreParams);
+        card.addView(top);
+        LinearLayout.LayoutParams connectParams = new LinearLayout.LayoutParams(-1, dp(48));
+        connectParams.setMarginStart(dp(56));
+        connectParams.setMarginEnd(dp(12));
+        connectParams.topMargin = dp(8);
+        card.addView(connect, connectParams);
         return card;
+    }
+
+    /**
+     * The pinned fingerprint in full (ellipsized on screen only), or a warning
+     * that the next connection will ask to trust a key.
+     */
+    private LinearLayout trustLine(SavedRemoteHost host) {
+        boolean trusted = !host.expectedFingerprint.isEmpty();
+        LinearLayout line = row(this);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        int color = trusted ? chrome.onSurfaceVariant : chrome.warning;
+        line.addView(icon(trusted ? R.drawable.ic_home_verified : R.drawable.ic_home_warning,
+                trusted ? chrome.primary : chrome.warning), new LinearLayout.LayoutParams(dp(16), dp(16)));
+        TextView key = text(this, trusted ? host.expectedFingerprint : "Host key not trusted yet",
+                trusted ? 12 : 13, color);
+        if (trusted) key.setTypeface(Typeface.MONOSPACE);
+        key.setSingleLine(true);
+        key.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        LinearLayout.LayoutParams keyParams = new LinearLayout.LayoutParams(0, -2, 1);
+        keyParams.setMarginStart(dp(6));
+        line.addView(key, keyParams);
+        return line;
+    }
+
+    /** A host's initial on the theme's selection colour. */
+    private TextView avatar(String name) {
+        String initial = name.isEmpty() ? "?"
+                : new String(Character.toChars(Character.toUpperCase(name.codePointAt(0))));
+        TextView avatar = medium(text(this, initial, 18, chrome.onSurface));
+        avatar.setGravity(Gravity.CENTER);
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(chrome.selected);
+        avatar.setBackground(circle);
+        avatar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return avatar;
+    }
+
+    /** The device's key, start-up behaviour and the other screens, as one group. */
+    private LinearLayout deviceCard() {
+        LinearLayout card = card();
+        card.setPadding(0, dp(4), 0, dp(4));
+        card.addView(keyRow());
+        card.addView(divider());
+        card.addView(reopenRow());
+        card.addView(divider());
+        card.addView(linkRow(R.drawable.ic_home_link, "Companion hosts",
+                "The HTTPS workflow with a companion token",
+                () -> startActivity(new android.content.Intent(this, MainActivity.class))));
+        card.addView(divider());
+        card.addView(linkRow(R.drawable.ic_home_diagnostics, "Local device diagnostics",
+                "Read-only, and off until you enable it",
+                () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
+        return card;
+    }
+
+    private LinearLayout keyRow() {
+        LinearLayout row = settingRow(R.drawable.ic_home_key, 2);
+        LinearLayout about = column(this);
+        about.addView(text(this, "Device SSH key", 16, chrome.onSurface));
+        about.addView(text(this, identityPresent
+                ? "Saved here, encrypted with Android Keystore"
+                : "None saved; connect with a password or a one-use key", 14, chrome.onSurfaceVariant));
+        LinearLayout actions = row(this);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        Button primary = tonalButton(identityPresent ? "Replace" : "Save key", this::editIdentity);
+        primary.setContentDescription(identityPresent ? "Replace the saved SSH key" : "Save a device SSH key");
+        actions.addView(primary, new LinearLayout.LayoutParams(-2, dp(48)));
+        if (identityPresent) {
+            Button remove = textButton("Remove", chrome.danger, this::removeIdentity);
+            remove.setContentDescription("Remove the saved SSH key");
+            LinearLayout.LayoutParams removeParams = new LinearLayout.LayoutParams(-2, dp(48));
+            removeParams.setMarginStart(dp(4));
+            actions.addView(remove, removeParams);
+        }
+        if (wideWindow()) {
+            row.addView(about, new LinearLayout.LayoutParams(0, -2, 1));
+            LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(-2, -2);
+            actionParams.setMarginStart(dp(12));
+            row.addView(actions, actionParams);
+            return row;
+        }
+        actions.setPadding(0, dp(8), 0, 0);
+        about.addView(actions);
+        row.addView(about, new LinearLayout.LayoutParams(0, -2, 1));
+        return row;
+    }
+
+    private LinearLayout reopenRow() {
+        // The icon centres on the switch's 48 dp line, not on the first text line.
+        LinearLayout row = settingRow(R.drawable.ic_home_history, 12);
+        LinearLayout about = column(this);
+        // No default switch style: inflating its animated thumb and track cost
+        // more than the rest of the list, and themeSwitch replaces both.
+        android.widget.Switch reopen = new android.widget.Switch(this, null, 0, 0);
+        reopen.setFocusable(true);
+        reopen.setClickable(true);
+        reopen.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        reopen.setText("Reopen the last session at launch");
+        reopen.setTextColor(chrome.onSurface);
+        reopen.setTextSize(16);
+        reopen.setMinHeight(dp(48));
+        reopen.setSwitchPadding(dp(16));
+        themeSwitch(reopen);
+        reopen.setChecked(reopenEnabled());
+        privateView(reopen);
+        about.addView(reopen);
+        TextView reopenHint = text(this, reopenHint(reopen.isChecked()), 14, chrome.onSurfaceVariant);
+        about.addView(reopenHint);
+        reopen.setOnCheckedChangeListener((view, checked) -> {
+            getSharedPreferences(STARTUP, MODE_PRIVATE).edit().putBoolean("reopen", checked).apply();
+            reopenHint.setText(reopenHint(checked));
+        });
+        row.addView(about, new LinearLayout.LayoutParams(0, -2, 1));
+        return row;
+    }
+
+    private static String reopenHint(boolean reopen) {
+        return reopen ? "The app opens the remembered host and pane instead of this list."
+                : "The app opens this host list every time.";
+    }
+
+    /**
+     * The current platform switch shape in the theme's colours: a 52 x 32 dp
+     * track, filled when on with a 24 dp thumb, outlined when off with a 16 dp
+     * one. Switch spans two thumb slots plus the track's padding, so 2 dp of
+     * padding and 24 dp slots keep the thumbs clear of the track's ends.
+     */
+    private void themeSwitch(android.widget.Switch control) {
+        // Without a style, showText defaults to on and would lay out null labels.
+        control.setShowText(false);
+        control.setBackground(pressable(0x00000000, 12, 0));
+        int[] on = {android.R.attr.state_checked};
+        android.graphics.drawable.StateListDrawable track = new android.graphics.drawable.StateListDrawable();
+        GradientDrawable trackOn = rounded(chrome.primary, 16);
+        trackOn.setSize(dp(52), dp(32));
+        trackOn.setPadding(dp(2), 0, dp(2), 0);
+        GradientDrawable trackOff = rounded(chrome.control, 16);
+        trackOff.setStroke(dp(2), chrome.onSurfaceVariant);
+        trackOff.setSize(dp(52), dp(32));
+        trackOff.setPadding(dp(2), 0, dp(2), 0);
+        track.addState(on, trackOn);
+        track.addState(new int[0], trackOff);
+        android.graphics.drawable.StateListDrawable thumb = new android.graphics.drawable.StateListDrawable();
+        thumb.addState(on, thumbDot(chrome.surface, 24));
+        thumb.addState(new int[0], thumbDot(chrome.onSurfaceVariant, 16));
+        control.setThumbTintList(null);
+        control.setTrackTintList(null);
+        control.setTrackDrawable(track);
+        control.setThumbDrawable(thumb);
+        control.setSwitchMinWidth(dp(52));
+    }
+
+    /**
+     * A round thumb of {@code sizeDp}, centred in a 24 x 32 dp slot. Switch reads
+     * a thumb's padding as part of its geometry, so the slot uses layer insets,
+     * which add none.
+     */
+    private Drawable thumbDot(int color, int sizeDp) {
+        GradientDrawable dot = new GradientDrawable();
+        dot.setShape(GradientDrawable.OVAL);
+        dot.setColor(color);
+        dot.setSize(dp(sizeDp), dp(sizeDp));
+        android.graphics.drawable.LayerDrawable slot =
+                new android.graphics.drawable.LayerDrawable(new Drawable[]{dot});
+        int horizontal = dp((24 - sizeDp) / 2), vertical = dp((32 - sizeDp) / 2);
+        slot.setLayerInset(0, horizontal, vertical, horizontal, vertical);
+        return slot;
+    }
+
+    /** A whole-row link to another screen, closed by a chevron. */
+    private LinearLayout linkRow(int iconRes, String heading, String detail, Runnable action) {
+        LinearLayout row = settingRow(iconRes, 0);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(pressable(0x00000000, 0, 0));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setOnClickListener(view -> action.run());
+        LinearLayout about = column(this);
+        about.addView(text(this, heading, 16, chrome.onSurface));
+        about.addView(text(this, detail, 14, chrome.onSurfaceVariant));
+        row.addView(about, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams chevronParams = new LinearLayout.LayoutParams(dp(24), dp(24));
+        chevronParams.setMarginStart(dp(12));
+        row.addView(icon(R.drawable.ic_home_chevron, chrome.onSurfaceVariant), chevronParams);
+        return row;
+    }
+
+    /** A settings row with its leading icon; callers add the text and controls. */
+    private LinearLayout settingRow(int iconRes, int iconTopDp) {
+        LinearLayout row = row(this);
+        row.setGravity(Gravity.TOP);
+        row.setMinimumHeight(dp(64));
+        row.setPadding(dp(16), dp(14), dp(16), dp(14));
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(24), dp(24));
+        iconParams.setMarginEnd(dp(16));
+        iconParams.topMargin = dp(iconTopDp);
+        row.addView(icon(iconRes, chrome.onSurfaceVariant), iconParams);
+        return row;
     }
 
     /** Every secondary action keeps its own confirmation; the menu only gathers them. */
     private void showHostActions(View anchor, SavedRemoteHost host) {
-        android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
+        Context themed = new android.view.ContextThemeWrapper(this, chrome.popupTheme());
+        android.widget.PopupMenu menu = new android.widget.PopupMenu(themed, anchor);
         // A raw shell needs the same pinned key and saved identity as Connect.
         if (!host.expectedFingerprint.isEmpty() && identityPresent) {
             menu.getMenu().add(0, 5, 0, "Open shell");
@@ -436,20 +852,20 @@ public final class RemoteHostsActivity extends Activity {
             GpuiLaunch.launchShell(this, host);
         } catch (RuntimeException | LinkageError failure) {
             String message = failure.getMessage();
-            setStatus(host.name + ": " + (message == null || message.isEmpty() ? "could not open a shell" : message));
+            setStatus(Tone.ERROR, host.name + ": " + (message == null || message.isEmpty() ? "could not open a shell" : message));
         }
     }
 
-    private static CharSequence destructive(String title) {
+    private CharSequence destructive(String title) {
         android.text.SpannableString text = new android.text.SpannableString(title);
-        text.setSpan(new android.text.style.ForegroundColorSpan(DANGER), 0, title.length(), 0);
+        text.setSpan(new android.text.style.ForegroundColorSpan(chrome.danger), 0, title.length(), 0);
         return text;
     }
 
     private TextView sectionLabel(String text) {
-        TextView label = label(text, 15, TEXT);
-        label.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
-        label.setPadding(0, dp(28), 0, dp(2));
+        TextView label = medium(text(this, text, 14, chrome.primary));
+        label.setAccessibilityHeading(true);
+        label.setPadding(dp(4), dp(20), 0, dp(8));
         return label;
     }
 
@@ -465,20 +881,21 @@ public final class RemoteHostsActivity extends Activity {
     private void editIdentity() {
         generation++;
         dismissDialog();
-        LinearLayout fields = column();
-        fields.setPadding(dp(16), 0, dp(16), 0);
-        fields.addView(label("Save one device-wide existing OpenSSH or PEM private key, encrypted with Android Keystore. It is not added to any host profile. A key passphrase is requested only for a connection and is never saved.", 14, MUTED));
-        identityInput = field(fields, "Paste existing OpenSSH / PEM private key", "", true);
+        AlertDialog.Builder builder = sheet();
+        Context context = builder.getContext();
+        LinearLayout fields = sheetFields(context);
+        fields.addView(note(context, "Save one device-wide existing OpenSSH or PEM private key, encrypted with Android Keystore. It is not added to any host profile. A key passphrase is requested only for a connection and is never saved.", 14));
+        identityInput = field(context, fields, "Paste existing OpenSSH / PEM private key", "", true);
         identityInput.setSingleLine(false);
         identityInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         identityInput.setMinLines(5);
         identityInput.setMaxLines(10);
-        TextView error = label("", 13, MUTED);
+        TextView error = note(context, "", 13);
         fields.addView(error);
-        ScrollView scroll = new ScrollView(this);
+        ScrollView scroll = new ScrollView(context);
         scroll.addView(fields);
-        AlertDialog editing = new AlertDialog.Builder(this).setTitle(identityPresent ? "Replace saved SSH key" : "Save SSH key")
+        AlertDialog editing = builder.setTitle(identityPresent ? "Replace saved SSH key" : "Save SSH key")
                 .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save key", null).create();
         editing.setOnDismissListener(ignored -> {
             if (identityInput != null) identityInput.setText("");
@@ -515,14 +932,14 @@ public final class RemoteHostsActivity extends Activity {
                 dismissDialog();
                 showProfiles();
             }, failure -> {
-                setStatus(failure);
+                setStatus(Tone.ERROR, failure);
             });
         });
     }
 
     private void removeIdentity() {
         generation++;
-        showDialog(new AlertDialog.Builder(this).setTitle("Remove saved SSH key?")
+        showDialog(sheet().setTitle("Remove saved SSH key?")
                 .setMessage("Permanently remove the device-wide encrypted SSH key and its Android Keystore key. Saved SSH profiles and host fingerprints are unchanged.")
                 .setNegativeButton("Cancel", null).setPositiveButton("Remove key", (which, index) -> {
                     int token = generation;
@@ -536,27 +953,28 @@ public final class RemoteHostsActivity extends Activity {
     private void editProfile(SavedRemoteHost old) {
         generation++;
         dismissDialog();
-        LinearLayout fields = column();
-        fields.setPadding(dp(16), 0, dp(16), 0);
-        EditText name = field(fields, "Profile name", old == null ? "" : old.name, false);
-        Spinner transport = new Spinner(this);
-        transport.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item,
+        AlertDialog.Builder builder = sheet();
+        Context context = builder.getContext();
+        LinearLayout fields = sheetFields(context);
+        EditText name = field(context, fields, "Profile name", old == null ? "" : old.name, false);
+        Spinner transport = new Spinner(context);
+        transport.setAdapter(new ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item,
                 new String[]{"Direct TCP + SSH", "Iroh + SSH"}));
         privateView(transport);
         transport.setSelection(old != null && "iroh".equals(old.transport) ? 1 : 0);
         fields.addView(transport);
-        EditText host = field(fields, "SSH hostname or IP", old == null ? "" : old.host, false);
-        EditText port = field(fields, "SSH port", old == null ? "22" : Integer.toString(old.port), false);
+        EditText host = field(context, fields, "SSH hostname or IP", old == null ? "" : old.host, false);
+        EditText port = field(context, fields, "SSH port", old == null ? "22" : Integer.toString(old.port), false);
         port.setInputType(InputType.TYPE_CLASS_NUMBER);
-        EditText endpoint = field(fields, "Iroh endpoint ID (Iroh only)", old == null ? "" : old.endpointId, false);
-        fields.addView(label("Iroh requires an Iroh SSH receiver on the host. Its receiver selects the SSH port; the port above applies only to direct TCP.", 12, MUTED));
-        EditText user = field(fields, "SSH username", old == null ? "" : old.username, false);
-        EditText session = field(fields, "Herdr session", old == null ? "default" : old.session, false);
-        TextView error = label("Changing the connection address, user or session clears saved SSH trust.", 13, MUTED);
+        EditText endpoint = field(context, fields, "Iroh endpoint ID (Iroh only)", old == null ? "" : old.endpointId, false);
+        fields.addView(note(context, "Iroh requires an Iroh SSH receiver on the host. Its receiver selects the SSH port; the port above applies only to direct TCP.", 12));
+        EditText user = field(context, fields, "SSH username", old == null ? "" : old.username, false);
+        EditText session = field(context, fields, "Herdr session", old == null ? "default" : old.session, false);
+        TextView error = note(context, "Changing the connection address, user or session clears saved SSH trust.", 13);
         fields.addView(error);
-        ScrollView scroll = new ScrollView(this);
+        ScrollView scroll = new ScrollView(context);
         scroll.addView(fields);
-        AlertDialog editing = new AlertDialog.Builder(this).setTitle(old == null ? "Add remote host" : "Edit remote host")
+        AlertDialog editing = builder.setTitle(old == null ? "Add host" : "Edit host")
                 .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create();
         showDialog(editing);
         editing.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
@@ -580,7 +998,7 @@ public final class RemoteHostsActivity extends Activity {
 
     private void forgetTrust(SavedRemoteHost host) {
         generation++;
-        showDialog(new AlertDialog.Builder(this).setTitle("Forget SSH trust?")
+        showDialog(sheet().setTitle("Forget SSH trust?")
                 .setMessage("Remove the saved fingerprint for " + host.name + "? Verify its next fingerprint independently before trusting it again.")
                 .setNegativeButton("Cancel", null).setPositiveButton("Forget trust", (which, index) -> {
                     int token = generation;
@@ -591,19 +1009,20 @@ public final class RemoteHostsActivity extends Activity {
     private void editShortcuts(SavedRemoteHost host) {
         generation++;
         dismissDialog();
-        LinearLayout fields = column();
-        fields.setPadding(dp(16), 0, dp(16), 0);
-        fields.addView(label("One button per line, up to 24. Text inserts without Enter.\nExamples:\nStop = key:ctrl+c\nStatus = text:git status\nNext = keys:down,enter", 14, MUTED));
-        EditText keys = field(fields, "Extra keys", host.shortcuts, false);
+        AlertDialog.Builder builder = sheet();
+        Context context = builder.getContext();
+        LinearLayout fields = sheetFields(context);
+        fields.addView(note(context, "One button per line, up to 24. Text inserts without Enter.\nExamples:\nStop = key:ctrl+c\nStatus = text:git status\nNext = keys:down,enter", 14));
+        EditText keys = field(context, fields, "Extra keys", host.shortcuts, false);
         keys.setSingleLine(false);
         keys.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         keys.setMinLines(5);
-        TextView error = label("", 13, MUTED);
+        TextView error = note(context, "", 13);
         fields.addView(error);
-        ScrollView scroll = new ScrollView(this);
+        ScrollView scroll = new ScrollView(context);
         scroll.addView(fields);
-        AlertDialog editor = new AlertDialog.Builder(this).setTitle("Extra keys · " + host.name)
+        AlertDialog editor = builder.setTitle("Extra keys · " + host.name)
                 .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create();
         showDialog(editor);
         editor.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
@@ -622,7 +1041,7 @@ public final class RemoteHostsActivity extends Activity {
 
     private void deleteProfile(SavedRemoteHost host) {
         generation++;
-        showDialog(new AlertDialog.Builder(this).setTitle("Delete remote profile?")
+        showDialog(sheet().setTitle("Delete remote profile?")
                 .setMessage("Remove " + host.name + " and its saved SSH trust and quick commands from this device?")
                 .setNegativeButton("Cancel", null).setPositiveButton("Delete", (which, index) -> {
                     int token = generation;
@@ -634,8 +1053,8 @@ public final class RemoteHostsActivity extends Activity {
         cancelConnection();
         selected = host;
         content.removeAllViews();
-        content.addView(button("Cancel and return to profiles", this::showProfiles));
-        setStatus("Checking the SSH host key for " + host.name + "…");
+        showHeader(host.name, destination(host).replace('\n', ' '), "Cancel and return to hosts");
+        setStatus(Tone.PROGRESS, "Checking the SSH host key for " + host.name + "…");
         int token = generation;
         run(token, () -> {
             SavedRemoteHost current = store.requireCurrent(host);
@@ -647,21 +1066,21 @@ public final class RemoteHostsActivity extends Activity {
                 if (key.isEmpty()) throw new IllegalArgumentException("Missing SSH host key");
                 if (!host.expectedFingerprint.isEmpty()) {
                     if (!host.expectedFingerprint.equals(key)) {
-                        setStatus("SSH HOST KEY CHANGED. Connection blocked. Verify the change independently, then use Forget SSH trust from the profile list.");
+                        setStatus(Tone.ERROR, "SSH HOST KEY CHANGED. Connection blocked. Verify the change independently, then use Forget SSH trust in the host's ⋮ menu.");
                         return;
                     }
                     showPassword(host);
                     return;
                 }
-                setStatus("Verify this SSH fingerprint before trusting the host");
-                showDialog(new AlertDialog.Builder(this).setTitle("Trust this SSH host key?")
+                setStatus(Tone.NOTE, "Verify this SSH fingerprint before trusting the host");
+                showDialog(sheet().setTitle("Trust this SSH host key?")
                         .setMessage(destination(host) + "\n\n" + key
                                 + "\n\nCompare this SHA-256 fingerprint with a trusted source. No credentials have been sent.")
                         .setNegativeButton("Cancel", (which, index) -> showProfiles())
                         .setPositiveButton("Trust fingerprint", (which, index) -> run(token,
                                 () -> store.trust(host, key), trusted -> { selected = trusted; showPassword(trusted); }))
                         .create());
-            } catch (Exception failure) { setStatus("SSH host-key inspection returned an invalid response."); }
+            } catch (Exception failure) { setStatus(Tone.ERROR, "SSH host-key inspection returned an invalid response."); }
         });
     }
 
@@ -671,19 +1090,24 @@ public final class RemoteHostsActivity extends Activity {
 
     private void showCredentials(SavedRemoteHost host, CredentialMode mode) {
         dismissDialog();
-        LinearLayout fields = column();
-        fields.setPadding(dp(16), 0, dp(16), 0);
-        fields.addView(label(destination(host), 16, TEXT));
-        fields.addView(label("Trusted " + host.expectedFingerprint
+        // The key was just verified or trusted; nothing is in progress until sign-in.
+        setStatus(Tone.NOTE, "Host key verified. Sign in to continue.");
+        AlertDialog.Builder builder = sheet();
+        Context context = builder.getContext();
+        LinearLayout fields = sheetFields(context);
+        TextView where = note(context, destination(host), 16);
+        where.setTextColor(themeColor(context, android.R.attr.textColorPrimary));
+        fields.addView(where);
+        fields.addView(note(context, "Trusted " + host.expectedFingerprint
                 + (mode == CredentialMode.SAVED_KEY
                     ? "\nThe saved private key is decrypted only for this connection. Its passphrase is one-use."
-                    : "\nPasswords and passphrases are used once and cleared on close or pause."), 13, MUTED));
-        fields.addView(label("The app checks for a running Herdr session. Herdr’s bridge may start it if it stops while connecting.", 13, MUTED));
+                    : "\nPasswords and passphrases are used once and cleared on close or pause."), 13));
+        fields.addView(note(context, "The app checks for a running Herdr session. Herdr’s bridge may start it if it stops while connecting.", 13));
         password = null;
         keyPassphrase = null;
         if (mode != CredentialMode.SAVED_KEY) {
             boolean privateKey = mode == CredentialMode.ONE_USE_KEY;
-            password = field(fields, privateKey ? "Existing OpenSSH / PEM private key" : "SSH password", "", true);
+            password = field(context, fields, privateKey ? "Existing OpenSSH / PEM private key" : "SSH password", "", true);
             if (privateKey) {
                 password.setSingleLine(false);
                 password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -692,21 +1116,21 @@ public final class RemoteHostsActivity extends Activity {
             }
         }
         if (mode != CredentialMode.PASSWORD) {
-            keyPassphrase = field(fields, "Key passphrase (optional)", "", true);
+            keyPassphrase = field(context, fields, "Key passphrase (optional)", "", true);
         }
         if (mode == CredentialMode.ONE_USE_KEY) {
-            fields.addView(label("This key is used once and is not saved. To save a device-wide encrypted key, return to Remote hosts.", 13, MUTED));
+            fields.addView(note(context, "This key is used once and is not saved. To save a device-wide encrypted key, return to Remote hosts.", 13));
         }
         if (mode == CredentialMode.SAVED_KEY) {
-            fields.addView(label("Uses the device-wide encrypted identity. No automatic password or pasted-key fallback is attempted.", 13, MUTED));
+            fields.addView(note(context, "Uses the device-wide encrypted identity. No automatic password or pasted-key fallback is attempted.", 13));
         }
-        if (mode != CredentialMode.PASSWORD) fields.addView(button("Use password", () -> showCredentials(host, CredentialMode.PASSWORD)));
-        if (mode != CredentialMode.ONE_USE_KEY) fields.addView(button("Use one-use private key", () -> showCredentials(host, CredentialMode.ONE_USE_KEY)));
+        if (mode != CredentialMode.PASSWORD) fields.addView(choice(context, "Use password", () -> showCredentials(host, CredentialMode.PASSWORD)));
+        if (mode != CredentialMode.ONE_USE_KEY) fields.addView(choice(context, "Use one-use private key", () -> showCredentials(host, CredentialMode.ONE_USE_KEY)));
         if (identityPresent && mode != CredentialMode.SAVED_KEY) {
-            fields.addView(button("Use saved SSH key", () -> showCredentials(host, CredentialMode.SAVED_KEY)));
+            fields.addView(choice(context, "Use saved SSH key", () -> showCredentials(host, CredentialMode.SAVED_KEY)));
         }
-        ScrollView scrolling = new ScrollView(this); scrolling.addView(fields);
-        AlertDialog login = new AlertDialog.Builder(this).setTitle("Connect to " + host.name).setView(scrolling)
+        ScrollView scrolling = new ScrollView(context); scrolling.addView(fields);
+        AlertDialog login = builder.setTitle("Connect to " + host.name).setView(scrolling)
                 .setNegativeButton("Cancel", (which, index) -> showProfiles())
                 .setPositiveButton("Connect", null).create();
         showDialog(login);
@@ -735,7 +1159,7 @@ public final class RemoteHostsActivity extends Activity {
     }
 
     private void connect(SavedRemoteHost host, char[] secret, char[] phrase, CredentialMode mode) {
-        setStatus("Connecting to " + host.name + "…");
+        setStatus(Tone.PROGRESS, "Connecting to " + host.name + "…");
         int token = generation;
         submit(() -> {
             long handle = 0;
@@ -767,7 +1191,7 @@ public final class RemoteHostsActivity extends Activity {
                 });
                 handle = 0;
             } catch (Exception | LinkageError failure) {
-                main.post(() -> { if (current(token)) setStatus("SSH connection failed. Return to profiles to try again."); });
+                main.post(() -> { if (current(token)) setStatus(Tone.ERROR, "SSH connection failed. Go back to the host list to try again."); });
             } finally {
                 if (handle != 0) RemoteNative.close(handle);
                 synchronized (this) {
@@ -788,11 +1212,12 @@ public final class RemoteHostsActivity extends Activity {
             return result(RemoteNative.poll(handle, 0, false));
         }, snapshot -> {
             if (ownedHandle != handle) return;
-            setStatus(snapshot.optString("status", "Connecting…"));
+            setStatus("ready".equals(snapshot.optString("state")) ? Tone.NOTE : Tone.PROGRESS,
+                    snapshot.optString("status", "Connecting…"));
             if ("closed".equals(snapshot.optString("state"))) {
                 String reason = snapshot.optString("status", "SSH connection closed");
                 cancelConnection();
-                setStatus(safeMessage(reason) + " Return to profiles to reconnect.");
+                setStatus(Tone.ERROR, safeMessage(reason) + " Go back to the host list to reconnect.");
                 return;
             }
             if ("ready".equals(snapshot.optString("state"))) {
@@ -805,29 +1230,69 @@ public final class RemoteHostsActivity extends Activity {
             main.postDelayed(() -> pollConnection(token, handle, host), 700);
         }, failure -> {
             cancelConnection();
-            setStatus(failure + " Return to profiles to reconnect.");
+            setStatus(Tone.ERROR, failure + " Go back to the host list to reconnect.");
         });
     }
 
+    /**
+     * One card of the session's panes. Each row is the pane's own button, its
+     * agent state as a dot that screen readers hear as a word.
+     */
     private void renderPanes(SavedRemoteHost host, long handle, JSONArray panes) {
         content.removeAllViews();
-        content.addView(button("Disconnect and return to profiles", this::showProfiles));
-        content.addView(label("Choose a terminal · " + host.name, 20, TEXT));
-        if (panes.length() == 0) content.addView(label("No terminal panes in this Herdr session", 16, MUTED));
+        showHeader("Choose a terminal", host.name, "Disconnect and return to hosts");
+        LinearLayout card = card();
+        card.setPadding(dp(4), dp(4), dp(4), dp(4));
+        if (panes.length() == 0) {
+            TextView none = text(this, "No terminal panes in this Herdr session", 16, chrome.onSurfaceVariant);
+            none.setPadding(dp(16), dp(16), dp(16), dp(16));
+            card.addView(none);
+        }
         for (int i = 0; i < Math.min(panes.length(), 256); i++) {
             JSONObject pane = panes.optJSONObject(i);
             if (pane == null) continue;
             String id = pane.optString("id", "");
             if (!id.matches("[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)*") || id.length() > 128) continue;
             String title = GpuiTerminalProtocol.title(pane.optString("title", id));
-            content.addView(button(title, () -> openPane(host, handle, id, title)));
+            card.addView(paneRow(title, pane.optString("status", "unknown"), () -> openPane(host, handle, id, title)),
+                    new LinearLayout.LayoutParams(-1, -2));
         }
+        content.addView(card, cardParams());
+    }
+
+    private Button paneRow(String title, String state, Runnable action) {
+        // No default button style: its background and elevation animator would be replaced.
+        Button row = new Button(this, null, 0, 0);
+        row.setFocusable(true);
+        row.setText(title);
+        row.setAllCaps(false);
+        row.setTextSize(16);
+        row.setTextColor(chrome.onSurface);
+        row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        row.setSingleLine(true);
+        row.setEllipsize(TextUtils.TruncateAt.END);
+        row.setMinHeight(dp(56));
+        row.setMinimumHeight(dp(56));
+        row.setPadding(dp(16), 0, dp(16), 0);
+        row.setBackground(pressable(0x00000000, 12, 0));
+        row.setStateListAnimator(null);
+        GradientDrawable dot = new GradientDrawable();
+        dot.setShape(GradientDrawable.OVAL);
+        dot.setColor(chrome.status(state));
+        dot.setBounds(0, 0, dp(10), dp(10));
+        row.setCompoundDrawablesRelative(dot, null, null, null);
+        row.setCompoundDrawablePadding(dp(16));
+        boolean known = !"unknown".equals(state) && !state.isEmpty();
+        row.setContentDescription(known ? title + ", " + state : title);
+        privateView(row);
+        row.setOnClickListener(view -> action.run());
+        return row;
     }
 
     private void openPane(SavedRemoteHost host, long handle, String id, String title) {
         if (ownedHandle != handle || openingPane) return;
         openingPane = true;
-        setStatus("Requesting selected pane…");
+        setStatus(Tone.PROGRESS, "Requesting selected pane…");
         int token = generation;
         run(token, () -> {
             SavedRemoteHost currentHost = store.requireCurrent(host);
@@ -843,12 +1308,12 @@ public final class RemoteHostsActivity extends Activity {
                 // startActivity succeeded: only the launch grant/terminal now owns the handle.
                 ownedHandle = 0;
                 generation++;
-                setStatus("Terminal opened");
+                setStatus(Tone.NOTE, "Terminal opened");
             } catch (Exception | LinkageError failure) {
                 openingPane = false;
-                setStatus("The GPUI terminal could not be opened. You can retry or disconnect.");
+                setStatus(Tone.ERROR, "The GPUI terminal could not be opened. You can retry or disconnect.");
             }
-        }, failure -> { openingPane = false; setStatus(failure); });
+        }, failure -> { openingPane = false; setStatus(Tone.ERROR, failure); });
     }
 
     private interface Work<T> { T execute() throws Exception; }
@@ -856,7 +1321,7 @@ public final class RemoteHostsActivity extends Activity {
     private interface Failed { void apply(String message); }
 
     private <T> void run(int token, Work<T> action, Done<T> done) {
-        run(token, action, done, message -> setStatus(message));
+        run(token, action, done, message -> setStatus(Tone.ERROR, message));
     }
 
     private <T> void run(int token, Work<T> action, Done<T> done, Failed failed) {
@@ -875,7 +1340,7 @@ public final class RemoteHostsActivity extends Activity {
 
     private void submit(Runnable task) {
         try { worker.execute(task); }
-        catch (RejectedExecutionException busy) { clearSecret(); setStatus("An operation is still finishing. Please try again."); }
+        catch (RejectedExecutionException busy) { clearSecret(); setStatus(Tone.ERROR, "An operation is still finishing. Please try again."); }
     }
 
     private boolean current(int token) { return visible && generation == token; }
@@ -898,7 +1363,39 @@ public final class RemoteHostsActivity extends Activity {
         dialog = value;
         value.show();
     }
-    private void setStatus(String value) { status.setText(value); }
+    /** Shows one status line; repeating the current one changes nothing and announces nothing. */
+    private void setStatus(Tone tone, String value) {
+        if (tone == statusTone && value.contentEquals(status.getText())
+                && statusRow.getVisibility() == View.VISIBLE) return;
+        statusTone = tone;
+        status.setText(value);
+        status.setTextColor(tone == Tone.ERROR ? chrome.onSurface : chrome.onSurfaceVariant);
+        if (tone == Tone.PROGRESS && statusProgress == null) {
+            statusProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleSmall);
+            statusProgress.setIndeterminateTintList(ColorStateList.valueOf(chrome.primary));
+            statusProgress.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            statusRow.addView(statusProgress, 0, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        }
+        if (statusProgress != null) statusProgress.setVisibility(tone == Tone.PROGRESS ? View.VISIBLE : View.GONE);
+        statusIcon.setVisibility(tone == Tone.PROGRESS ? View.GONE : View.VISIBLE);
+        if (tone == Tone.ERROR) {
+            statusIcon.setImageResource(R.drawable.ic_home_error);
+            statusIcon.setImageTintList(ColorStateList.valueOf(chrome.danger));
+            statusRow.setBackground(rounded(GpuiChrome.withAlpha(chrome.danger, 0x24), 12));
+            statusRow.setPadding(dp(12), dp(10), dp(12), dp(10));
+        } else {
+            statusIcon.setImageResource(R.drawable.ic_home_info);
+            statusIcon.setImageTintList(ColorStateList.valueOf(chrome.onSurfaceVariant));
+            statusRow.setBackground(null);
+            statusRow.setPadding(dp(4), dp(2), dp(4), dp(2));
+        }
+        statusRow.setVisibility(View.VISIBLE);
+    }
+    private void clearStatus() {
+        statusTone = null;
+        status.setText("");
+        statusRow.setVisibility(View.GONE);
+    }
     private static String destination(SavedRemoteHost host) {
         return "iroh".equals(host.transport)
                 ? host.username + " via Iroh\n" + host.endpointId
@@ -929,12 +1426,30 @@ public final class RemoteHostsActivity extends Activity {
         view.setSaveFromParentEnabled(false);
         view.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
     }
-    private EditText field(LinearLayout parent, String hint, String value, boolean secret) {
-        EditText field = new EditText(this);
+
+    /** A sheet in the platform dialog style whose lightness matches the theme. */
+    private AlertDialog.Builder sheet() {
+        return new AlertDialog.Builder(this, chrome.dialogTheme());
+    }
+
+    /** A sheet's content column; built from the sheet's context so it takes its colours. */
+    private LinearLayout sheetFields(Context context) {
+        LinearLayout fields = column(context);
+        fields.setPadding(dp(24), dp(4), dp(24), 0);
+        return fields;
+    }
+
+    /** Sheet text in the sheet theme's secondary colour. */
+    private TextView note(Context context, String value, int sizeSp) {
+        TextView note = text(context, value, sizeSp, themeColor(context, android.R.attr.textColorSecondary));
+        note.setPadding(0, dp(6), 0, dp(6));
+        return note;
+    }
+
+    private EditText field(Context context, LinearLayout parent, String hint, String value, boolean secret) {
+        EditText field = new EditText(context);
         field.setHint(hint);
         field.setText(value);
-        field.setTextColor(TEXT);
-        field.setHintTextColor(MUTED);
         field.setSingleLine(true);
         field.setInputType(InputType.TYPE_CLASS_TEXT | (secret ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS));
         field.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
@@ -942,47 +1457,161 @@ public final class RemoteHostsActivity extends Activity {
         parent.addView(field);
         return field;
     }
-    private TextView label(String text, int size, int color) {
-        TextView label = new TextView(this);
-        label.setText(text); label.setTextSize(size); label.setTextColor(color);
-        label.setPadding(0, dp(6), 0, dp(6)); privateView(label);
-        return label;
-    }
-    private Button button(String text, Runnable action) {
-        // The desktop chrome is a flat slate bar with the terminal foreground; the
-        // platform button tint reads as a different product beside it.
-        Button button = new Button(this);
+
+    /** A sheet's text button, in the platform style of the sheet's theme. */
+    private Button choice(Context context, String text, Runnable action) {
+        Button button = new Button(context, null, android.R.attr.borderlessButtonStyle);
         button.setText(text);
         button.setAllCaps(false);
-        button.setTextColor(0xffdce5ef);
-        button.setTextSize(14);
-        button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff1e222a));
+        button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         button.setMinHeight(dp(48));
+        privateView(button);
+        button.setOnClickListener(view -> action.run());
+        return button;
+    }
+
+    private static int themeColor(Context context, int attribute) {
+        android.content.res.TypedArray values = context.obtainStyledAttributes(new int[]{attribute});
+        try {
+            return values.getColor(0, 0xff000000);
+        } finally {
+            values.recycle();
+        }
+    }
+
+    private TextView text(Context context, String value, int sizeSp, int color) {
+        TextView text = new TextView(context);
+        text.setText(value);
+        text.setTextSize(sizeSp);
+        text.setTextColor(color);
+        privateView(text);
+        return text;
+    }
+
+    private static TextView medium(TextView text) {
+        text.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        return text;
+    }
+
+    /** The one filled action of a card: the theme's accent with surface-coloured text. */
+    private Button primaryButton(String text, Runnable action) {
+        return pill(text, chrome.primary, chrome.surface, action);
+    }
+
+    /** A secondary action on a tonal fill; only the primary text colour is legible on it. */
+    private Button tonalButton(String text, Runnable action) {
+        return pill(text, chrome.control, chrome.onSurface, action);
+    }
+
+    private Button textButton(String text, int color, Runnable action) {
+        return pill(text, 0x00000000, color, action);
+    }
+
+    /** A 40 dp rounded button inside a 48 dp touch target, with a press ripple. */
+    private Button pill(String text, int fill, int textColor, Runnable action) {
+        // No default button style: its background and elevation animator would be replaced.
+        Button button = new Button(this, null, 0, 0);
+        button.setFocusable(true);
+        button.setGravity(Gravity.CENTER);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextSize(14);
+        button.setTextColor(textColor);
+        medium(button);
+        button.setBackground(pressable(fill, 20, dp(4)));
+        button.setMinHeight(dp(48));
+        button.setMinimumHeight(dp(48));
+        button.setMinWidth(dp(64));
+        button.setMinimumWidth(dp(64));
+        button.setPadding(dp(20), 0, dp(20), 0);
         button.setStateListAnimator(null);
         privateView(button);
         button.setOnClickListener(view -> action.run());
         return button;
     }
 
-    private LinearLayout row() {
-        LinearLayout row = new LinearLayout(this);
+    /** An 18 dp leading icon in the label's colour. */
+    private void withIcon(Button button, int iconRes, int color) {
+        Drawable icon = getDrawable(iconRes);
+        if (icon == null) return;
+        icon = icon.mutate();
+        icon.setBounds(0, 0, dp(18), dp(18));
+        icon.setTint(color);
+        button.setCompoundDrawablesRelative(icon, null, null, null);
+        button.setCompoundDrawablePadding(dp(8));
+        button.setPadding(dp(16), 0, dp(20), 0);
+    }
+
+    /** A 48 dp icon button with a round ripple; its label is a tooltip. */
+    private ImageButton iconButton(int iconRes, int tint, String label, String description,
+            View.OnClickListener action) {
+        ImageButton button = new ImageButton(this, null, 0, 0);
+        button.setFocusable(true);
+        button.setImageResource(iconRes);
+        button.setImageTintList(ColorStateList.valueOf(tint));
+        button.setBackground(pressable(0x00000000, 24, 0));
+        button.setScaleType(ImageView.ScaleType.CENTER);
+        button.setContentDescription(description);
+        button.setTooltipText(label);
+        privateView(button);
+        button.setOnClickListener(action);
+        return button;
+    }
+
+    private ImageView icon(int iconRes, int tint) {
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setImageTintList(ColorStateList.valueOf(tint));
+        icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        privateView(icon);
+        return icon;
+    }
+
+    /** A rounded surface with the theme's outline, lifted off the page. */
+    private LinearLayout card() {
+        LinearLayout card = column(this);
+        GradientDrawable shape = rounded(chrome.surface, 16);
+        shape.setStroke(Math.max(1, dp(1) / 2), chrome.outline);
+        card.setBackground(shape);
+        return card;
+    }
+
+    private View divider() {
+        View line = new View(this);
+        line.setBackgroundColor(chrome.outline);
+        line.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, Math.max(1, dp(1) / 2));
+        params.setMarginStart(dp(56));
+        line.setLayoutParams(params);
+        return line;
+    }
+
+    private GradientDrawable rounded(int color, int radiusDp) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(color);
+        shape.setCornerRadius(dp(radiusDp));
+        return shape;
+    }
+
+    /**
+     * Rounded fill inset to its visual size, with a press ripple, as the
+     * terminal's controls draw it; the view keeps its full touch target.
+     */
+    private Drawable pressable(int fill, int radiusDp, int inset) {
+        return new RippleDrawable(ColorStateList.valueOf(GpuiChrome.withAlpha(chrome.onSurface, 0x29)),
+                new InsetDrawable(rounded(fill, radiusDp), 0, inset, 0, inset),
+                new InsetDrawable(rounded(0xffffffff, radiusDp), 0, inset, 0, inset));
+    }
+
+    private LinearLayout row(Context context) {
+        LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(0, dp(4), 0, 0);
         privateView(row);
         return row;
     }
 
-    /** Half-width sibling in a row: weight carries the width, margin the gap. */
-    private Button weighted(Button button) {
-        LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        params.setMarginEnd(dp(4));
-        button.setLayoutParams(params);
-        return button;
-    }
-
-    private LinearLayout column() {
-        LinearLayout result = new LinearLayout(this);
+    private LinearLayout column(Context context) {
+        LinearLayout result = new LinearLayout(context);
         result.setOrientation(LinearLayout.VERTICAL); privateView(result);
         return result;
     }

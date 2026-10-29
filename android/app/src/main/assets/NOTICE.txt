@@ -86,9 +86,9 @@ SOFTWARE.
 Android native client is based on the Herdr Companion API from
 penso/herdr-gpui PR #248, revision 273a7bfea714374f10a03445a0a679359f21117c.
 The Android launcher icon adapts the companion's web/icon.svg (Apache-2.0).
-The terminal toolbar icons in res/drawable/ic_bar_*.xml use path data from
-Google's Material Icons (https://github.com/google/material-design-icons),
-Apache-2.0.
+The terminal toolbar and host list icons in res/drawable/ic_bar_*.xml and
+res/drawable/ic_home_*.xml use path data from Google's Material Icons
+(https://github.com/google/material-design-icons), Apache-2.0.
 The Gradle wrapper is from Gradle v8.9.0 (Apache-2.0).
 
 Raw SSH shell mode renders with a modified copy of gpui-rio 0.1.0
