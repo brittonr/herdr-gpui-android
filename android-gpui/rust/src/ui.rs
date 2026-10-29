@@ -352,8 +352,8 @@ impl Render for TerminalView {
                         ScrollDelta::Pixels(point) => (f32::from(point.x), f32::from(point.y)),
                         ScrollDelta::Lines(point) => (point.x, point.y),
                     };
-                    if dx.abs() > 2. && dx.abs() > dy.abs() {
-                        model::mailbox().pan(-dx);
+                    if let Some(delta) = model::pan_from_wheel(dx, dy) {
+                        model::mailbox().pan(delta);
                     }
                 });
                 body

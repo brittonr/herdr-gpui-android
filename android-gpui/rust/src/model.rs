@@ -769,6 +769,17 @@ pub struct Mailbox {
     pub follow: bool,
 }
 
+
+/// Horizontal pan requested by a wheel or drag delta, if the gesture is
+/// horizontal. Vertical deltas stay with the list so scrolling is untouched.
+pub fn pan_from_wheel(dx: f32, dy: f32) -> Option<f32> {
+    if !dx.is_finite() || !dy.is_finite() {
+        return None;
+    }
+    let horizontal = dx.abs() > 2. && dx.abs() > dy.abs();
+    horizontal.then(|| -dx)
+}
+
 /// Enough for the widest supported line without letting a stray gesture hide
 /// the whole pane.
 pub const MAX_PAN: f32 = 2400.;
@@ -1132,6 +1143,18 @@ mod tests {
         assert_eq!(box_.state().generation, 11);
         assert!(box_.state().snapshot.lines.is_empty());
     }
+    #[test]
+    fn horizontal_wheel_pans_and_vertical_wheel_does_not() {
+        assert_eq!(pan_from_wheel(-300., 0.), Some(300.));
+        assert_eq!(pan_from_wheel(0., -300.), None);
+        // Diagonal gestures follow the dominant axis only.
+        assert_eq!(pan_from_wheel(120., 40.), Some(-120.));
+        assert_eq!(pan_from_wheel(40., 120.), None);
+        // Jitter under the threshold is never a pan.
+        assert_eq!(pan_from_wheel(1.5, 0.), None);
+        assert_eq!(pan_from_wheel(f32::NAN, 0.), None);
+    }
+
     #[test]
     fn pan_is_bounded_and_only_reports_real_movement() {
         let mut box_ = Mailbox::default();
