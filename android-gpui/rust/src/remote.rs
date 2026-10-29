@@ -287,8 +287,11 @@ fn parse_grid(raw: &str) -> herdr_client::ConnectOptions {
     let rows = parts.next().and_then(|v| v.parse::<u16>().ok());
     let cell_w = parts.next().and_then(|v| v.parse::<u32>().ok());
     let cell_h = parts.next().and_then(|v| v.parse::<u32>().ok());
-    match (cols, rows, cell_w, cell_h) {
-        (Some(cols), Some(rows), Some(cell_w), Some(cell_h))
+    // Exactly four fields: trailing junk means the caller is confused, so fall
+    // back rather than accept a value that may not mean what it looks like.
+    let nothing_extra = parts.next().is_none();
+    match (cols, rows, cell_w, cell_h, nothing_extra) {
+        (Some(cols), Some(rows), Some(cell_w), Some(cell_h), true)
             if (20..=400).contains(&cols)
                 && (5..=200).contains(&rows)
                 && (1..=64).contains(&cell_w)
@@ -1043,7 +1046,12 @@ fn project(state: &mut State) {
     }
     .into();
     let pane_id = state.view.pane_id.clone();
-    let projection = surface_for_pane(state, &pane_id).map(|(surface, _pane)| {
+    // No pane chosen yet means a focus is still resolving; painting then would
+    // show a pane the user has not been switched to.
+    let projection = (!pane_id.is_empty())
+        .then(|| surface_for_pane(state, &pane_id))
+        .flatten()
+        .map(|(surface, _pane)| {
         (
             surface_text(surface),
             surface_style(surface),
@@ -1354,6 +1362,8 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
         paint.status.to_owned()
     };
     drop(state);
+    // The surface mailbox is a UI concern; `remote` alone has no window to paint.
+    #[cfg(feature = "android-ui")]
     if let Ok(snapshot) = model::Snapshot::with_surface(
         paint.title,
         &text,
@@ -1589,6 +1599,26 @@ fn key_event(key: &str) -> Result<ClientPaneInputEvent> {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
+    use super::parse_grid;
+
+    #[test]
+    fn grid_parsing_accepts_the_phone_shape_and_falls_back_otherwise() {
+        let parsed = parse_grid("259,125,9,19");
+        assert_eq!(parsed.surface_size.cols, 259);
+        assert_eq!(parsed.surface_size.rows, 125);
+        assert_eq!(parsed.cell_width_px, 9);
+        assert_eq!(parsed.cell_height_px, 19);
+
+        // Out of range on either axis falls back rather than guessing.
+        let fallback = herdr_client::ConnectOptions::default();
+        for bad in ["19,125,9,19", "401,125,9,19", "259,4,9,19", "259,201,9,19",
+                    "259,125,0,19", "259,125,65,19", "259,125,9", "", "a,b,c,d",
+                    "259,125,9,19,extra"] {
+            let got = parse_grid(bad);
+            assert_eq!(got.surface_size, fallback.surface_size, "{bad}");
+        }
+    }
+
     use super::*;
 
     fn snapshot(boot: &str, revision: u64, focus: &str) -> Arc<ClientShellSnapshot> {
@@ -1947,10 +1977,13 @@ mod tests {
         assert_eq!(state.view.pane_id, "p2");
         assert_eq!(state.view.text, "xxxx\nxABx\nxxxx");
         assert_eq!(state.view.state, "ready");
-        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 3, "p1")));
-        assert!(state.view.text.is_empty());
-        assert_eq!(state.view.state, "connecting");
-        assert!(matching_surface(&state, "p2").is_none());
+        // The daemon's focus moved elsewhere after our own focus completed.
+        // The client stays on the pane it was told to focus and keeps its text,
+        // rather than blanking the pane the user is reading.
+        let moved = apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 3, "p1")));
+        assert!(moved.is_none());
+        assert_eq!(state.view.pane_id, "p2");
+        assert_eq!(state.view.text, "xxxx\nxABx\nxxxx");
     }
     #[test]
     fn boot_change_and_deleted_pane_fail_closed() {
@@ -2155,7 +2188,7 @@ mod tests {
         let id = connect(config, "fixture-unused-password".into()).unwrap();
         let start = Instant::now();
         loop {
-            let state: serde_json::Value = serde_json::from_str(&poll(id).unwrap()).unwrap();
+            let state: serde_json::Value = serde_json::from_str(&poll(id, 0, false).unwrap()).unwrap();
             if state["state"] == "closed" {
                 break;
             }
@@ -2170,7 +2203,7 @@ mod tests {
             Err(Error::Closed)
         ));
         close(id);
-        assert!(matches!(poll(id), Err(Error::Closed)));
+        assert!(matches!(poll(id, 0, false), Err(Error::Closed)));
         close(id);
     }
 }
