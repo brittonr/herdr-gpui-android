@@ -734,12 +734,29 @@ fn run(
             state.client = Some(client.handle.clone());
         }
     }
+    // Herdr answers its programs' color queries with the foreground client's
+    // theme, and an attaching terminal connection becomes that client. Report
+    // the palette once the boot is known and again whenever it changes. A
+    // failed enqueue leaves `reported` behind, so a later tick sends it again.
+    let mut reported: Option<model::Palette> = None;
     while !owner.cancel.is_cancelled() && !client.handle.is_disconnected() {
         if let Ok(event) = client.events.recv_timeout(Duration::from_millis(25)) {
             let failure = apply_event(&mut lock(&owner.state), event);
             if let Some(reason) = failure {
                 finish(owner, &reason);
                 break;
+            }
+        }
+        let palette = model::palette();
+        if reported != Some(palette) {
+            let boot_id = lock(&owner.state).view.boot_id.clone();
+            if !boot_id.is_empty()
+                && client
+                    .handle
+                    .set_host_theme(&boot_id, &host_theme(&palette))
+                    .is_ok()
+            {
+                reported = Some(palette);
             }
         }
         let focus_expired = lock(&owner.state)
@@ -780,6 +797,35 @@ fn run(
     // Runtime and relay ownership ends on this background thread, never JNI/UI.
     drop(runtime);
     Ok(())
+}
+
+/// What Herdr is told about this client's terminal, so a program asking for
+/// its colors (OSC 10/11/4) or color scheme gets the palette the phone paints
+/// with. The appearance is the palette's own: "Follow system" already turns the
+/// system appearance into a light or dark palette, and a chosen palette is what
+/// the cells look like whatever the system says.
+fn host_theme(palette: &model::Palette) -> herdr_client::HostTheme {
+    let rgb = |color: u32| {
+        let [_, r, g, b] = color.to_be_bytes();
+        ClientHostColor { r, g, b }
+    };
+    herdr_client::HostTheme {
+        foreground: rgb(palette.foreground),
+        background: rgb(palette.background),
+        // Every indexed wire color as painted: the ANSI sixteen, cube and greys.
+        palette: std::array::from_fn(|index| {
+            rgb(model::resolve_color(
+                0x0100_0000 | index as u32,
+                palette.background,
+                palette,
+            ))
+        }),
+        appearance: if palette.is_light() {
+            ClientHostAppearance::Light
+        } else {
+            ClientHostAppearance::Dark
+        },
+    }
 }
 
 /// Scroll position of the focused pane, so the activity can bound a swipe.
@@ -2799,5 +2845,27 @@ mod tests {
         close(id);
         assert!(matches!(poll(id, 0, false), Err(Error::Closed)));
         close(id);
+    }
+
+    #[test]
+    fn host_theme_tells_herdr_the_colors_cells_are_painted_with() {
+        let rgb = |value: u32| {
+            let [_, r, g, b] = value.to_be_bytes();
+            ClientHostColor { r, g, b }
+        };
+        for palette in model::PALETTES {
+            let theme = host_theme(&palette);
+            assert_eq!(theme.foreground, rgb(palette.foreground));
+            assert_eq!(theme.background, rgb(palette.background));
+            assert_eq!(theme.palette[..16], palette.ansi.map(rgb));
+            // xterm's colour cube and grey ramp follow the palette's sixteen.
+            assert_eq!(theme.palette[16], rgb(0x00_0000));
+            assert_eq!(theme.palette[196], rgb(0xff_0000));
+            assert_eq!(theme.palette[231], rgb(0xff_ffff));
+            assert_eq!(theme.palette[232], rgb(0x08_0808));
+            assert_eq!(theme.palette[255], rgb(0xee_eeee));
+            let light = theme.appearance == ClientHostAppearance::Light;
+            assert_eq!(light, palette.name == "Latte", "{}", palette.name);
+        }
     }
 }

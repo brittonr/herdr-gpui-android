@@ -274,6 +274,16 @@ Applying a theme also recolours the status and navigation bars (with dark icons
 on a light theme), the toolbar, the rail and every sheet; sheets and menus use
 the device's own light or dark dialog style to match the palette's lightness.
 
+Like the desktop client, the phone reports its palette to Herdr as the host
+terminal theme: the default foreground and background, all 256 indexed colours
+as the phone paints them, and light or dark from the palette's own lightness
+(Latte is light). Herdr answers its programs' colour queries (OSC 10, 11 and 4)
+with the theme of the client in the foreground, and an attaching terminal
+becomes that client, so a program that follows its terminal's theme, such as
+omp, repaints to match the phone, live when the theme or the system appearance
+changes. Using the desktop client makes its theme current again for the whole
+session. Output printed before a change keeps the colours it was drawn with.
+
 A pane shorter than the body spreads its rows over the body's height, up to
 twice their natural pitch; the type size and columns do not change, and cell
 backgrounds fill each taller row so painted panels stay solid.

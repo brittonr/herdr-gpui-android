@@ -65,6 +65,11 @@ the palette, and the activity reads them through `nativeThemeColors` for the
 system bars, toolbar, rail, banner and sheets. A light palette gets dark
 status-bar icons and the DeviceDefault light dialog theme.
 
+The terminal connection also reports the palette to Herdr as its host terminal
+theme (`ClientShellHostTheme`), which Herdr applies while the phone is its
+foreground client. Before this, the phone reported nothing, and Herdr reset its
+theme to unknown each time the phone attached.
+
 Several palette colours failed text contrast on their own chrome surface
 before the roles existed - Latte muted 4.06:1 and accent 4.04:1, Latte yellow
 2.15:1, Nord red 2.46:1 - so text roles are blended toward the primary text
@@ -641,6 +646,23 @@ show gaps between rows, and on the cover the 24 rows need nearly the full 2×.
 Measured on the inner panel and at `wm size 1080x2152` with the same live agent
 pane, viewed only; the text extent is the first and last row with bright pixels
 between the header and the toolbar.
+
+## Host theme verification
+
+Same live omp pane on the test host, inner panel, viewed only,
+theme **Follow system** with the phone in light mode (Latte):
+
+| Build and system appearance | What the pane showed |
+|---|---|
+| Previous build (no theme reported), light | omp's dark theme inside the light chrome, with the letterbox filled dark |
+| This build, light | omp repainted its light theme without restarting: light tool box and status line, Latte-legible syntax colours, no letterbox fill |
+| This build, `cmd uimode night yes` | Mocha chrome, and omp repainted its dark theme live |
+| This build, `cmd uimode night no` | Latte again, and omp back to its light theme |
+
+A block omp printed before the first change kept its dark background through
+both switches: a program repaints only what it redraws, and a terminal never
+recolours cells already drawn. Night mode, the capture switch and the open pane
+were restored afterwards.
 
 ## Measurement traps (each cost real time)
 
