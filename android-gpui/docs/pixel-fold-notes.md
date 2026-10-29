@@ -30,6 +30,18 @@ inferred from code. Update it when a behaviour changes.
 | Privacy | Dialogs and the terminal are `FLAG_SECURE`; nothing is backed up on Android 12+ (`data_extraction_rules`) |
 | Cost | Cold start 167–177 ms; idle CPU 0 % per thread |
 
+## Local diagnostics, verified end to end
+
+Exercised on the device rather than read from code: the screen starts with the
+switch off and "Read diagnostics" disabled; enabling it flips the status to
+"Local diagnostics are enabled for this screen" and enables the action; reading
+prints exactly the allowlisted snapshot — `schema_version`, `device_model`
+("Pixel 9 Pro Fold"), `manufacturer`, `android_sdk` (36), `battery_percent` and
+`app_storage_available_bytes` — and nothing that identifies the device beyond
+its model. Leaving the app and returning shows the switch off again, so access
+is revoked by leaving, and `DeviceDiagnosticsActivity` is not exported, so the
+shell cannot launch it directly.
+
 ## Themes
 
 Four palettes ship: Default, Nord, Mocha and Latte (light). The GPUI surface is
