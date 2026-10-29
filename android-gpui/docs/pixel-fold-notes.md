@@ -62,7 +62,7 @@ Recorded at commit `5e228b0`, Pixel 9 Pro Fold, install over USB:
 
 | Evidence | Value |
 |---|---|
-| `cargo test` (android-gpui) | 24 passed, 0 failed |
+| `cargo test` (android-gpui) | 26 passed, 0 failed |
 | `:app:testDebugUnitTest`, `:app:lintDebug` | pass; lint reports 0 warnings |
 | Debug APK sha256 (first 16) | `dd490b9cfd23d172` |
 | Device launch | `am start -W` → ok, 167–177 ms |

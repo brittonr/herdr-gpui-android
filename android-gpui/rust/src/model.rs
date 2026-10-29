@@ -256,6 +256,7 @@ pub(crate) struct DisplayMetrics {
 /// Monospace advance as a fraction of the em. Measured on this device's font:
 /// 0.60 and 0.66 both still clipped the pane's last column, so the fit now
 /// reserves visibly more than the nominal advance.
+#[cfg(any(feature = "android-ui", test))]
 const CELL_ADVANCE_EM: f32 = 0.70;
 
 #[cfg(any(feature = "android-ui", test))]
@@ -1148,6 +1149,7 @@ mod tests {
         assert_eq!(box_.state().pan, 0.);
     }
 
+    #[test]
     fn auto_type_fills_a_narrow_pane_and_stays_on_screen_for_a_wide_one() {
         let auto = DisplayPreferences::default();
         // A 70-cell pane on a 798 dp panel grows instead of leaving the row half empty.
@@ -1169,6 +1171,7 @@ mod tests {
         assert!(big.font_size <= 36., "{}", big.font_size);
     }
 
+    #[test]
     fn display_preferences_are_bounded_local_and_generation_independent() {
         let mut box_ = Mailbox::default();
         // A fresh session is auto-sized, so 0 changes nothing and 13 is a choice.
