@@ -1,6 +1,8 @@
 # Kept separate from the desktop workspace, which remains on GPUI 0.3.6.
 [workspace]
 resolver = "2"
+# Vendored upstream code keeps upstream's lints and tests; gpui-rio is ours to gate.
+exclude = ["vendor/rio-vt"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -18,6 +20,11 @@ android_logger = "0.15"
 log = "0.4"
 herdr-client = { path = "../../crates/herdr-client" }
 herdr-remote-transport = { path = "../../android-remote/rust" }
+# Raw SSH shell mode renders with this vendored, PTY-free copy of gpui-rio.
+gpui-rio = { path = "vendor/gpui-rio" }
+# Vendored for Android and to refuse file/shared-memory graphics, without the
+# default `pty` feature: nothing here spawns a local process.
+rio-vt = { path = "vendor/rio-vt", default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "time", "net"] }
 zeroize = { version = "1.9", features = ["serde"] }
 ndk-context = "0.1"
@@ -38,7 +45,7 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # UI is host-checkable; only the actual activity/backend is Android-specific.
 android-ui = ["remote", "dep:async-channel", "dep:gpui", "dep:gpui-mobile", "dep:gpui-wgpu", "dep:jni", "dep:jni-mobile", "dep:ndk", "dep:android-activity", "dep:android_logger", "dep:log"]
-remote = ["dep:herdr-client", "dep:herdr-remote-transport", "dep:tokio", "dep:zeroize", "dep:jni", "dep:ndk-context"]
+remote = ["dep:herdr-client", "dep:herdr-remote-transport", "dep:gpui-rio", "dep:tokio", "dep:zeroize", "dep:jni", "dep:ndk-context"]
 
 [dependencies]
 serde = { workspace = true }
@@ -53,6 +60,7 @@ log = { workspace = true, optional = true }
 [target.'cfg(unix)'.dependencies]
 herdr-client = { workspace = true, optional = true }
 herdr-remote-transport = { workspace = true, optional = true }
+gpui-rio = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 zeroize = { workspace = true, optional = true }
 

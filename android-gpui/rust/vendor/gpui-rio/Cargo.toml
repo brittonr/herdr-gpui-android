@@ -1,0 +1,21 @@
+# Vendored from gpui-rio 0.1.0 (https://github.com/cachix/agentaps), Apache-2.0,
+# and changed to run over any byte stream and on Android: see README.md.
+[package]
+name = "gpui-rio"
+version = "0.1.0"
+edition = "2024"
+description = "Rio terminal component for GPUI, driven by a caller's byte stream"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+rio-vt = { workspace = true }
+thiserror = { workspace = true }
+
+[lints.rust]
+unsafe_code = "deny"
+unused_qualifications = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

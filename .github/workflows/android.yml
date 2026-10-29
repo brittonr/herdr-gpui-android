@@ -68,7 +68,7 @@ jobs:
           sh android/tests/run.sh
           cargo test --locked --manifest-path android-remote/rust/Cargo.toml
           sh android-gpui/tests/run-ime.sh
-          cargo test --locked --manifest-path android-gpui/rust/Cargo.toml --features remote
+          cargo test --locked --manifest-path android-gpui/rust/Cargo.toml --workspace --features remote
       - name: Build actual GPUI native library
         run: android-gpui/scripts/build-native.sh
       - name: Gradle build and lint
