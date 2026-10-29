@@ -37,10 +37,12 @@ fully palette-driven after a fix in this session - the root text, header status
 and truncation banner had hardcoded light colours, which made the Latte header
 invisible on its own white background.
 
-**Known limitation:** the Java chrome (rail, toolbar, dialogs) still uses fixed
-dark colours, so a light theme gives dark chrome around a light terminal. That is
-a visual inconsistency, not a legibility failure, and theming the Java side means
-replacing the hardcoded colours throughout the activity.
+The frame is deliberately dark in every theme: the GPUI header, the Java rail and
+the toolbar all use the same dark surface, and only the page area follows the
+palette. A light theme therefore reads as a light terminal inside a dark frame,
+which is coherent; a light header beside dark chrome was not. Theming the Java
+chrome instead would mean replacing hardcoded colours across the activity and
+giving the dialogs a light theme of their own.
 
 ## Verification receipt
 

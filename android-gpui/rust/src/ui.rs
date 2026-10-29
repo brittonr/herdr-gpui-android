@@ -285,6 +285,7 @@ impl Render for TerminalView {
             .overflow_hidden()
             .bg(rgb(model::palette().background))
             .text_color(rgb(model::palette().foreground))
+            .when(false, |root| root)
             .font_family(crate::fonts::SANS_FAMILY)
             .track_focus(&self.focus)
             .child(
@@ -292,6 +293,10 @@ impl Render for TerminalView {
                     .flex_none()
                     .min_w_0()
                     .h(px(metrics.header_height))
+                    // Fixed dark frame: the Java rail and toolbar cannot follow a
+                    // palette, so the header joins them instead of the page.
+                    .bg(rgb(0x1e222a))
+                    .text_color(rgb(0xdce5ef))
                     .flex()
                     .items_center()
                     .gap(px(metrics.gap))
