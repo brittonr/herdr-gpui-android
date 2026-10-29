@@ -69,7 +69,13 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        // Same rule as the terminal activity: private content, except in a
+        // debuggable build that opts into capture so a screen can be reviewed.
+        boolean capturable = (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && "1".equals(android.provider.Settings.Global.getString(
+                        getContentResolver(), "herdr_probe"));
+        if (!capturable) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store = new HostStore(this);
         try { hosts.addAll(store.read()); }
         catch (Exception error) { storageFailed = true; }
@@ -185,18 +191,22 @@ public final class MainActivity extends Activity {
         composer = null;
         root = column();
         root.setBackgroundColor(BG);
-        root.setPadding(dp(12), dp(8), dp(12), dp(8));
+        // fitSystemWindows replaces padding on the same view, so the inset lives
+        // on the children and the text stops sitting on the rounded edge.
         root.setFitsSystemWindows(true);
         root.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         toolbar = row();
+        toolbar.setPadding(dp(16), dp(8), dp(16), 0);
         root.addView(toolbar);
         TextView title = label(page.equals("hosts") ? "Herdr" : page.equals("pane") ? paneTitle : host.profile.getName(), 22, TEXT);
         title.setMaxLines(2);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         toolbar.addView(button(page.equals("hosts") ? "+ Host" : "Hosts", () -> { if (page.equals("hosts")) editHost(null); else showHosts(); }));
         status = label("", 12, MUTED);
+        status.setPadding(dp(16), 0, dp(16), dp(4));
         root.addView(status);
         content = column();
+        content.setPadding(dp(16), dp(4), dp(16), dp(12));
         root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
         if (page.equals("hosts")) renderHosts();
@@ -225,14 +235,17 @@ public final class MainActivity extends Activity {
         } catch (ClassNotFoundException javaOnlyBuild) {
             // The companion-only APK deliberately has no native remote transport.
         }
-        content.addView(label("Your agents. Any saved host.", 16, MUTED));
-        content.addView(label("Connect to the HTTPS endpoint of a Herdr companion. Tokens stay encrypted on this device.", 14, MUTED));
+        if (hosts.isEmpty() && !storageFailed) {
+            content.addView(label("No hosts yet", 20, TEXT));
+            content.addView(label("Add a host to reach a Herdr companion over HTTPS. Tokens stay encrypted on this device.", 14, MUTED));
+        } else {
+            content.addView(label("Connect to the HTTPS endpoint of a Herdr companion. Tokens stay encrypted on this device.", 14, MUTED));
+        }
         LinearLayout list = scroll(content);
         if (storageFailed) {
             list.addView(label("Saved hosts could not be decrypted. They have not been overwritten. App storage must be recovered or reset in Android Settings before saving hosts.", 15, ACCENT));
             toolbar.getChildAt(1).setEnabled(false);
         }
-        if (hosts.isEmpty() && !storageFailed) list.addView(label("No hosts yet. Add a host to get started.", 18, TEXT));
         for (SavedHost saved : hosts) {
             LinearLayout card = card(list);
             card.addView(label(saved.profile.getName(), 20, TEXT));
@@ -673,7 +686,21 @@ public final class MainActivity extends Activity {
     private LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); v.setGravity(Gravity.CENTER_VERTICAL); return v; }
     private LinearLayout.LayoutParams weighted() { return new LinearLayout.LayoutParams(0, -2, 1); }
     private TextView label(String text, int size, int color) { TextView v = new TextView(this); v.setText(text); v.setTextSize(size); v.setTextColor(color); v.setPadding(dp(4), dp(6), dp(4), dp(6)); v.setSaveEnabled(false); return v; }
-    private Button button(String text, Runnable click) { Button v = new Button(this); v.setText(text); v.setTextSize(12); v.setAllCaps(false); v.setMinWidth(0); v.setMinimumWidth(0); v.setOnClickListener(w -> click.run()); return v; }
+    private Button button(String text, Runnable click) {
+        Button v = new Button(this);
+        v.setText(text);
+        v.setTextSize(13);
+        v.setAllCaps(false);
+        v.setMinWidth(0);
+        v.setMinimumWidth(0);
+        // The platform tint reads as a different product beside the terminal chrome.
+        v.setTextColor(TEXT);
+        v.setBackgroundTintList(android.content.res.ColorStateList.valueOf(SURFACE));
+        v.setMinHeight(dp(48));
+        v.setStateListAnimator(null);
+        v.setOnClickListener(w -> click.run());
+        return v;
+    }
     private EditText input(String hint, boolean password) { EditText v = new EditText(this); v.setHint(hint); v.setSingleLine(true); v.setTextColor(TEXT); v.setHintTextColor(MUTED); v.setSaveEnabled(false); v.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO); v.setInputType(InputType.TYPE_CLASS_TEXT | (password ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)); return v; }
     private LinearLayout scroll(LinearLayout parent) { ScrollView scroll = new ScrollView(this); LinearLayout list = column(); scroll.addView(list); parent.addView(scroll, new LinearLayout.LayoutParams(-1, -1)); return list; }
     private LinearLayout card(LinearLayout parent) { LinearLayout card = column(); card.setPadding(dp(10), dp(6), dp(10), dp(10)); card.setBackgroundColor(SURFACE); LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.setMargins(0, dp(8), 0, dp(4)); parent.addView(card, params); return card; }
