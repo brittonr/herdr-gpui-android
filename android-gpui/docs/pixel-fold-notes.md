@@ -671,10 +671,12 @@ The host list (`RemoteHostsActivity`) was redrawn in the terminal's theme: a
 titled header with **Add host**, one card per host, a grouped **This device**
 card with a switch, a status line that is a spinner, a note or an error banner,
 and back-arrow steps for the key check, sign-in and pane choice. The phone was
-locked and in use, so this was verified on an emulator with the
+locked and in use during development, so the checks below ran on an emulator
+with the
 `pixel_9_pro_fold` device profile (Android 15, inner 852 x 883 dp, cover
 443 x 994 dp through `adb emu fold`), with three saved hosts, one of them pinned
-through the synthetic SSH fixture.
+through the synthetic SSH fixture. The committed build was then installed on
+the phone, captured and timed there (end of this section).
 
 | Check | Result |
 |---|---|
@@ -702,11 +704,25 @@ layout (122–183 ms before, 97–134 ms after). That phase compiles a GPU progr
 the first time each kind of primitive is drawn: stroked rounded cards, circles,
 more text styles. SwiftShader compiles on the CPU, and neither the emulator nor
 the phone kept a persistent shader cache for this debuggable app, so every
-cold start pays it there. The phone's GPU was not measured. On the CPU side the
+cold start pays it there. On the CPU side the
 renderer library loads in 9–35 ms, and building the platform button and switch
 styles only to replace them cost more than the rest of the list (the switch
 alone 33–45 ms), so the list now constructs those widgets without a default
 style. A launch that reopens the last session draws no host cards at all.
+
+On the Pixel itself the cost is small. Same method, launched with
+`--ez skip_reopen true` so no session opened, Nord theme, the user's four saved
+hosts and saved key, the previous build measured first and then the
+installed `b620d68` build:
+
+| Pixel 9 Pro Fold, inner panel | Previous list | Redesign |
+|---|---:|---:|
+| Cold start to first frame, median of 6 | 173 ms | 197 ms |
+| First frame: measure and layout | 10–11 ms | 11–13 ms |
+| First frame: render (sync to swap) | 9–12 ms | 22–24 ms |
+
+The capture on the phone matched the emulator, and every control measured at
+least 48 dp tall.
 
 ## Measurement traps (each cost real time)
 
