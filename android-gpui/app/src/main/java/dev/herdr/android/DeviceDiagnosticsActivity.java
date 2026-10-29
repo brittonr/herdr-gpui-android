@@ -46,7 +46,13 @@ public final class DeviceDiagnosticsActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(null);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        // Device data is private: masked except in a debuggable build that opts
+        // into capture, matching the terminal, its sheets and the companion.
+        boolean capturable = (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && "1".equals(android.provider.Settings.Global.getString(
+                        getContentResolver(), "herdr_probe"));
+        if (!capturable) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         createScreen();
         status.setText("Diagnostics are off. Nothing is collected until you enable them and choose Read diagnostics.");
     }
@@ -122,6 +128,9 @@ public final class DeviceDiagnosticsActivity extends Activity {
         read.setText("Read diagnostics");
         read.setAllCaps(false);
         read.setEnabled(false);
+        // The platform disabled tint is all but invisible on this surface; keep
+        // the unavailable action readable so it still explains itself.
+        read.setTextColor(read.getTextColors().withAlpha(0x9a));
         read.setMinHeight(dp(48));
         privateView(read);
         root.addView(read);
