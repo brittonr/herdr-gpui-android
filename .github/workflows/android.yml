@@ -52,7 +52,7 @@ jobs:
         with:
           accept-android-sdk-licenses: true
           cmdline-tools-version: '13114758'
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
       - name: Install pinned native tools
         run: |
           sdkmanager "ndk;$NDK_VERSION"

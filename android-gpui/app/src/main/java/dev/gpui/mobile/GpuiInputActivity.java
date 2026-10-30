@@ -2,6 +2,7 @@ package dev.gpui.mobile;
 
 import android.app.Activity;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.InputType;
@@ -9,6 +10,7 @@ import android.text.Selection;
 import android.text.TextWatcher;
 import android.view.KeyEvent;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -86,6 +88,7 @@ public class GpuiInputActivity extends Activity {
         private long newestConnection;
         private int depth;
         private boolean marked;
+        private boolean keyboardVisible;
 
         InputProxy() {
             super(GpuiInputActivity.this);
@@ -139,6 +142,21 @@ public class GpuiInputActivity extends Activity {
                 gpuiIme(session, 4, "", 0, 0);
             }
             return super.onKeyPreIme(code, event);
+        }
+
+        /**
+         * From Android 13 a Back gesture goes to the keyboard itself and never
+         * reaches {@link #onKeyPreIme}, and the keyboard's own hide button never
+         * did. Both show up here as the keyboard leaving the window's insets.
+         * Repeating the dismissal after the key path is harmless.
+         */
+        @Override public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+            if (Build.VERSION.SDK_INT >= 30) {
+                boolean visible = insets.isVisible(WindowInsets.Type.ime());
+                if (keyboardVisible && !visible) gpuiIme(session, 4, "", 0, 0);
+                keyboardVisible = visible;
+            }
+            return super.onApplyWindowInsets(insets);
         }
 
         @Override public InputConnection onCreateInputConnection(EditorInfo info) {

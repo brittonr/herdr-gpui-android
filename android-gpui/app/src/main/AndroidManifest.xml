@@ -6,8 +6,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
     <uses-feature android:name="android.hardware.vulkan.level" android:version="0" android:required="false" />
+    <!-- Back reaches each screen through OnBackInvokedCallback (BackOwner) on
+         Android 13 and later, as Android 16 requires for every app targeting it. -->
     <application android:label="Remote for Herdr" android:theme="@style/AppTheme"
         android:icon="@mipmap/ic_launcher" android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true" tools:targetApi="33"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
         tools:ignore="DataExtractionRules"

@@ -61,6 +61,9 @@ public final class RemoteHostsActivity extends Activity {
     private Button addHost;
     /** Where Back and the header arrow go; null on the host list itself. */
     private Runnable backAction;
+    private final BackOwner backOwner = new BackOwner(this, () -> {
+        if (backAction != null) backAction.run();
+    });
     private LinearLayout statusRow;
     private ProgressBar statusProgress;
     private ImageView statusIcon;
@@ -281,6 +284,7 @@ public final class RemoteHostsActivity extends Activity {
     private void showHeader(String heading, String detail, String backLabel) {
         boolean list = backLabel == null;
         backAction = list ? null : this::showProfiles;
+        backOwner.setOwned(!list);
         logo.setVisibility(list ? View.VISIBLE : View.GONE);
         back.setVisibility(list ? View.GONE : View.VISIBLE);
         back.setContentDescription(backLabel);

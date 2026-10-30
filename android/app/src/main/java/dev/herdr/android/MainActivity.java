@@ -55,6 +55,7 @@ public final class MainActivity extends Activity {
     private boolean visible, reading, storageFailed;
     private final java.util.Set<String> pendingDecisions = new java.util.HashSet<>();
     private String page = "hosts", listPage = "agents", paneId, sessionId, paneTitle;
+    private final BackOwner backOwner = new BackOwner(this, this::goBack);
     private boolean transcript, liveKeys;
     private String lastBody = "";
     private AlertDialog activeDialog;
@@ -186,6 +187,7 @@ public final class MainActivity extends Activity {
     }
 
     private void render() {
+        backOwner.setOwned(!page.equals("hosts"));
         liveKeys = false;
         directKeysButton = null;
         composer = null;
@@ -518,9 +520,14 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
+        if (page.equals("hosts")) super.onBackPressed();
+        else goBack();
+    }
+
+    /** A pane returns to its list and a list returns to the hosts. */
+    private void goBack() {
         if (page.equals("pane")) showList(listPage);
-        else if (!page.equals("hosts")) showHosts();
-        else super.onBackPressed();
+        else showHosts();
     }
 
     private void editHost(SavedHost old) {

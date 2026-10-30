@@ -7,12 +7,12 @@ if (!(herdrAndroidAbi in ['arm64-v8a', 'x86_64'])) {
 
 android {
     namespace 'dev.herdr.android'
-    compileSdk 35
+    compileSdk 36
     buildToolsVersion "35.0.0"
     defaultConfig {
         applicationId 'ch.robitzs.herdr'
         minSdk 29
-        targetSdk 35
+        targetSdk 36
         versionCode 5
         versionName '0.5.0-gpui-remote'
         ndk { abiFilters herdrAndroidAbi }

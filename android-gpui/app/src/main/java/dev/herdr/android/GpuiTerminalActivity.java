@@ -117,6 +117,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     /** Colors for every surface outside the painted grid, from the current palette. */
     private GpuiChrome chrome;
     private volatile boolean sidebarOpen;
+    private final BackOwner backOwner = new BackOwner(this, this::hideSidebar);
     private String sidebarSignature = "";
     private QuickCommandPalette.Owner paletteOwner;
     private volatile java.util.List<SavedRemoteHost> savedHosts = java.util.Collections.emptyList();
@@ -454,6 +455,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             styleRail();
         }
         railScrim.setVisibility(drawer && sidebarOpen ? View.VISIBLE : View.GONE);
+        // An open drawer is the only thing Back closes here; otherwise Back leaves the terminal.
+        backOwner.setOwned(drawer && sidebarOpen);
     }
 
     /** Choosing a destination in the drawer closes it, as Android's drawers do. */
