@@ -707,7 +707,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             pinned.addView(iconButton(R.drawable.ic_bar_view, "View",
                     "Terminal display and keyboard options", view -> showDisplayOptions()));
             pinned.addView(iconButton(R.drawable.ic_bar_session, "Session",
-                    shellMode() ? "Copy the screen, save a screenshot or return to the hosts"
+                    shellMode() ? (debuggable() ? "Copy the screen, save a screenshot or return to the hosts"
+                            : "Copy the screen or return to the hosts")
                             : "New tab, split, zoom or close this session's pane", view -> showSessionActions()));
             pinned.addView(iconButton(R.drawable.ic_bar_close, "Close",
                     "Close this terminal and return to the host list", view -> finish()));
@@ -1581,6 +1582,14 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private void hideSidebar() {
         if (!sidebarOpen) return;
         setSidebarOpen(false);
+    }
+
+    /**
+     * Debugging aids, such as the app-private screenshot that would bypass
+     * FLAG_SECURE's intent, exist only in a debuggable build.
+     */
+    private boolean debuggable() {
+        return (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
     private void showSidebar() {
@@ -2491,6 +2500,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 ? new String[]{"copy.text", "hosts.list", "capture.screen"}
                 : new String[]{"tab.new", "pane.split.right", "pane.split.down", "pane.zoom.on", "pane.close",
                         "tab.close", "scroll.live", "copy.text", "hosts.list", "capture.screen"};
+        if (!debuggable()) {
+            // The screenshot is a debugging aid listed last; a release build drops it.
+            labels = java.util.Arrays.copyOf(labels, labels.length - 1);
+            actions = java.util.Arrays.copyOf(actions, actions.length - 1);
+        }
+        final String[] shownLabels = labels;
+        final String[] shownActions = actions;
         AlertDialog.Builder builder = sheetBuilder();
         android.content.Context context = builder.getContext();
         int text = themeColor(context, android.R.attr.textColorPrimary);
@@ -2503,13 +2519,13 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 .setView(list)
                 .setNegativeButton("Cancel", null)
                 .create();
-        for (int i = 0; i < labels.length; i++) {
+        for (int i = 0; i < shownLabels.length; i++) {
             // Group create/layout from view/utilities, and mark the closes as
             // destructive instead of styling them like "New tab".
             if (!target.shell && (i == 4 || i == 6 || i == 8)) list.addView(sheetDivider(context, divider));
-            boolean destructive = actions[i].endsWith(".close");
+            boolean destructive = shownActions[i].endsWith(".close");
             TextView row = new TextView(context);
-            row.setText(labels[i]);
+            row.setText(shownLabels[i]);
             row.setTextSize(16);
             row.setTextColor(destructive ? destructiveText : text);
             row.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -2520,7 +2536,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             final int index = i;
             row.setOnClickListener(view -> {
                 sheet.dismiss();
-                runSessionChoice(target, labels[index], actions[index]);
+                runSessionChoice(target, shownLabels[index], shownActions[index]);
             });
             list.addView(row);
         }
@@ -2545,7 +2561,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
             copyPaneText();
             return;
         }
-        if ("capture.screen".equals(action)) {
+        if ("capture.screen".equals(action) && debuggable()) {
             captureScreen();
             return;
         }
