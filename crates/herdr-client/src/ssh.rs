@@ -621,7 +621,8 @@ printf '%s\n' "$hello"
                 .spawn()
                 .unwrap(),
         );
-        let status = read_remote_bridge_ready(&mut stream, &AtomicBool::new(false), Instant::now()).unwrap();
+        let status =
+            read_remote_bridge_ready(&mut stream, &AtomicBool::new(false), Instant::now()).unwrap();
         assert_eq!(compatible_status(&status), Some(true));
         stream.write_all(b"accept-idle\nhello\n").unwrap();
         stream
@@ -849,7 +850,9 @@ esac
         let mut bytes = [0; 4];
         stream.read_exact(&mut bytes).unwrap();
         assert_eq!(&bytes, b"WIRE");
-        assert!(read_remote_bridge_ready(&mut stream, &AtomicBool::new(true), Instant::now()).is_err());
+        assert!(
+            read_remote_bridge_ready(&mut stream, &AtomicBool::new(true), Instant::now()).is_err()
+        );
     }
     #[test]
     fn child_guard_reaps_on_drop() {
@@ -908,7 +911,8 @@ esac
                 .chain(bytes(READY))
                 .collect(),
         );
-        let output = read_remote_bridge_ready(&mut stream, &AtomicBool::new(false), Instant::now()).unwrap();
+        let output =
+            read_remote_bridge_ready(&mut stream, &AtomicBool::new(false), Instant::now()).unwrap();
         assert_eq!(output, b"one\ntwo\n");
     }
 

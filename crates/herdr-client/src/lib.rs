@@ -58,13 +58,13 @@ pub use sessions::{
 };
 #[cfg(unix)]
 pub use sessions::{parse_remote_sessions, remote_session_list_command};
+pub use ssh::{
+    Destination, HostProbe, probe_host, remote_config_value, remote_origin_url, resolve_destination,
+};
 #[cfg(unix)]
 pub use ssh::{
     classify_remote_probe, negotiate_remote_bridge, read_remote_bridge_ready,
     remote_bridge_command, remote_bridge_compatibility, remote_probe_command, script_command,
-};
-pub use ssh::{
-    Destination, HostProbe, probe_host, remote_config_value, remote_origin_url, resolve_destination,
 };
 pub use surface_images::{
     MAX_IMAGE_BYTES, MAX_IMAGE_SIDE, MAX_IMAGES, MAX_PLACEMENTS, SurfaceImage, SurfaceImages,
