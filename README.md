@@ -21,7 +21,7 @@ On a phone: a workspace's split panes, the drawer with the host's workspaces and
 ## Features
 
 - Native Android host management with encrypted profiles and explicit SSH host-key trust
-- Embedded password or compatible private-key SSH authentication; passwords and passphrases are used once, and a private key is kept only when explicitly saved as an Android Keystore-encrypted device identity outside every profile
+- Embedded password or compatible private-key SSH authentication; passwords and passphrases are used once, and a private key is kept only when explicitly saved as an Android Keystore-encrypted device identity outside every profile. With a saved key, Connect signs in without asking how
 - Direct TCP or Iroh `/iroh/ssh` transport to Herdr's binary remote-client bridge; an Iroh host takes a pasted endpoint ID or `endpoint…` ticket and, optionally, your own relay in place of Iroh's public relays
 - GPUI/wgpu terminal surface, ordered keyboard/IME input, and explicit pane selection
 - Per-host OMP quick commands with editable previews and separately confirmed Send + Enter

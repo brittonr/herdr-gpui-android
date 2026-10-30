@@ -153,7 +153,34 @@ final class RemoteIdentityStore {
         Arrays.fill(bytes, (byte) 0);
     }
 
+    /**
+     * Whether `identity` is encrypted, so signing in with it needs its
+     * passphrase. Only what the key's own format says counts: an OpenSSH key
+     * naming a cipher, a PKCS#8 encrypted key, or a PEM key with encryption
+     * headers. Leaves `identity` unchanged.
+     */
+    static boolean needsPassphrase(char[] identity) throws Exception {
+        byte[] bytes = encode(identity);
+        try {
+            return validateArmored(bytes);
+        } finally {
+            Arrays.fill(bytes, (byte) 0);
+        }
+    }
+
     private static byte[] encodeAndValidate(char[] identity) throws Exception {
+        byte[] bytes = encode(identity);
+        try {
+            validateArmored(bytes);
+            return bytes;
+        } catch (Exception invalid) {
+            Arrays.fill(bytes, (byte) 0);
+            throw invalid;
+        }
+    }
+
+    /** `identity` as UTF-8 within the size bound; the caller wipes the result. */
+    private static byte[] encode(char[] identity) {
         if (identity == null || identity.length == 0 || identity.length > MAX_BYTES) {
             throw new IllegalArgumentException("SSH identity must be nonempty and at most 64 KiB");
         }
@@ -167,16 +194,11 @@ final class RemoteIdentityStore {
         byte[] bytes = new byte[encoded.remaining()];
         encoded.get(bytes);
         if (encoded.hasArray()) Arrays.fill(encoded.array(), (byte) 0);
-        try {
-            if (bytes.length == 0 || bytes.length > MAX_BYTES) {
-                throw new IllegalArgumentException("SSH identity must be at most 64 KiB in UTF-8");
-            }
-            validateArmored(bytes);
-            return bytes;
-        } catch (Exception invalid) {
+        if (bytes.length == 0 || bytes.length > MAX_BYTES) {
             Arrays.fill(bytes, (byte) 0);
-            throw invalid;
+            throw new IllegalArgumentException("SSH identity must be at most 64 KiB in UTF-8");
         }
+        return bytes;
     }
 
     private static char[] decodeUtf8(byte[] bytes) throws CharacterCodingException {
@@ -189,7 +211,8 @@ final class RemoteIdentityStore {
         return result;
     }
 
-    private static void validateArmored(byte[] bytes) {
+    /** Validates an armored key and returns whether it is encrypted. */
+    private static boolean validateArmored(byte[] bytes) {
         if (bytes.length == 0 || bytes.length > MAX_BYTES) {
             throw new IllegalArgumentException("SSH identity must be nonempty and at most 64 KiB");
         }
@@ -223,6 +246,8 @@ final class RemoteIdentityStore {
         }
         if (format < 0) throw new IllegalArgumentException("SSH identity must be an OpenSSH or PEM private key");
 
+        // ENCRYPTED PRIVATE KEY is PKCS#8 under a password.
+        boolean encrypted = format == 2;
         WipingOutput base64 = new WipingOutput();
         byte[] decoded = null;
         try {
@@ -243,6 +268,9 @@ final class RemoteIdentityStore {
                         && (startsAscii(bytes, lineStart, lineEnd, "Proc-Type:")
                         || startsAscii(bytes, lineStart, lineEnd, "DEK-Info:"))) {
                     headers = true;
+                    // A traditional PEM key names its cipher in these headers.
+                    encrypted |= startsAscii(bytes, lineStart, lineEnd, "DEK-Info:")
+                            || equalsAscii(bytes, lineStart, lineEnd, "Proc-Type: 4,ENCRYPTED");
                 } else {
                     if (headers && !headerSeparator) {
                         throw new IllegalArgumentException("PEM headers must be separated from key data");
@@ -277,10 +305,26 @@ final class RemoteIdentityStore {
                     : (decoded[0] & 0xff) != 0x30)) {
                 throw new IllegalArgumentException("SSH identity key data has an invalid encoding");
             }
+            return format == 0 ? namesCipher(decoded) : encrypted;
         } finally {
             base64.wipe();
             if (decoded != null) Arrays.fill(decoded, (byte) 0);
         }
+    }
+
+    /**
+     * Whether an openssh-key-v1 container names a cipher other than "none".
+     * The cipher name follows the magic as an SSH string; a container too short
+     * to hold one is not known to be encrypted.
+     */
+    private static boolean namesCipher(byte[] container) {
+        int at = 15;
+        if (container.length < at + 4) return false;
+        long length = (container[at] & 0xffL) << 24 | (container[at + 1] & 0xffL) << 16
+                | (container[at + 2] & 0xffL) << 8 | (container[at + 3] & 0xffL);
+        int start = at + 4;
+        if (length > container.length - start) return false;
+        return !equalsAscii(container, start, start + (int) length, "none");
     }
 
     private static int lineEnd(byte[] bytes, int start) {

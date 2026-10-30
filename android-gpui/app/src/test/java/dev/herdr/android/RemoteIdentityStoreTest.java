@@ -1,9 +1,12 @@
 package dev.herdr.android;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public final class RemoteIdentityStoreTest {
@@ -43,9 +46,51 @@ public final class RemoteIdentityStoreTest {
         reject(malformedUtf16);
     }
 
+    @Test public void tellsFromTheKeyItselfWhetherSigningInNeedsItsPassphrase() throws Exception {
+        assertFalse(needsPassphrase(armor("OPENSSH PRIVATE KEY", openSsh("none"))));
+        assertTrue(needsPassphrase(armor("OPENSSH PRIVATE KEY", openSsh("aes256-ctr"))));
+        // Too short to name a cipher: not known to be encrypted, so sign-in still tries it.
+        assertFalse(needsPassphrase(armor("OPENSSH PRIVATE KEY",
+                "openssh-key-v1\0x".getBytes(StandardCharsets.US_ASCII))));
+        byte[] der = new byte[16];
+        der[0] = 0x30;
+        assertFalse(needsPassphrase(armor("PRIVATE KEY", der)));
+        assertTrue(needsPassphrase(armor("ENCRYPTED PRIVATE KEY", der)));
+        assertFalse(needsPassphrase(armor("RSA PRIVATE KEY", der)));
+        assertTrue(needsPassphrase(armor("RSA PRIVATE KEY", "Proc-Type: 4,ENCRYPTED\n"
+                + "DEK-Info: AES-128-CBC,00112233445566778899AABBCCDDEEFF\n\n", der)));
+        // Sign-in goes on to use the same characters, so the check must leave them intact.
+        char[] key = armor("OPENSSH PRIVATE KEY", openSsh("none")).toCharArray();
+        char[] original = key.clone();
+        RemoteIdentityStore.needsPassphrase(key);
+        assertArrayEquals(original, key);
+    }
+
     private static String armor(String label, byte[] body) {
-        return "-----BEGIN " + label + "-----\n" + Base64.getEncoder().encodeToString(body)
+        return armor(label, "", body);
+    }
+
+    /** A PEM block whose `headers` sit between its first line and the body. */
+    private static String armor(String label, String headers, byte[] body) {
+        return "-----BEGIN " + label + "-----\n" + headers + Base64.getEncoder().encodeToString(body)
                 + "\n-----END " + label + "-----\n";
+    }
+
+    /** The start of an openssh-key-v1 container: magic, cipher, KDF and its options, key count. */
+    private static byte[] openSsh(String cipher) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write("openssh-key-v1\0".getBytes(StandardCharsets.US_ASCII), 0, 15);
+        for (String field : new String[] {cipher, "none".equals(cipher) ? "none" : "bcrypt", ""}) {
+            byte[] bytes = field.getBytes(StandardCharsets.US_ASCII);
+            out.write(new byte[] {0, 0, 0, (byte) bytes.length}, 0, 4);
+            out.write(bytes, 0, bytes.length);
+        }
+        out.write(new byte[] {0, 0, 0, 1}, 0, 4);
+        return out.toByteArray();
+    }
+
+    private static boolean needsPassphrase(String key) throws Exception {
+        return RemoteIdentityStore.needsPassphrase(key.toCharArray());
     }
 
     private static void reject(char[] input) throws Exception {

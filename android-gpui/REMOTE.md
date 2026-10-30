@@ -20,7 +20,7 @@ Use password authentication or provide an existing compatible OpenSSH/PEM
 private key and its optional passphrase. Passwords and passphrases are used for
 one connection and are not stored in the profile. A private key can be saved
 explicitly as one device-wide, Android Keystore-encrypted identity outside every
-profile; that copy is decrypted only for a connection that names it, and its
+profile; that copy is decrypted only for a connection that uses it, and its
 passphrase is never saved. The app does not generate or install SSH keys.
 This build enables Ed25519 and ECDSA key algorithms; RSA and DSA support is not
 enabled. SSH configuration files, agent forwarding, jump hosts and interactive
@@ -49,10 +49,13 @@ host when the phone disconnects.
    the host, SSH port, username and Herdr session
 2. Inspect the server key. Compare the displayed SHA-256 fingerprint with a
    trusted copy from the host administrator before explicitly trusting it
-3. Connect and enter the SSH password, choose **Use one-use private key** for a
-   one-use key, or save a key once from **Remote hosts** and choose
-   **Use saved SSH key**. Passwords and pasted keys are used once; only an
-   explicitly saved identity is kept
+3. Connect. With a key saved once from **Remote hosts**, Connect signs in with
+   it straight away and asks only for an encrypted key's passphrase. Without
+   one, enter the SSH password or choose **Use one-use private key**. If the
+   saved key is refused, or the connection fails before the panes appear, the
+   sign-in sheet opens with the reason, so a password or another key can be
+   used instead. Passwords and pasted keys are used once; only an explicitly
+   saved identity is kept
 4. Select a pane, then use the GPUI terminal and **Commands** palette
 
 Inspection retrieves the public server key without authenticating. Credentials

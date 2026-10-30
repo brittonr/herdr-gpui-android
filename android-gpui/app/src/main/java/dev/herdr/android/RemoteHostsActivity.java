@@ -1278,7 +1278,7 @@ public final class RemoteHostsActivity extends Activity {
                         setStatus(Tone.ERROR, "SSH HOST KEY CHANGED. Connection blocked. Verify the change independently, then use Forget SSH trust in the host's ⋮ menu.");
                         return;
                     }
-                    showPassword(host);
+                    signIn(host);
                     return;
                 }
                 setStatus(Tone.NOTE, "Verify this SSH fingerprint before trusting the host");
@@ -1287,7 +1287,7 @@ public final class RemoteHostsActivity extends Activity {
                                 + "\n\nCompare this SHA-256 fingerprint with a trusted source. No credentials have been sent.")
                         .setNegativeButton("Cancel", (which, index) -> showProfiles())
                         .setPositiveButton("Trust fingerprint", (which, index) -> run(token,
-                                () -> store.trust(host, key), trusted -> { selected = trusted; showPassword(trusted); }))
+                                () -> store.trust(host, key), trusted -> { selected = trusted; signIn(trusted); }))
                         .create());
             } catch (Exception failure) { setStatus(Tone.ERROR, "SSH host-key inspection returned an invalid response."); }
         });
@@ -1295,15 +1295,51 @@ public final class RemoteHostsActivity extends Activity {
 
     private enum CredentialMode { PASSWORD, ONE_USE_KEY, SAVED_KEY }
 
-    private void showPassword(SavedRemoteHost host) { showCredentials(host, CredentialMode.PASSWORD); }
+    /**
+     * Signs in once the host key is verified. A saved device key needs no
+     * choice: it is used at once, and the sheet appears only when the key needs
+     * its passphrase or that sign-in fails.
+     */
+    private void signIn(SavedRemoteHost host) {
+        if (!identityPresent) {
+            showCredentials(host, CredentialMode.PASSWORD);
+            return;
+        }
+        char[] secret = new char[0];
+        char[] phrase = new char[0];
+        synchronized (this) { pendingSecret = secret; pendingPassphrase = phrase; }
+        connect(host, secret, phrase, CredentialMode.SAVED_KEY, true);
+    }
+
+    /** Why an automatic sign-in with the saved key handed over to the sheet. */
+    private static String savedKeyFailed(String reason) {
+        return reason == null || reason.isEmpty()
+                ? "Connecting with the saved SSH key failed. Choose another way to sign in."
+                : "Connecting with the saved SSH key failed: " + reason;
+    }
 
     private void showCredentials(SavedRemoteHost host, CredentialMode mode) {
+        showCredentials(host, mode, null, false);
+    }
+
+    /**
+     * The sign-in sheet. `notice` says why it opened when the user did not ask
+     * for it; `passphraseRequired` means the saved key is encrypted, so Connect
+     * waits for its passphrase.
+     */
+    private void showCredentials(SavedRemoteHost host, CredentialMode mode, String notice,
+            boolean passphraseRequired) {
         dismissDialog();
         // The key was just verified or trusted; nothing is in progress until sign-in.
         setStatus(Tone.NOTE, "Host key verified. Sign in to continue.");
         AlertDialog.Builder builder = sheet();
         Context context = builder.getContext();
         LinearLayout fields = sheetFields(context);
+        if (notice != null) {
+            TextView why = note(context, notice, 14);
+            why.setTextColor(themeColor(context, android.R.attr.textColorPrimary));
+            fields.addView(why);
+        }
         TextView where = note(context, destination(host), 16);
         where.setTextColor(themeColor(context, android.R.attr.textColorPrimary));
         fields.addView(where);
@@ -1325,7 +1361,7 @@ public final class RemoteHostsActivity extends Activity {
             }
         }
         if (mode != CredentialMode.PASSWORD) {
-            keyPassphrase = field(context, fields, "Key passphrase (optional)", "", true);
+            keyPassphrase = field(context, fields, passphraseRequired ? "Key passphrase" : "Key passphrase (optional)", "", true);
         }
         if (mode == CredentialMode.ONE_USE_KEY) {
             fields.addView(note(context, "This key is used once and is not saved. To save a device-wide encrypted key, return to Remote hosts.", 13));
@@ -1356,19 +1392,29 @@ public final class RemoteHostsActivity extends Activity {
             if (keyPassphrase != null && !boundedSecret(keyPassphrase.getText(), 4096)) {
                 keyPassphrase.setError("Passphrase exceeds 4096 bytes"); return;
             }
+            if (passphraseRequired && (keyPassphrase == null || keyPassphrase.length() == 0)) return;
             final char[] secret = mode == CredentialMode.SAVED_KEY ? new char[0] : characters(password);
             final char[] phrase = keyPassphrase == null ? new char[0] : characters(keyPassphrase);
             synchronized (this) { pendingSecret = secret; pendingPassphrase = phrase; }
             if (password != null) password.setText("");
             if (keyPassphrase != null) keyPassphrase.setText("");
             login.dismiss(); dialog = null; password = null; keyPassphrase = null;
-            connect(host, secret, phrase, mode);
+            connect(host, secret, phrase, mode, false);
         });
         login.setOnCancelListener(ignored -> showProfiles());
     }
 
-    private void connect(SavedRemoteHost host, char[] secret, char[] phrase, CredentialMode mode) {
-        setStatus(Tone.PROGRESS, "Connecting to " + host.name + "…");
+    /**
+     * Starts the SSH session. An `automatic` sign-in, with the saved key and no
+     * sheet, hands over to the sheet instead of ending at an error: before
+     * trying when the key needs its passphrase, and when it fails before the
+     * session's panes arrive.
+     */
+    private void connect(SavedRemoteHost host, char[] secret, char[] phrase, CredentialMode mode,
+            boolean automatic) {
+        setStatus(Tone.PROGRESS, automatic
+                ? "Signing in to " + host.name + " with the saved SSH key…"
+                : "Connecting to " + host.name + "…");
         int token = generation;
         submit(() -> {
             long handle = 0;
@@ -1376,7 +1422,17 @@ public final class RemoteHostsActivity extends Activity {
             try {
                 if (!current(token)) return;
                 SavedRemoteHost currentHost = store.requireCurrent(host);
-                if (mode == CredentialMode.SAVED_KEY) credentialSecret = identityStore.read();
+                if (mode == CredentialMode.SAVED_KEY) {
+                    credentialSecret = identityStore.read();
+                    // Ask for the passphrase now rather than after a refused attempt.
+                    if (automatic && RemoteIdentityStore.needsPassphrase(credentialSecret)) {
+                        main.post(() -> {
+                            if (current(token)) showCredentials(currentHost, CredentialMode.SAVED_KEY,
+                                    "The saved SSH key is encrypted. Enter its passphrase to connect.", true);
+                        });
+                        return;
+                    }
+                }
                 String credential;
                 synchronized (this) {
                     if (!current(token) || pendingSecret != secret || pendingPassphrase != phrase) return;
@@ -1396,11 +1452,17 @@ public final class RemoteHostsActivity extends Activity {
                     if (!current(token)) { RemoteNative.close(readyHandle); return; }
                     ownedHandle = readyHandle;
                     selected = currentHost;
-                    pollConnection(token, readyHandle, currentHost);
+                    pollConnection(token, readyHandle, currentHost, automatic);
                 });
                 handle = 0;
             } catch (Exception | LinkageError failure) {
-                main.post(() -> { if (current(token)) setStatus(Tone.ERROR, "SSH connection failed. Go back to the host list to try again."); });
+                String reason = failure instanceof IllegalStateException || failure instanceof IllegalArgumentException
+                        ? safeMessage(failure.getMessage()) : null;
+                main.post(() -> {
+                    if (!current(token)) return;
+                    if (automatic) showCredentials(host, CredentialMode.PASSWORD, savedKeyFailed(reason), false);
+                    else setStatus(Tone.ERROR, "SSH connection failed. Go back to the host list to try again.");
+                });
             } finally {
                 if (handle != 0) RemoteNative.close(handle);
                 synchronized (this) {
@@ -1414,7 +1476,7 @@ public final class RemoteHostsActivity extends Activity {
         });
     }
 
-    private void pollConnection(int token, long handle, SavedRemoteHost host) {
+    private void pollConnection(int token, long handle, SavedRemoteHost host, boolean automatic) {
         if (!current(token) || ownedHandle != handle) return;
         run(token, () -> {
             store.requireCurrent(host);
@@ -1426,17 +1488,26 @@ public final class RemoteHostsActivity extends Activity {
             if ("closed".equals(snapshot.optString("state"))) {
                 String reason = snapshot.optString("status", "SSH connection closed");
                 cancelConnection();
+                if (automatic) {
+                    // The session never reached its panes: most likely the host
+                    // refused the saved key, so offer the other ways to sign in.
+                    selected = host;
+                    showCredentials(host, CredentialMode.PASSWORD, savedKeyFailed(safeMessage(reason)), false);
+                    return;
+                }
                 setStatus(Tone.ERROR, safeMessage(reason) + " Go back to the host list to reconnect.");
                 return;
             }
-            if ("ready".equals(snapshot.optString("state"))) {
+            boolean ready = "ready".equals(snapshot.optString("state"));
+            if (ready) {
                 JSONArray panes = snapshot.optJSONArray("panes");
                 if (panes != null && !panes.toString().equals(paneSnapshot)) {
                     paneSnapshot = panes.toString();
                     renderPanes(host, handle, panes);
                 }
             }
-            main.postDelayed(() -> pollConnection(token, handle, host), 700);
+            // Once the session is ready, a later close is a lost connection, not a refused key.
+            main.postDelayed(() -> pollConnection(token, handle, host, automatic && !ready), 700);
         }, failure -> {
             cancelConnection();
             setStatus(Tone.ERROR, failure + " Go back to the host list to reconnect.");
