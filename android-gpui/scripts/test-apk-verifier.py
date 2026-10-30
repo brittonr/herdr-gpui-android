@@ -34,6 +34,16 @@ class ApkAbiTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, error):
                 checker.check_apk(path, abi)
 
+    def split_pair(self, directory, duplicate_asset=False):
+        paths = [pathlib.Path(directory) / 'base.apk', pathlib.Path(directory) / 'config.apk']
+        for path in paths:
+            with zipfile.ZipFile(path, 'w', zipfile.ZIP_STORED) as archive:
+                archive.writestr('AndroidManifest.xml', struct.pack('<H', 3))
+                archive.writestr('resources.arsc', struct.pack('<H', 2))
+                if duplicate_asset or path.name == 'base.apk':
+                    archive.writestr('assets/about/index.html', b'about')
+        return paths
+
     def test_default_arm64_reaches_dex_checks(self):
         self.assert_native_gate({'lib/arm64-v8a/libherdr_gpui_android.so': fixtures.host_elf_fixture()},
                                 'Missing DEX')
@@ -61,6 +71,18 @@ class ApkAbiTests(unittest.TestCase):
             'lib/x86_64/libherdr_gpui_android.so': fixtures.host_elf_fixture(machine=62),
             'lib/x86_64/libc++_shared.so': fixtures.elf_fixture(),
         }, 'Expected x86_64', 'x86_64')
+
+    def test_resources_table_may_appear_in_each_split(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self.split_pair(directory)
+            with self.assertRaisesRegex(ValueError, 'Actual GPUI arm64-v8a native library missing'):
+                checker.check_apks(paths)
+
+    def test_rejects_entry_owned_by_multiple_splits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = self.split_pair(directory, duplicate_asset=True)
+            with self.assertRaisesRegex(ValueError, 'assets/about/index.html is owned by more than one APK split'):
+                checker.check_apks(paths)
 
 
 if __name__ == '__main__':

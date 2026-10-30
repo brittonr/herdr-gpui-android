@@ -52,7 +52,7 @@ coexist with the Java-native preview.
 ## Isolated Linux verification APK
 
 The verification packager prefers an installed SDK when `ANDROID_HOME` (or
-`ANDROID_SDK_ROOT`) is set. It uses that SDK's API 35 `android.jar` and Build
+`ANDROID_SDK_ROOT`) is set. It uses that SDK's API 36 `android.jar` and Build
 Tools 35.0.0 AAPT2, D8, and apksig. This validates against the public Android
 API surface without Gradle's dependency resolution:
 
@@ -62,7 +62,7 @@ export ANDROID_HOME=/absolute/path/to/android-sdk
 ```
 
 If a full Android SDK is unavailable and those variables are unset, the verification packager uses official
-Google Maven AAPT2, D8 and apksig plus Robolectric's API 35 framework JAR as a
+Google Maven AAPT2, D8 and apksig plus Robolectric's API 36 framework JAR as a
 build-time reference. Downloads are pinned by SHA-256 and cached locally:
 
 ```sh
@@ -139,6 +139,58 @@ not replaced when building x86_64.
 References: [Android 16KB pages](https://developer.android.com/guide/practices/page-sizes),
 [Android NDK downloads and license](https://developer.android.com/ndk/downloads).
 
+## Google Play App Bundle
+
+The shipped app uses application ID `ch.robitzs.herdr`, compile/target SDK 36,
+and Android App Bundles. Gradle uses the pinned Android Gradle Plugin 8.7.3 with
+`android.suppressUnsupportedCompileSdk=36`; Build Tools 35.0.0 remain sufficient
+for the current build. CI installs `platforms;android-36`, but never holds or
+uses the Play upload key.
+
+Create an upload key once, outside the repository, with a JDK:
+
+```sh
+./scripts/make-upload-key.sh
+```
+
+The default files are `~/.config/remote-for-herdr/upload-keystore.p12` and
+`~/.config/remote-for-herdr/upload-keystore.pass`, with alias `upload`. The
+script refuses to overwrite either file, uses a random 24-byte password, creates
+a 4096-bit RSA PKCS12 key valid for 10,950 days, and prints its SHA-256
+certificate fingerprint. Back up the keystore and password securely in separate
+approved storage; never commit either file. For an isolated test key, override
+`HERDR_UPLOAD_KEYSTORE`, `HERDR_UPLOAD_PASSWORD_FILE`, and optionally
+`HERDR_UPLOAD_KEY_ALIAS` to paths in a temporary directory.
+
+Build from `android-gpui/` after installing an Android NDK and Rust targets for
+both `aarch64-linux-android` and `x86_64-linux-android`:
+
+```sh
+export ANDROID_NDK_HOME=/absolute/path/to/android-ndk
+./scripts/build-bundle.sh
+```
+
+The script builds both 16KB-aligned native libraries with `build-native.sh`,
+then uses the shared `android-tools.sh` resource-linking and Java/D8 pipeline in
+release mode. Its local tool cache pins AAPT2, D8, apksig, Robolectric's
+`android-all-16-robolectric-13921718` framework fallback, and bundletool 1.18.3
+by SHA-256. It creates and signs the bundle with jarsigner, validates the bundle
+and its non-debuggable manifest, then builds complete representative install
+split sets for ARM64/API 29, ARM64/API 36 and x86_64/API 36. The APK-set verifier
+checks unique split ownership, DEX integrity, the actual ABI libraries and
+16KB ZIP alignment. The result is
+`build/outputs/remote-for-herdr-<versionName>-<versionCode>.aab`; the script
+prints its SHA-256. `HERDR_SKIP_NATIVE=1` reuses existing native builds only
+when their source-bound build records still verify. To install a checked bundle
+on an explicitly selected device, set `HERDR_INSTALL_SERIAL` to its adb serial.
+
+`HERDR_UPLOAD_KEYSTORE`, `HERDR_UPLOAD_PASSWORD_FILE`, and
+`HERDR_UPLOAD_KEY_ALIAS` configure the upload key paths and alias for the bundle
+builder. If `ANDROID_HOME` or `ANDROID_SDK_ROOT` is set, the packaging helpers
+use SDK platform 36 and Build Tools 35.0.0. Without an SDK they use pinned Google
+Maven tools and the Robolectric API 36 framework JAR; the scripts do not install
+the SDK or NDK, accept licenses, or communicate with Play.
+
 ## In-app About pages
 
 `scripts/about-pages.py` generates the committed offline WebView assets in
@@ -159,4 +211,4 @@ fetched from `spdx/license-list-data` at pinned revision
 `31846481de7ea17d92f2f46fad76abe58b2e9bb0`. Generation fails if a package has
 no declared non-copyleft option or a required standard text is absent, and
 enforces a 1,500,000-byte maximum for `licenses.html` so the page stays suitable
-for an offline WebView.
+for an offline WebView. The bundle build runs `--check` before packaging.

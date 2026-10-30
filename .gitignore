@@ -17,6 +17,7 @@
 .herdr-sign.*/
 *.p8
 *.p12
+*.pass
 *.pfx
 *.pem
 *.key
