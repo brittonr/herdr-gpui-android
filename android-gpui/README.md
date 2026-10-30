@@ -10,8 +10,9 @@ companion. See [remote setup, trust and limits](REMOTE.md).
 
 The app is **Remote for Herdr**, an unofficial client not affiliated with
 Herdr's authors. It installs as `ch.robitzs.herdr`, alongside earlier previews
-(`dev.herdr.android.gpui.remote` and the Compact app), whose saved hosts it does
-not migrate. **Companion hosts** still opens the HTTPS workflow.
+(`dev.herdr.android.gpui.remote` and the Compact app), which keep their own saved
+hosts. **Hosts file** under **This device** exports host profiles to a file and
+imports them from one. **Companion hosts** still opens the HTTPS workflow.
 
 **Local device diagnostics** opens a separate, read-only screen that reads
 nothing until you choose **Read diagnostics**. It then collects one bounded

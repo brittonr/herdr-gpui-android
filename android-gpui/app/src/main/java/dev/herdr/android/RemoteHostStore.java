@@ -30,6 +30,7 @@ final class RemoteHostStore {
     private static final String ALIAS = "herdr.remote-hosts.v1";
     private static final byte[] AAD = "herdr-remote-hosts-v1".getBytes(StandardCharsets.UTF_8);
     private static final int MAX_BYTES = 2 * 1024 * 1024;
+    static final int MAX_PROFILES = 32;
     private static final Object LOCK = new Object();
     private final AtomicFile file;
 
@@ -104,6 +105,44 @@ final class RemoteHostStore {
         }
     }
 
+    /**
+     * Adds the hosts of a file that are not saved yet, all or none. Rechecked under
+     * the lock, so a list changed since the import was planned cannot gain duplicates.
+     * Returns how many were added.
+     */
+    int importProfiles(List<SavedRemoteHost> incoming) throws Exception {
+        synchronized (LOCK) {
+            List<SavedRemoteHost> values = readLocked();
+            List<SavedRemoteHost> added = newProfiles(values, incoming);
+            if (added.isEmpty()) return 0;
+            values.addAll(added);
+            writeLocked(values);
+            return added.size();
+        }
+    }
+
+    /**
+     * The hosts of `incoming` that `saved` does not already hold, each once, in file
+     * order. A host is the same one when it reaches the same account and session, so
+     * a saved profile, with its trust, always wins over a file's copy.
+     */
+    static List<SavedRemoteHost> newProfiles(List<SavedRemoteHost> saved, List<SavedRemoteHost> incoming) {
+        List<SavedRemoteHost> added = new ArrayList<>();
+        for (SavedRemoteHost host : incoming) {
+            if (!containsIdentity(saved, host) && !containsIdentity(added, host)) added.add(host);
+        }
+        if (saved.size() + added.size() > MAX_PROFILES) {
+            throw new IllegalArgumentException("Importing " + added.size() + " more hosts would pass the limit of "
+                + MAX_PROFILES + "; delete some first");
+        }
+        return added;
+    }
+
+    private static boolean containsIdentity(List<SavedRemoteHost> values, SavedRemoteHost host) {
+        for (SavedRemoteHost item : values) if (item.sameIdentity(host)) return true;
+        return false;
+    }
+
     static SavedRemoteHost replaceShortcuts(List<SavedRemoteHost> values, SavedRemoteHost expected,
             String shortcuts) {
         dev.herdr.android.core.Shortcut.parseConfiguration(shortcuts);
@@ -119,7 +158,9 @@ final class RemoteHostStore {
             SavedRemoteHost draft) {
         if (draft == null) throw new IllegalArgumentException("Profile is required");
         if (expected == null) {
-            if (values.size() >= 32) throw new IllegalArgumentException("At most 32 remote profiles can be saved");
+            if (values.size() >= MAX_PROFILES) {
+                throw new IllegalArgumentException("At most " + MAX_PROFILES + " remote profiles can be saved");
+            }
             for (SavedRemoteHost item : values) if (item.id.equals(draft.id)) {
                 throw new IllegalStateException("This profile already exists");
             }

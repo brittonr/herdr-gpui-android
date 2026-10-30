@@ -93,14 +93,28 @@ final class SavedRemoteHost {
     }
 
     JSONObject toJson() throws JSONException {
+        return toPortableJson().put("id", id).put("connectionRevision", connectionRevision);
+    }
+
+    /** The profile without its device-local ID and revision, for a hosts file. */
+    JSONObject toPortableJson() throws JSONException {
         JSONArray commands = new JSONArray();
         for (QuickCommand command : quickCommands) commands.put(new JSONObject()
             .put("label", command.getLabel()).put("text", command.getText()).put("pinned", command.isPinned()));
-        return new JSONObject(connectionJson()).put("id", id).put("name", name).put("shortcuts", shortcuts)
-            .put("quickCommands", commands).put("connectionRevision", connectionRevision);
+        return new JSONObject(connectionJson()).put("name", name).put("shortcuts", shortcuts)
+            .put("quickCommands", commands);
     }
 
     static SavedRemoteHost fromJson(JSONObject value) throws JSONException {
+        return parse(value, string(value, "id"), string(value, "connectionRevision"));
+    }
+
+    /** A profile from a hosts file, as a new profile with its own ID and revision. */
+    static SavedRemoteHost fromPortableJson(JSONObject value) throws JSONException {
+        return parse(value, null, null);
+    }
+
+    private static SavedRemoteHost parse(JSONObject value, String id, String revision) throws JSONException {
         JSONArray array = value.getJSONArray("quickCommands");
         if (array.length() > QuickCommand.MAX_COMMANDS) throw new IllegalArgumentException("Too many quick commands");
         List<QuickCommand> commands = new ArrayList<>();
@@ -114,14 +128,14 @@ final class SavedRemoteHost {
         if (!(port instanceof Integer) && !(port instanceof Long)) throw new IllegalArgumentException("Invalid SSH port");
         long portValue = ((Number) port).longValue();
         if (portValue < 1 || portValue > 65535) throw new IllegalArgumentException("Invalid SSH port");
-        return new SavedRemoteHost(string(value, "id"), string(value, "name"), string(value, "transport"),
+        return new SavedRemoteHost(id, string(value, "name"), string(value, "transport"),
             string(value, "host"), (int) portValue, string(value, "endpoint_id"),
             // Profiles saved before tickets and relays existed have neither.
             value.has("endpoint_ticket") ? string(value, "endpoint_ticket") : "",
             value.has("relay_url") ? string(value, "relay_url") : "",
             string(value, "username"),
             string(value, "session"), string(value, "expected_fingerprint"), string(value, "shortcuts"),
-            commands, string(value, "connectionRevision"));
+            commands, revision);
     }
 
     static String fingerprint(String value) {

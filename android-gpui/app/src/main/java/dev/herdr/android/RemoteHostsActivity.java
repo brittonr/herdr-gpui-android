@@ -2,9 +2,11 @@ package dev.herdr.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Typeface;
@@ -13,6 +15,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -32,6 +35,9 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -84,6 +90,12 @@ public final class RemoteHostsActivity extends Activity {
     private String pendingStatus;
     private Tone pendingTone = Tone.NOTE;
     private String paneSnapshot = "";
+    private static final int REQUEST_EXPORT_HOSTS = 41;
+    private static final int REQUEST_IMPORT_HOSTS = 42;
+    /** A hosts file the system picker returned, handled once this screen resumes. */
+    private int pendingFileRequest;
+    private Uri pendingFileUri;
+    private int savedHostCount;
 
     /** How a status line reads: work under way, a neutral note, or a failure. */
     private enum Tone { PROGRESS, NOTE, ERROR }
@@ -121,10 +133,26 @@ public final class RemoteHostsActivity extends Activity {
         int palette = currentPalette();
         if (palette != appliedPalette) shell(palette);
         // Reopening should land in the terminal, not this list; the list is the
-        // fallback when the remembered session cannot be restored.
-        boolean skip = getIntent() != null && getIntent().getBooleanExtra("skip_reopen", false);
+        // fallback when the remembered session cannot be restored. Returning
+        // from the file picker is not a launch, so it never reopens one.
+        int fileRequest = pendingFileRequest;
+        Uri fileUri = pendingFileUri;
+        pendingFileRequest = 0;
+        pendingFileUri = null;
+        boolean skip = fileUri != null
+                || getIntent() != null && getIntent().getBooleanExtra("skip_reopen", false);
         if (launchReopen.firstResume(() -> !skip && reopenEnabled() && queueReopen())) return;
         showProfiles();
+        if (fileUri != null) handleHostFile(fileRequest, fileUri);
+    }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != REQUEST_EXPORT_HOSTS && request != REQUEST_IMPORT_HOSTS) return;
+        if (result != RESULT_OK || data == null || data.getData() == null) return;
+        // This arrives before onResume, while work is still fenced off.
+        pendingFileRequest = request;
+        pendingFileUri = data.getData();
     }
 
     @Override protected void onPause() {
@@ -539,6 +567,7 @@ public final class RemoteHostsActivity extends Activity {
             clearStatus();
         }
         // The hosts are why this screen exists, so they lead; settings follow.
+        savedHostCount = hosts.size();
         if (hosts.isEmpty()) content.addView(emptyHosts(), cardParams());
         for (SavedRemoteHost host : hosts) content.addView(hostCard(host), cardParams());
         content.addView(sectionLabel("This device"));
@@ -570,6 +599,11 @@ public final class RemoteHostsActivity extends Activity {
         LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(-2, dp(48));
         addParams.topMargin = dp(16);
         card.addView(add, addParams);
+        // Moving to this app from another install starts here.
+        Button importFile = textButton("Import from a file", chrome.primary, this::importHosts);
+        LinearLayout.LayoutParams importParams = new LinearLayout.LayoutParams(-2, dp(48));
+        importParams.topMargin = dp(4);
+        card.addView(importFile, importParams);
         return card;
     }
 
@@ -590,9 +624,7 @@ public final class RemoteHostsActivity extends Activity {
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.END);
         about.addView(name);
-        TextView address = text(this, "tcp".equals(host.transport)
-                ? host.username + "@" + host.host + ":" + host.port + " · " + host.session
-                : "Iroh · " + host.endpointId + " · " + host.session, 14, chrome.onSurfaceVariant);
+        TextView address = text(this, address(host), 14, chrome.onSurfaceVariant);
         address.setSingleLine(true);
         address.setEllipsize(TextUtils.TruncateAt.END);
         address.setPadding(0, dp(2), 0, dp(6));
@@ -623,6 +655,13 @@ public final class RemoteHostsActivity extends Activity {
         connectParams.topMargin = dp(8);
         card.addView(connect, connectParams);
         return card;
+    }
+
+    /** A host in one line: its account and session, or its Iroh endpoint. */
+    private static String address(SavedRemoteHost host) {
+        return "tcp".equals(host.transport)
+                ? host.username + "@" + host.host + ":" + host.port + " · " + host.session
+                : "Iroh · " + host.endpointId + " · " + host.session;
     }
 
     /**
@@ -668,6 +707,9 @@ public final class RemoteHostsActivity extends Activity {
         card.addView(keyRow());
         card.addView(divider());
         card.addView(reopenRow());
+        card.addView(divider());
+        card.addView(linkRow(R.drawable.ic_home_import_export, "Hosts file",
+                "Export your hosts to a file, or import them from one", this::showHostFile));
         card.addView(divider());
         card.addView(linkRow(R.drawable.ic_home_link, "Companion hosts",
                 "The HTTPS workflow with a companion token",
@@ -1097,6 +1139,123 @@ public final class RemoteHostsActivity extends Activity {
                     int token = generation;
                     run(token, () -> { store.delete(host); return true; }, ignored -> showProfiles());
                 }).create());
+    }
+
+    /** What a hosts file holds, before either picker opens. */
+    private void showHostFile() {
+        showDialog(sheet().setTitle("Hosts file")
+                .setMessage("Export saves every host's address, user, session, extra keys, quick commands "
+                        + "and trusted host key to a file you choose. Passwords and the device SSH key are "
+                        + "never in it.\n\nImport adds the hosts from such a file, after showing you which.")
+                .setNegativeButton("Cancel", null)
+                .setNeutralButton("Import", (which, index) -> importHosts())
+                .setPositiveButton("Export", (which, index) -> exportHosts())
+                .create());
+    }
+
+    private void exportHosts() {
+        if (savedHostCount == 0) {
+            setStatus(Tone.NOTE, "There are no hosts to export yet");
+            return;
+        }
+        openPicker(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType(HostFile.MIME_TYPE).putExtra(Intent.EXTRA_TITLE, HostFile.FILE_NAME),
+                REQUEST_EXPORT_HOSTS);
+    }
+
+    private void importHosts() {
+        // Files sent by mail or chat often lose their JSON type.
+        openPicker(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES,
+                        new String[] {HostFile.MIME_TYPE, "text/plain", "application/octet-stream"}),
+                REQUEST_IMPORT_HOSTS);
+    }
+
+    private void openPicker(Intent intent, int request) {
+        try {
+            startActivityForResult(intent, request);
+        } catch (ActivityNotFoundException missing) {
+            setStatus(Tone.ERROR, "This device has no file picker to choose a hosts file");
+        }
+    }
+
+    /** A picked file, on the worker: export writes it; import plans and then asks first. */
+    private void handleHostFile(int request, Uri uri) {
+        int token = generation;
+        if (request == REQUEST_EXPORT_HOSTS) {
+            run(token, () -> {
+                List<SavedRemoteHost> hosts = store.read();
+                byte[] bytes = HostFile.write(hosts);
+                try (OutputStream out = getContentResolver().openOutputStream(uri, "w")) {
+                    if (out == null) throw new IOException("The picker returned no file to write");
+                    out.write(bytes);
+                } catch (IOException | SecurityException unwritable) {
+                    throw new IllegalStateException("The hosts file could not be written", unwritable);
+                }
+                return hosts.size();
+            }, count -> setStatus(Tone.NOTE, count == 1 ? "Exported 1 host" : "Exported " + count + " hosts"));
+            return;
+        }
+        run(token, () -> {
+            byte[] bytes;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new IOException("The picker returned no file to read");
+                bytes = HostFile.readBounded(in);
+            } catch (IOException | SecurityException unreadable) {
+                throw new IllegalStateException("The hosts file could not be read", unreadable);
+            }
+            List<SavedRemoteHost> incoming = HostFile.read(bytes);
+            return new ImportPlan(incoming.size(), RemoteHostStore.newProfiles(store.read(), incoming));
+        }, this::confirmImport);
+    }
+
+    /**
+     * Names every host an import adds. A file's trusted host keys come with its
+     * hosts, so confirming here is the explicit trust step for those keys.
+     */
+    private void confirmImport(ImportPlan plan) {
+        if (plan.added.isEmpty()) {
+            setStatus(Tone.NOTE, plan.inFile == 0 ? "The hosts file has no hosts in it"
+                    : "Every host in the file is already saved here");
+            return;
+        }
+        StringBuilder message = new StringBuilder();
+        boolean trusted = false;
+        for (SavedRemoteHost host : plan.added) {
+            message.append("• ").append(host.name).append(" — ").append(address(host)).append('\n');
+            trusted |= !host.expectedFingerprint.isEmpty();
+        }
+        int skipped = plan.inFile - plan.added.size();
+        if (skipped == 1) message.append("\n1 host in the file is already saved here and stays as it is.\n");
+        else if (skipped > 1) message.append('\n').append(skipped)
+                .append(" hosts in the file are already saved here and stay as they are.\n");
+        if (trusted) {
+            message.append("\nHost keys trusted in the file are trusted here too, so import only a file "
+                    + "you exported yourself or got from someone you trust.");
+        }
+        int count = plan.added.size();
+        generation++;
+        showDialog(sheet().setTitle(count == 1 ? "Import 1 host?" : "Import " + count + " hosts?")
+                .setMessage(message.toString().trim())
+                .setNegativeButton("Cancel", null).setPositiveButton("Import", (which, index) -> {
+                    int token = generation;
+                    run(token, () -> store.importProfiles(plan.added), added -> {
+                        pendingStatus = added == 1 ? "Imported 1 host" : "Imported " + added + " hosts";
+                        pendingTone = Tone.NOTE;
+                        showProfiles();
+                    });
+                }).create());
+    }
+
+    /** What a hosts file would add: how many hosts it held, and those not saved yet. */
+    private static final class ImportPlan {
+        final int inFile;
+        final List<SavedRemoteHost> added;
+
+        ImportPlan(int inFile, List<SavedRemoteHost> added) {
+            this.inFile = inFile;
+            this.added = added;
+        }
     }
 
     private void inspectHost(SavedRemoteHost host) {

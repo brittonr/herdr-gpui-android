@@ -70,10 +70,10 @@ Google's current [Data safety requirements](https://support.google.com/googlepla
 
 Recommended declaration: **the app collects and shares no user data.** This is your legal declaration, so check the reasoning against the current form:
 
-- **The developer receives nothing.** There is no developer server or account, and no analytics, crash-reporting or advertising SDK. The Java side's only dependency is test-only JUnit, and the native libraries (SSH, Iroh, GPUI) send nothing beyond the connections described below.
+- **The developer receives nothing.** There is no developer server or account, and no analytics, crash-reporting or advertising SDK. The Java side's only dependencies are test-only (JUnit and org.json), and the native libraries (SSH, Iroh, GPUI) send nothing beyond the connections described below.
 - **Every connection is one the user starts:** the SSH host, Iroh endpoint and companion host are what the user entered. Credentials go only to that SSH host, inside the encrypted SSH connection. These are transfers from a specific user-initiated action, which Google excludes from sharing.
 - **Iroh's default relays and lookup (number0) see connection metadata only:** the device's IP address, used to route packets; a random endpoint ID the app creates for each connection, which identifies neither the device nor the user; and the endpoint IDs the user connects to. Nobody uses the IP address to determine location, so under the FAQ there is no location to declare. A host with its own relay URL uses only that relay, with no number0 lookups (confirmed by packet capture; see REMOTE.md).
-- **On-device data is not collected:** host profiles, fingerprints, saved keys and tokens, preferences and diagnostics never leave the device.
+- **On-device data is not collected:** host profiles, fingerprints, saved keys and tokens, preferences and diagnostics stay on the device. The one exception is a hosts file the user exports to a place they pick; the app never sends it anywhere and the developer never receives it, which Google's FAQ does not count as collection.
 
 If you prefer the most conservative reading, treat number0's relay traffic as collection and declare **Approximate location**, purpose **App functionality**, optional, not shared, encrypted in transit. That tells users the app collects location, which it does not do, so it is not the recommendation. Re-evaluate if a release adds any developer- or third-party-bound data.
 

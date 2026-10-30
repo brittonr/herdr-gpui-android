@@ -16,6 +16,10 @@ Nothing. The app has no developer accounts, advertising, analytics, crash report
 
 Host profiles, fingerprints, saved keys and companion tokens are encrypted using Android Keystore. Passwords and passphrases are used for a connection only and are never saved. App data is excluded from backup and device transfer. Uninstalling the app removes its local data.
 
+## Host files
+
+If you choose **Export** under **Hosts file**, the app writes a file to a place you pick. It contains each saved host's name, address, user name, Herdr session, Iroh ticket and relay, extra keys, quick commands and trusted host fingerprint. It never contains passwords, passphrases, the device SSH key or companion tokens. The file is not encrypted, so keep it as you would an SSH configuration file. The app reads a hosts file only when you choose one to import, and shows you its hosts before adding them. It never sends a hosts file anywhere.
+
 ## Network connections
 
 The app connects only to destinations you specify. SSH connects over TCP to a host you enter; your password or key goes only to that host, inside the encrypted SSH connection. Iroh connects to an endpoint ID or ticket you enter. By default, Iroh uses number0's public relays and address lookup at n0.computer; those services see your device's IP address, a random endpoint ID the app creates for each connection, and the endpoint IDs you connect to. If you set your own relay for a host, the app uses only that relay for it and makes no lookups at number0. Once a relay has introduced the two ends, Iroh may connect directly to the other endpoint's addresses. The optional companion feature connects over HTTPS to a host you enter, using a token you provide. The remote host and any relay or lookup service involved operate under their own terms. The app has no developer server.

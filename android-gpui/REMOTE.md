@@ -68,14 +68,25 @@ key is not trusted yet. Each card has a single **Connect** action; its ⋮ menu
 holds **Edit profile**, **Edit extra keys**, **Forget SSH trust** and **Delete
 profile**, and forgetting trust or deleting still asks for confirmation.
 **Add host** sits beside the title. The device's saved key, **Reopen the last
-session at launch**, **Companion hosts** and **Local device diagnostics** form
-one group under **This device**. The list is painted in the terminal's theme
+session at launch**, **Hosts file**, **Companion hosts** and **Local device
+diagnostics** form one group under **This device**. The list is painted in the terminal's theme
 (**View > Theme**, including **Follow system**) and its dialogs use the
 platform's light or dark style to match. While a host key is checked, during
 sign-in and while choosing a pane, the title names the host with a back arrow;
 the arrow and system Back cancel the step and return to the list. On panels
 wider than 720 dp the list keeps a centred 720 dp column, and below 600 dp each
 card moves **Connect** under the host's details.
+
+**Hosts file** exports every saved host to a JSON file chosen in Android's file
+picker, and imports such a file; an empty list offers **Import from a file** too.
+A host's name, address, user, session, Iroh ticket and relay, extra keys, quick
+commands and trusted fingerprint go into the file. Passwords are never saved, and
+the device SSH key and companion tokens are not part of profiles, so none of them
+can be exported. Import names every host it will add and skips any whose account
+and session are already saved, keeping the saved profile and its trust. The
+file's trusted fingerprints are trusted once you confirm that list. A file holds
+at most 32 hosts, the list's own limit, and an import that would pass it adds
+nothing. Imported hosts are new profiles; no device-local ID crosses over.
 
 For a trusted host, with a device SSH key saved, the ⋮ menu also offers **Open
 shell**: the account's login shell on a remote PTY, without Herdr. It needs the

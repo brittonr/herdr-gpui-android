@@ -7,6 +7,7 @@ Connect to your own computer running Herdr. Your host must be reachable over SSH
 • Connect over direct TCP or Iroh using an endpoint ID or ticket. Optionally configure your own Iroh relay.
 • Verify and trust the SSH host fingerprint yourself before connecting.
 • Authenticate with a one-use password or an optional private key encrypted on your device.
+• Move your hosts to another install with an export file that never holds passwords or keys.
 • Open a raw SSH shell on a trusted host, or use quick commands for coding agents.
 • Optionally connect to your own HTTPS companion host.
 
