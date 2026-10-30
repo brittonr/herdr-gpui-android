@@ -76,7 +76,7 @@ public final class RemoteHostsActivity extends Activity {
     private SavedRemoteHost selected;
     private volatile long ownedHandle;
     private boolean openingPane;
-    private boolean reopenedThisVisit;
+    private final LaunchReopen launchReopen = new LaunchReopen();
     /** A message that must survive the asynchronous profile render. */
     private String pendingStatus;
     private Tone pendingTone = Tone.NOTE;
@@ -120,10 +120,7 @@ public final class RemoteHostsActivity extends Activity {
         // Reopening should land in the terminal, not this list; the list is the
         // fallback when the remembered session cannot be restored.
         boolean skip = getIntent() != null && getIntent().getBooleanExtra("skip_reopen", false);
-        if (!skip && !reopenedThisVisit && reopenEnabled() && queueReopen()) {
-            reopenedThisVisit = true;
-            return;
-        }
+        if (launchReopen.firstResume(() -> !skip && reopenEnabled() && queueReopen())) return;
         showProfiles();
     }
 

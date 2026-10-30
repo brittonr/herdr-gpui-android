@@ -164,6 +164,9 @@ verifies the pinned fingerprint, connects with the saved device key and starts
 the terminal without showing the host list. The list remains reachable from the
 terminal's **Session > Remote hosts…**, where **Reopen the last session at launch**
 switches the behaviour back to starting on the list.
+Reopening happens once per launch. Back from a terminal always lands on the
+list, including on a first run, when the pane just opened becomes the
+remembered one.
 
 Every saved host is mirrored in the rail by its own read-only session, polled
 every three seconds. A mirror negotiates `surface_active: false` in the initial
