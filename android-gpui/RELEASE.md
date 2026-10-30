@@ -98,3 +98,8 @@ The existing source-preview limitations in README and REMOTE-VALIDATION still ap
 If signing is disabled the draft contains debug/unsigned artifacts only; provision
 an approved existing identity and use a new version/tag after validation, or sign
 the verified unsigned artifact offline and verify it before uploading manually.
+
+## Google Play
+
+Play listing materials, privacy policy, Data safety guidance, and local bundle
+release instructions are in [docs/google-play.md](docs/google-play.md).

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#10151d"/><stop offset="1" stop-color="#222d3b"/></linearGradient>
+    <linearGradient id="pane" x2="0" y2="1"><stop stop-color="#222b37"/><stop offset="1" stop-color="#171d26"/></linearGradient>
+    <linearGradient id="glow" x2="1" y2="0"><stop stop-color="#e8a33d" stop-opacity="0"/><stop offset=".5" stop-color="#e8a33d" stop-opacity=".22"/><stop offset="1" stop-color="#e8a33d" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+
+  <ellipse cx="514" cy="250" rx="390" ry="210" fill="url(#glow)"/>
+  <g transform="translate(170 102)" fill="none">
+    <rect width="684" height="296" rx="26" fill="#10151d" stroke="#8091a2" stroke-opacity=".5" stroke-width="2"/>
+    <path d="M26 0h632a26 26 0 0 1 26 26v28H0V26A26 26 0 0 1 26 0" fill="#293542"/>
+    <circle cx="29" cy="27" r="6" fill="#e8a33d"/><circle cx="51" cy="27" r="6" fill="#7d91a6"/><circle cx="73" cy="27" r="6" fill="#526273"/>
+    <path d="M28 82h206M28 105h328M28 128h270M28 151h383M28 174h224M28 197h347M28 220h290" stroke="#73869a" stroke-width="8" stroke-linecap="round" opacity=".78"/>
+    <path d="M28 105h106M28 151h142M28 197h114" stroke="#e8a33d" stroke-width="8" stroke-linecap="round" opacity=".92"/>
+    <rect x="447" y="82" width="205" height="172" rx="14" fill="#1b242e" stroke="#5b6a79" stroke-opacity=".6" stroke-width="2"/>
+    <path d="M469 112h75M469 137h153M469 162h116M469 187h138M469 212h81" stroke="#8293a5" stroke-width="7" stroke-linecap="round" opacity=".67"/>
+    <circle cx="624" cy="231" r="13" fill="#e8a33d"/>
+    <path d="M-40 70c-36 46-36 110 0 156M724 70c36 46 36 110 0 156" stroke="#e8a33d" stroke-width="3" stroke-linecap="round" opacity=".45"/>
+  </g>
+  <g fill="#e8a33d" opacity=".75"><circle cx="138" cy="91" r="3"/><circle cx="879" cy="93" r="4"/><circle cx="134" cy="409" r="4"/><circle cx="894" cy="410" r="3"/></g>
+</svg>

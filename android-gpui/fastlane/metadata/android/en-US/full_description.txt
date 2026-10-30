@@ -1,0 +1,15 @@
+Remote for Herdr is an unofficial third-party client for Herdr, made by an independent developer and not affiliated with Herdr's authors.
+
+Connect to your own computer running Herdr. Your host must be reachable over SSH or Iroh; this app includes no demo host or hosted service.
+
+• View GPU-rendered Herdr terminal panes and agent status on your phone.
+• Use a foldable-aware layout that adapts to narrow and wide screens.
+• Connect over direct TCP or Iroh using an endpoint ID or ticket. Optionally configure your own Iroh relay.
+• Verify and trust the SSH host fingerprint yourself before connecting.
+• Authenticate with a one-use password or an optional private key encrypted on your device.
+• Open a raw SSH shell on a trusted host, or use quick commands for coding agents.
+• Optionally connect to your own HTTPS companion host.
+
+You choose the remote host and credentials. Passwords and passphrases are used once, never saved. Saved profiles, fingerprints, optional device key and companion tokens are encrypted on your device. There are no developer accounts, ads, analytics, crash reporting or developer-operated servers.
+
+Herdr is owned by an unrelated team. Remote for Herdr is an independent client and is not an official Herdr app.

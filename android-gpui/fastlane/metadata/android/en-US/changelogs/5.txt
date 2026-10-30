@@ -1,0 +1,1 @@
+First Google Play release. Connect to your own Herdr host over SSH or Iroh with foldable-aware, GPU-rendered terminal panes.
