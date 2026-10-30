@@ -6,9 +6,9 @@ require the HTTP companion. The optional HTTPS companion workflow remains
 available through **Companion hosts**. Existing Compact profiles remain in
 Compact; this separately installed app does not migrate them automatically.
 
-The remote build has application ID `dev.herdr.android.gpui.remote`. It installs
-alongside Compact 0.4.0 because the old development signing key did not survive
-the build workspace reset. It does not overwrite Compact or its saved profiles.
+The app, Remote for Herdr, has application ID `ch.robitzs.herdr`. It installs
+alongside earlier previews (`dev.herdr.android.gpui.remote` and Compact 0.4.0)
+and does not overwrite them or their saved profiles.
 See REMOTE-VALIDATION.md for the exact build and runtime evidence. Accompanying dependency notices are in android-remote/THIRD-PARTY-NOTICES.txt.
 
 ## Host prerequisites

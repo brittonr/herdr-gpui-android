@@ -1,4 +1,4 @@
-# Herdr Android with a GPUI terminal
+# Remote for Herdr: unofficial Android client
 
 ## Remote connection update
 
@@ -8,9 +8,10 @@ one-use private key, or a device-wide key saved encrypted on the phone, and
 select a pane. It uses Herdr's binary bridge and does not require an HTTP
 companion. See [remote setup, trust and limits](REMOTE.md).
 
-The Remote preview installs as `dev.herdr.android.gpui.remote`, alongside the
-preserved Compact app. The prior development signing key was lost with the
-temporary build workspace. **Companion hosts** still opens the HTTPS workflow.
+The app is **Remote for Herdr**, an unofficial client not affiliated with
+Herdr's authors. It installs as `ch.robitzs.herdr`, alongside earlier previews
+(`dev.herdr.android.gpui.remote` and the Compact app), whose saved hosts it does
+not migrate. **Companion hosts** still opens the HTTPS workflow.
 
 **Local device diagnostics** opens a separate, read-only screen that reads
 nothing until you choose **Read diagnostics**. It then collects one bounded
@@ -223,8 +224,9 @@ After producing `app/src/main/jniLibs/arm64-v8a/libherdr_gpui_android.so`:
 ./gradlew :app:assembleDebug :app:lintDebug
 ```
 
-The current app ID is `dev.herdr.android.gpui.remote`, installed alongside the
-older previews. Profiles from those separate applications must be entered again.
+The current app ID is `ch.robitzs.herdr`, installed alongside older previews
+such as `dev.herdr.android.gpui.remote`. Profiles from those separate
+applications must be entered again.
 The GPUI build requires Android 10+ because this mobile backend links an Android
 API 29 function; the original Java-only preview still supports Android 8+.
 It requires an ARM64 Android device, API 29+ (Android 10+), with the GPU capabilities required

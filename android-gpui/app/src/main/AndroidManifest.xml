@@ -6,8 +6,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
     <uses-feature android:name="android.hardware.vulkan.level" android:version="0" android:required="false" />
-    <application android:label="Herdr GPUI Remote" android:theme="@style/AppTheme"
-        android:icon="@drawable/ic_herdr" android:allowBackup="false"
+    <application android:label="Remote for Herdr" android:theme="@style/AppTheme"
+        android:icon="@mipmap/ic_launcher" android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
         tools:ignore="DataExtractionRules"

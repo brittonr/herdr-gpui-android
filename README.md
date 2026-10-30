@@ -48,7 +48,7 @@ cd android-gpui
 
 The alternative `./scripts/build-verification-apk.sh` uses the official SDK tools and generates a development-signed APK. Historical builds used that packager. Standard Gradle debug/release builds, diagnostics JVM tests, and debug/release lint have also passed for x86_64. Physical-device execution remains a separate gate. Do not use development signing for a production release.
 
-Default ABI is ARM64 (`arm64-v8a`). Set `HERDR_ANDROID_ABI=x86_64` and install the corresponding Rust target for emulator builds. The app requires Android API 29+ and a GPU supported by GPUI Mobile. Current application ID: `dev.herdr.android.gpui.remote`.
+Default ABI is ARM64 (`arm64-v8a`). Set `HERDR_ANDROID_ABI=x86_64` and install the corresponding Rust target for emulator builds. The app requires Android API 29+ and a GPU supported by GPUI Mobile. It is published as **Remote for Herdr**, an unofficial client, with application ID `ch.robitzs.herdr`.
 
 Lockfiles and the GPUI Mobile revision are pinned, but bit-for-bit reproducibility is not established. Signing keys and generated binaries are deliberately absent; a fresh build's signing identity cannot update an installation signed by a different key.
 

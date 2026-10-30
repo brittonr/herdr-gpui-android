@@ -10,7 +10,7 @@ android {
     compileSdk 35
     buildToolsVersion "35.0.0"
     defaultConfig {
-        applicationId 'dev.herdr.android.gpui.remote'
+        applicationId 'ch.robitzs.herdr'
         minSdk 29
         targetSdk 35
         versionCode 5
