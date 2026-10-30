@@ -199,15 +199,18 @@ output no longer yanks a reader back to the newest line, and it only re-pins to
 the tail when lines are actually appended or the session is switched.
 
 Dragging in the terminal scrolls the client's own row buffer: the session keeps
-the last 512 rows it has seen, at the offset the daemon drew them, and serves
-motion from memory. The daemon is asked only to prefetch the next rows, eight
-requests in flight, so a slow read never waits on a round trip.
-
-Dragging in the terminal scrolls the daemon's scrollback: the target is walked
-one row at a time (the daemon renders one frame per request, so a single large
-target would look like a jump), requests are coalesced instead of dropped, the newest offset is always
-delivered when the finger lifts, a flick keeps travelling under momentum, and a
-poll never overwrites the target with the last offset the daemon applied.
+the last 512 rows it has seen, keyed by their position in the pane's history,
+and serves motion from memory; a flick keeps travelling under momentum. Reading
+back pins the rows under the finger, so output arriving meanwhile does not move
+them. The daemon draws one screen per `pane.scroll` request, so the session asks
+for the screen holding the newest row its view lacks: one screen ahead of the
+finger, or a gap a burst of output left between two frames it saw. Until that
+frame arrives the last complete screen stays up rather than jumping to live.
+Returning to the tail, or **Jump to live output**, follows new output again and
+puts the pane back at offset zero if this client scrolled it. Requests go only to
+the pane the daemon has focused, so another client's focus never moves a pane
+this client is not showing. Switching panes starts the new one at its live
+output with an empty buffer, so no rows from the previous pane can appear in it.
 
 A snapshot and its matching surface arrive as separate messages, so their
 revisions disagree for a frame or two; the client keeps the last drawn pane

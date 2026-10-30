@@ -199,6 +199,10 @@ pub struct View {
     local_offset: i64,
     /// Number of rows the buffer can serve beyond the tail window.
     buffered_rows: i64,
+    /// Offset the client should ask the daemon to draw next: the frame holding
+    /// the newest row its view lacks, or 0 to return a pane this client scrolled
+    /// back to live output. `None` when nothing is missing.
+    fetch: Option<i64>,
 }
 impl Default for View {
     fn default() -> Self {
@@ -225,6 +229,7 @@ impl Default for View {
             rendered_scroll: 0,
             local_offset: 0,
             buffered_rows: 0,
+            fetch: None,
         }
     }
 }
@@ -253,6 +258,10 @@ struct State {
     /// Row shown at the top of the viewport, counted from the bottom. `None`
     /// follows the tail, so new output keeps scrolling as usual.
     anchor: Option<i64>,
+    /// Offset this client last asked the daemon to draw; 0 when live. While it
+    /// is not 0 the daemon's frames show history this client fetched, so the
+    /// live view comes from the buffer's tail instead.
+    requested: i64,
     /// Hyperlink table shared by the buffered rows.
     history_links: serde_json::Value,
 }
@@ -596,6 +605,7 @@ fn poll_view(state: &mut State, since: u64, content: PollContent) -> Result<(Str
             "pane_id": state.view.pane_id,
             "focused_pane": state.view.focused_pane,
             "scroll": &state.view.scroll,
+            "fetch": state.view.fetch,
         });
         return Ok((serde_json::to_string(&quiet)?, false));
     }
@@ -1205,19 +1215,11 @@ impl State {
             .retain(|row, _| *row >= oldest && *row <= newest);
     }
 
-    /// The window shown for the current local offset, clamped to the buffer.
-    /// The window shown for the current anchor. A fixed anchor keeps the rows
-    /// under the finger still while output keeps arriving behind them.
-    fn window_at(&mut self, rows: usize, max: i64) -> Option<(String, String)> {
-        let oldest = *self.history.keys().next()?;
-        // Ids grow with the pane, so the tail window's top is `max - rows + 1`
-        // and scrolling back walks it down towards `oldest`.
-        let tail_top = (max - rows as i64 + 1).max(oldest);
-        let top = self.anchor.unwrap_or(tail_top).clamp(oldest, tail_top);
-        self.anchor = (top != tail_top).then_some(top);
+    /// The `rows` rows starting at id `top`, or `None` while any is missing.
+    fn window(&self, top: i64, rows: i64) -> Option<(String, String)> {
         let mut text = String::new();
-        let mut styled: Vec<String> = Vec::with_capacity(rows);
-        for (index, row) in (top..top + rows as i64).enumerate() {
+        let mut styled: Vec<String> = Vec::with_capacity(usize::try_from(rows).unwrap_or(0));
+        for (index, row) in (top..top + rows).enumerate() {
             let stored = self.history.get(&row)?;
             if index != 0 {
                 text.push('\n');
@@ -1231,6 +1233,58 @@ impl State {
             styled.join(",")
         );
         Some((text, style))
+    }
+
+    /// The offset whose frame holds the newest row missing from the window at
+    /// `top` or from the screen above it, so gaps and the buffer's edge fill in
+    /// before the finger reaches them. A frame at offset `o` shows rows
+    /// `max - o - rows + 1 ..= max - o`, so the missing row lands at its bottom.
+    fn fetch_for(&self, top: i64, rows: i64, max: i64) -> Option<i64> {
+        // Older rows would leave the bounded buffer as soon as they arrived.
+        let floor = (max - HISTORY_ROWS).max(0);
+        let window = (top..top + rows).rev();
+        let ahead = ((top - rows).max(floor)..top).rev();
+        let missing = window
+            .chain(ahead)
+            .find(|row| (floor..=max).contains(row) && !self.history.contains_key(row))?;
+        Some(max - missing)
+    }
+
+    /// Moves the reading position `delta` rows into the buffer; positive reads
+    /// older rows. Reading back pins the view where it is, so output arriving
+    /// meanwhile never moves it; reaching the tail again resumes following.
+    fn scroll_by(&mut self, delta: i64) -> serde_json::Value {
+        let rows = self.view.scroll.rows.max(1) as i64;
+        let max = self.view.scroll.max as i64;
+        let tail_top = (max - rows + 1).max(0);
+        let oldest = self
+            .history
+            .keys()
+            .next()
+            .copied()
+            .unwrap_or(tail_top)
+            .min(tail_top);
+        let current = self.anchor.unwrap_or(tail_top);
+        let next = (current - delta).clamp(oldest, tail_top);
+        self.anchor = (next != tail_top || delta > 0).then_some(next);
+        project(self);
+        json!({
+            "offset": tail_top - next,
+            "limit": tail_top - oldest,
+            "rows": rows,
+            "following": self.anchor.is_none(),
+            "fetch": self.view.fetch,
+        })
+    }
+
+    /// Records an offset this client asked the daemon to draw. Offset 0 is the
+    /// live view, so the reading position returns to the tail with it.
+    fn note_request(&mut self, target: u64) {
+        self.requested = i64::try_from(target).unwrap_or(i64::MAX);
+        if target == 0 {
+            self.anchor = None;
+        }
+        project(self);
     }
 }
 
@@ -1268,6 +1322,12 @@ fn project(state: &mut State) {
     if state.text_pane != state.view.pane_id {
         state.view.text.clear();
         state.view.surface.clear();
+        // Rows are keyed by distance from the bottom, so another pane's rows
+        // would read as this pane's history, and its position as this one's.
+        state.history.clear();
+        state.anchor = None;
+        state.requested = 0;
+        state.pending_offsets.clear();
         state.text_pane.clone_from(&state.view.pane_id);
     }
     state.view.state = if state.snapshot.is_some() && state.pending_focus.is_none() {
@@ -1306,23 +1366,43 @@ fn project(state: &mut State) {
                 rows: metrics.viewport_rows,
             })
             .unwrap_or_default();
-        let rows = state.view.scroll.rows.max(1) as usize;
+        let rows = state.view.scroll.rows.max(1) as i64;
         let max = state.view.scroll.max as i64;
         state.remember_rows(state.view.scroll.offset as i64, max, &text, &surface);
         state.view.revision = revision;
-        if state.anchor.is_none() {
-            state.view.text = text;
-            state.view.surface = surface;
-        } else if let Some((local_text, local_surface)) = state.window_at(rows, max) {
-            state.view.text = local_text;
-            state.view.surface = local_surface;
-        } else {
-            state.anchor = None;
-            state.view.text = text;
-            state.view.surface = surface;
+        let tail_top = (max - rows + 1).max(0);
+        let oldest = state.history.keys().next().copied().unwrap_or(tail_top);
+        // History fetches scroll the shared pane, so the daemon's frame is live
+        // output only when no fetch of this client's is outstanding.
+        let fetching = state.requested != 0 || !state.pending_offsets.is_empty();
+        let shown = match state.anchor {
+            Some(top) => {
+                // Output that pushed the anchored rows out of the buffer moves
+                // the view to the oldest rows still held.
+                let top = top.clamp(oldest.min(tail_top), tail_top);
+                state.anchor = Some(top);
+                state.window(top, rows)
+            }
+            None if fetching && state.view.scroll.offset != 0 => state.window(tail_top, rows),
+            None => Some((text, surface)),
+        };
+        // A window with a missing row keeps the last complete one on screen
+        // until the fetched frame fills it, rather than jumping elsewhere.
+        if let Some((shown_text, shown_surface)) = shown {
+            state.view.text = shown_text;
+            state.view.surface = shown_surface;
         }
-        let tail_top = (max - rows as i64 + 1).max(0);
-        let oldest = state.history.keys().next().copied().unwrap_or(max);
+        // Requests scroll the daemon's focused pane, so ask only for that one.
+        let focused = state
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.focused_pane_id.as_deref())
+            == Some(pane_id.as_str());
+        state.view.fetch = match state.anchor {
+            _ if !focused => None,
+            Some(top) => state.fetch_for(top, rows, max),
+            None => (state.requested != 0).then_some(0),
+        };
         state.view.local_offset = tail_top - state.anchor.unwrap_or(tail_top);
         // Rows of history the buffer holds behind the tail window.
         state.view.buffered_rows = (tail_top - oldest).max(0);
@@ -1604,17 +1684,8 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
     if state.view.state == "closed" || owner.cancel.is_cancelled() {
         return Err(Error::Closed);
     }
-    let rows = state.view.scroll.rows.max(1) as i64;
-    let max = state.view.scroll.max as i64;
-    let oldest = state.history.keys().next().copied().unwrap_or(0);
-    let tail_top = (max - rows + 1).max(oldest);
-    let current = state.anchor.unwrap_or(tail_top);
     // Dragging down (positive delta) reads older rows, i.e. lower ids.
-    let next = (current - delta).clamp(oldest, tail_top);
-    state.anchor = (next != tail_top).then_some(next);
-    let offset = tail_top - next;
-    let limit = (tail_top - oldest).max(0);
-    project(&mut state);
+    let answer = state.scroll_by(delta);
     // Prepare the borrowed body while it is still the exact anchored view.
     #[cfg(feature = "android-ui")]
     let snapshot = model::Snapshot::with_surface(
@@ -1636,13 +1707,7 @@ pub fn scroll_local(id: u64, delta: i64, paint: UiPaint<'_>) -> Result<String> {
     }
     #[cfg(not(feature = "android-ui"))]
     let _ = paint;
-    Ok(json!({
-        "offset": offset,
-        "limit": limit,
-        "rows": rows,
-        "at_edge": offset == limit && delta > 0,
-    })
-    .to_string())
+    Ok(answer.to_string())
 }
 
 pub fn scroll_to(id: u64, offset: i64) -> Result<String> {
@@ -1651,27 +1716,41 @@ pub fn scroll_to(id: u64, offset: i64) -> Result<String> {
     if state.view.state == "closed" || owner.cancel.is_cancelled() {
         return Err(Error::Closed);
     }
+    // The daemon scrolls its focused pane; while another client has focused a
+    // different one, a request would scroll that pane instead of this view.
     let pane = state
         .snapshot
         .as_ref()
         .and_then(|snapshot| snapshot.focused_pane_id.clone())
-        .filter(|pane| valid_pane_id(pane))
-        .ok_or(Error::StaleTarget)?;
+        .filter(|pane| valid_pane_id(pane) && *pane == state.view.pane_id);
     let scroll = state.view.scroll;
     let target = clamp_offset(offset, scroll.max);
-    if target == scroll.offset {
-        return Ok(json!({"queued": false}).to_string());
+    let queued = match pane {
+        Some(pane) if target != scroll.offset => {
+            state.client.as_ref().ok_or(Error::Closed)?.request(
+                &state.view.boot_id,
+                Method::PaneScroll,
+                json!({"pane_id": pane, "offset_from_bottom": target}),
+            )?;
+            state.view.scroll.offset = target;
+            if state.pending_offsets.len() < 8 {
+                state.pending_offsets.push_back(target as i64);
+            }
+            true
+        }
+        Some(_) => false,
+        // Returning this view to live output needs nothing from the daemon.
+        None if target == 0 => false,
+        None => return Err(Error::StaleTarget),
+    };
+    // Recorded once queued, so the live view knows that frame is on its way.
+    state.note_request(target);
+    Ok(if queued {
+        json!({"queued": true, "offset": target, "max": scroll.max})
+    } else {
+        json!({"queued": false})
     }
-    state.client.as_ref().ok_or(Error::Closed)?.request(
-        &state.view.boot_id,
-        Method::PaneScroll,
-        json!({"pane_id": pane, "offset_from_bottom": target}),
-    )?;
-    state.view.scroll.offset = target;
-    if state.pending_offsets.len() < 8 {
-        state.pending_offsets.push_back(target as i64);
-    }
-    Ok(json!({"queued": true, "offset": target, "max": scroll.max}).to_string())
+    .to_string())
 }
 
 /// Runs one allowlisted session action against the daemon's focused workspace,
@@ -1977,6 +2056,24 @@ mod tests {
             started: Instant::now(),
         });
     }
+    /// A 4x3 frame of `pane_id` whose rows read `lines`, drawn at `offset` of `max`.
+    fn rows_frame(pane_id: &str, lines: [&str; 3], offset: u64, max: u64) -> Arc<PaneSurfaceFrame> {
+        let mut frame = Arc::unwrap_or_clone(surface("boot", 1, pane_id));
+        for (cell, symbol) in frame
+            .frame
+            .cells
+            .iter_mut()
+            .zip(lines.iter().flat_map(|line| line.chars()))
+        {
+            cell.symbol = symbol.to_string();
+        }
+        frame.panes[0].scroll = Some(PaneSurfaceScrollMetrics {
+            offset_from_bottom: offset,
+            max_offset_from_bottom: max,
+            viewport_rows: 3,
+        });
+        Arc::new(frame)
+    }
 
     fn polling_state() -> State {
         State {
@@ -2197,6 +2294,154 @@ mod tests {
             ["xxxx", "xABx", "xxxx"]
         );
         assert_eq!(state.view.local_offset, 0);
+    }
+
+    #[test]
+    fn switching_panes_starts_live_without_the_previous_panes_rows() {
+        let mut state = State::default();
+        state.view.pane_id = "p1".into();
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 1, "p1")));
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["a7..", "a8..", "a9.."], 0, 9)),
+        );
+        // p1's older rows sit under ids the next pane uses too.
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["a4..", "a5..", "a6.."], 3, 9)),
+        );
+        state.scroll_by(3);
+        assert_eq!(state.view.text, "a4..\na5..\na6..");
+
+        state.view.pane_id = "p2".into();
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 2, "p2")));
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p2", ["b7..", "b8..", "b9.."], 0, 9)),
+        );
+        assert_eq!(
+            state.view.text, "b7..\nb8..\nb9..",
+            "the new pane opens at its live output"
+        );
+        let answer = state.scroll_by(3);
+        // Only p2's own screen is held, so reading back waits for its older
+        // rows instead of showing p1's under the same ids.
+        assert_eq!(state.view.text, "b7..\nb8..\nb9..");
+        assert_eq!(answer["fetch"], 3);
+    }
+
+    #[test]
+    fn reading_into_a_gap_holds_the_view_until_the_fetched_frame_fills_it() {
+        let mut state = State::default();
+        state.view.pane_id = "p1".into();
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 1, "p1")));
+        // A screen, then a burst of output: rows 4 to 6 were never drawn.
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r1..", "r2..", "r3.."], 0, 3)),
+        );
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r7..", "r8..", "r9.."], 0, 9)),
+        );
+        let answer = state.scroll_by(2);
+        // Rows 5 and 6 of the window are missing: the view neither jumps to
+        // live nor shows a partial window, and asks for the frame ending at 6.
+        assert_eq!(state.view.text, "r7..\nr8..\nr9..");
+        assert_eq!(answer["following"], false);
+        assert_eq!(answer["fetch"], 3);
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r4..", "r5..", "r6.."], 3, 9)),
+        );
+        assert_eq!(
+            state.view.text, "r5..\nr6..\nr7..",
+            "the window appears once filled"
+        );
+        assert_eq!(
+            state.view.fetch, None,
+            "nothing missing on screen or one screen above"
+        );
+    }
+
+    #[test]
+    fn returning_to_the_tail_shows_live_rows_and_asks_the_pane_back_to_live() {
+        let mut state = State::default();
+        state.view.pane_id = "p1".into();
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 1, "p1")));
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r7..", "r8..", "r9.."], 0, 9)),
+        );
+        assert_eq!(state.scroll_by(1)["fetch"], 3);
+        // This client's fetch scrolls the shared pane; its frame arrives.
+        state.note_request(3);
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r4..", "r5..", "r6.."], 3, 9)),
+        );
+        state.scroll_by(2);
+        assert_eq!(state.view.text, "r5..\nr6..\nr7..");
+
+        let answer = state.scroll_by(-10);
+        assert_eq!(answer["following"], true);
+        assert_eq!(
+            answer["fetch"], 0,
+            "the pane this client scrolled goes back to live"
+        );
+        // The daemon still draws offset 3; the live view is the buffer's tail.
+        assert_eq!(state.view.text, "r7..\nr8..\nr9..");
+        state.note_request(0);
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r8..", "r9..", "rA.."], 0, 10)),
+        );
+        assert_eq!(
+            state.view.text, "r8..\nr9..\nrA..",
+            "new output follows again"
+        );
+        assert_eq!(state.view.fetch, None);
+    }
+
+    #[test]
+    fn jumping_to_live_leaves_an_anchored_reading_position() {
+        let mut state = State::default();
+        state.view.pane_id = "p1".into();
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 1, "p1")));
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r4..", "r5..", "r6.."], 3, 9)),
+        );
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r7..", "r8..", "r9.."], 0, 9)),
+        );
+        state.scroll_by(3);
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r8..", "r9..", "rA.."], 0, 10)),
+        );
+        assert_eq!(
+            state.view.text, "r4..\nr5..\nr6..",
+            "output does not move an anchored view"
+        );
+        state.note_request(0);
+        assert_eq!(state.view.text, "r8..\nr9..\nrA..");
+        assert_eq!(state.view.local_offset, 0);
+    }
+
+    #[test]
+    fn another_clients_focus_stops_history_fetches_for_this_view() {
+        let mut state = State::default();
+        state.view.pane_id = "p1".into();
+        // Another client focused p2; requests would scroll that pane instead.
+        apply_event(&mut state, ClientEvent::Snapshot(snapshot("boot", 1, "p2")));
+        apply_event(
+            &mut state,
+            ClientEvent::Surface(rows_frame("p1", ["r7..", "r8..", "r9.."], 0, 9)),
+        );
+        assert_eq!(state.view.text, "r7..\nr8..\nr9..");
+        assert_eq!(state.scroll_by(1)["fetch"], serde_json::Value::Null);
     }
 
     #[test]

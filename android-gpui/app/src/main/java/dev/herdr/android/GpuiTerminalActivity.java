@@ -177,8 +177,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     private boolean scrolling;
     /** Locally accumulated scrollback target; polls only resync it while idle. */
     private long desiredScroll, lastSentScroll = -1;
-    /** Rows requested but not yet drawn, so the local buffer stays ahead. */
-    private static final long PREFETCH_WINDOW = 32;
+    /** A fetch whose frame never arrived is asked for again after this long. */
+    private static final long FETCH_RETRY_MS = 1000;
     /** True while the finger, a fling, or an in-flight request owns the offset. */
     private volatile boolean scrollSeeking;
     private boolean lastFollowSent = true;
@@ -976,13 +976,11 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 try {
                     JSONObject answer = new JSONObject(RemoteNative.scrollLocal(target.remoteHandle, lines,
                             target.generation, target.title, target.status, shortcutJson));
-                    if (answer.optBoolean("at_edge", false)) {
-                        prefetchHistory(target);
-                    } else if (answer.optLong("offset", 0) == 0 && target.renderedScroll != 0) {
-                        sendScroll(target, 0);
+                    if (answer.optBoolean("following", false) && !lastFollowSent) {
                         lastFollowSent = true;
                         nativeSetFollow(target.generation, true);
                     }
+                    fetchRows(target, answer);
                 } catch (Exception | LinkageError ignored) {
                 }
             });
@@ -993,20 +991,22 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
     }
 
     /**
-     * Asks the daemon for one more row above what it has already drawn. Frames
-     * arrive one per request, so this walks backwards one row at a time and the
-     * buffer stays contiguous.
+     * Asks the daemon to draw the offset the native view needs next: a gap in
+     * the buffer, the screen ahead of the finger, or live output once back at
+     * the tail. Each frame fills a whole screen of rows, so one request per
+     * offset is enough; it is repeated only when its frame never arrives.
      */
-    private void prefetchHistory(Connection target) {
-        // Keep a window of rows in flight so the buffer runs ahead of the finger;
-        // the daemon answers each request with one frame at that offset.
-        if (target.desiredHistory < target.renderedScroll) target.desiredHistory = target.renderedScroll;
-        long inFlight = target.desiredHistory - target.renderedScroll;
-        while (inFlight < PREFETCH_WINDOW && target.desiredHistory < target.scrollMax) {
-            target.desiredHistory++;
-            sendScroll(target, target.desiredHistory);
-            inFlight++;
+    private void fetchRows(Connection target, JSONObject answer) {
+        if (answer.isNull("fetch")) return;
+        long offset = answer.optLong("fetch", -1);
+        if (offset < 0) return;
+        long now = SystemClock.uptimeMillis();
+        synchronized (target) {
+            if (offset == target.fetchedOffset && now - target.fetchedAt < FETCH_RETRY_MS) return;
+            target.fetchedOffset = offset;
+            target.fetchedAt = now;
         }
+        sendScroll(target, offset);
     }
 
     /** Asks the daemon to render at `offset`, which backfills the local buffer. */
@@ -1029,6 +1029,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         desiredScroll = 0;
         lastSentScroll = -1;
         scrollSeeking = true;
+        synchronized (target) { target.fetchedOffset = -1; }
         if (!lastFollowSent) {
             lastFollowSent = true;
             nativeSetFollow(target.generation, true);
@@ -3019,6 +3020,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                             current.scrollMax = quietScroll.optLong("max", 0);
                             current.scrollRows = quietScroll.optLong("rows", 0);
                         }
+                        fetchRows(current, state);
                         return;
                     }
                     // The tree did not move but the connection did: fetch the full view once.
@@ -3071,7 +3073,15 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                 }
                 // Reset for the daemon-confirmed pane, not a queued focus or
                 // a title update on the pane the user is already reading.
-                if (selected && !pane.equals(current.chromePane)) nativeResetPan();
+                if (selected && !pane.equals(current.chromePane)) {
+                    nativeResetPan();
+                    // The native side starts the new pane at its live output.
+                    synchronized (current) { current.fetchedOffset = -1; }
+                    if (!lastFollowSent) {
+                        lastFollowSent = true;
+                        nativeSetFollow(current.generation, true);
+                    }
+                }
                 current.chromePane = pane;
                 current.renderedScroll = state.optLong("rendered_scroll", current.renderedScroll);
                 JSONObject scroll = state.optJSONObject("scroll");
@@ -3089,6 +3099,7 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
                         lastSentScroll = current.scrollOffset;
                     }
                 }
+                fetchRows(current, state);
                 int bell = state.optInt("bell", 0);
                 if (bell > 0) {
                     final int rings = bell;
@@ -3282,7 +3293,8 @@ public final class GpuiTerminalActivity extends GpuiInputActivity implements Sur
         volatile String status = "Connecting…";
         volatile long fastUntil;
         volatile long renderedScroll;
-        volatile long desiredHistory;
+        /** Last offset {@link #fetchRows} asked for and when, guarded by the connection. */
+        long fetchedOffset = -1, fetchedAt;
         long nextRemotePollAt;
         volatile String title = launch.title;
         volatile String hostName = launch.name();
