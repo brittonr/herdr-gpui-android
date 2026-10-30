@@ -1,6 +1,8 @@
 # Android local diagnostics
 
-Phase 1 is an app-local, read-only diagnostics screen and foreground service.
+Phase 1 is an app-local, read-only diagnostics screen. It reads only when you
+ask and only while the screen is open; there is no service, notification or
+background work.
 It is not a remote control agent: there is no listener, controller pairing,
 MCP/ChatGPT bridge, shell, root request, accessibility service, or screen capture.
 
@@ -12,29 +14,26 @@ separate from SSH, Iroh, companion authentication, and terminal connections.
 ## Use
 
 1. From **Remote hosts**, open **Local device diagnostics**.
-2. Check **Enable local diagnostics for this screen**. Android 13+ requires
-   notification permission. Approving that OS prompt does not enable diagnostics;
-   check the switch again. Blocked app notifications or a blocked diagnostics
-   channel prevent enablement.
-3. An ongoing **Local diagnostics enabled** notification appears. Choose
-   **Read diagnostics** to collect one snapshot. Enabling alone collects nothing.
-4. Uncheck the switch or use the notification's **Stop diagnostics** action to
-   revoke access and clear the displayed result.
+2. Choose **Read diagnostics** to read one snapshot. Opening the screen alone
+   reads nothing.
+3. Leave the screen to discard the result.
 
-Leaving/backgrounding the screen, recreation, and last-client unbinding also
-disable the service. Returning requires a fresh explicit opt-in. The service is
-`START_NOT_STICKY`; no grant, result, startup receiver, or restart is persisted.
+Leaving or backgrounding the screen and recreating it clear the shown result
+and discard a read still in progress; returning shows nothing until you read
+again. No grant, result or schedule is persisted, and no permission is needed.
 Diagnostics never stop a remote Herdr daemon or terminal.
+
+An earlier version ran these reads in a `specialUse` foreground service with a
+notification and a Stop action. Google Play requires a written justification and
+a video for that service type, and a read that only happens on request while the
+screen is open needs no service, so the service and its permissions were removed.
 
 ## Local contract and privacy
 
-`DeviceDiagnosticsService` is non-exported. Its process-local `LocalBinder`
-accepts only the app's UID on the main thread. Binding alone cannot enable it;
-only an explicit enable action with usable notifications does. An unknown or
-missing start action fails closed. There is no arbitrary command/request body.
-
-`readSnapshot(success, failure)` performs platform reads on a worker and invokes
-one callback on the main thread. Success is a JSON object with exactly:
+`DeviceDiagnosticsActivity` is not exported. Choosing **Read diagnostics** runs
+`DeviceDiagnostics.snapshot()` on a worker and shows the result on the main
+thread. There is no other entry point and no command or request body. A
+successful read is a JSON object with exactly:
 
 | Field | Value |
 | --- | --- |
@@ -49,22 +48,16 @@ Hardware strings omit controls, format/bidi controls, and unpaired surrogates.
 The fixed allowlist excludes serials, Android IDs, accounts, installed-app or
 process inventories, paths, profiles, credentials, and terminal content. Storage
 is filesystem availability, not an app quota or a scan of files. Results are
-bounded to 4 KiB UTF-8, not logged or sent to a host, and excluded from saved
-view state. The window retains `FLAG_SECURE`; autofill and, on API 30+, content
-capture are disabled for its views.
+not logged or sent to a host, and are excluded from saved view state. The window
+retains `FLAG_SECURE`; autofill and, on API 30+, content capture are disabled
+for its views.
 
-One read may be in flight. Additional requests return `BUSY`, not queued work.
-The five-second deadline returns `TIMEOUT`; unavailable reads return
-`UNAVAILABLE`. Disabled/revoked reads return `DISABLED`. Late completions cannot
-publish a snapshot after revocation or expiration. A single process-wide worker
-slot also bounds platform calls that ignore interruption; a still-occupied slot
-remains busy rather than spawning another worker. No automatic reads or retries
-occur.
-
-The foreground service uses Android 14+'s `specialUse` type for explicitly
-user-enabled local diagnostics, with a declared subtype. It does not claim
-network data synchronization. Store-specific foreground-service policy review
-remains part of any future app-store distribution, not this source PR.
+One read may be in flight: the button is disabled until it finishes. After five
+seconds the read is reported as timed out, and an unavailable read says so.
+A late result cannot appear after a timeout or after the screen was left. A
+single process-wide worker slot also bounds platform calls that ignore
+interruption: if a read from an earlier visit still holds it, a new request is
+refused rather than starting another worker. No automatic reads or retries occur.
 
 ## Verification
 
@@ -80,26 +73,18 @@ HERDR_VM_DIAGNOSTICS_ONLY=1 ./vm-tests/run.sh emulator-5554 \
 Use only an explicitly selected disposable emulator. The separate test APK must
 be signed with the target's development key. `compileVmTests` builds the debug
 target first and selects Gradle's configured debug keystore, not a guessed home
-directory. The runner exercises actual Android Views, permissions, foreground
-notifications, Binder callbacks, request bounds,
-HOME, and recreation; captures use in-process `View.draw` without removing
-`FLAG_SECURE`. No GPUI/JNI, remote host, or profile store is needed. See
+directory. The runner exercises actual Android Views, the installed package's
+declared services and permissions, a real allowlisted read, HOME and
+recreation; captures use in-process `View.draw` without removing `FLAG_SECURE`.
+No GPUI/JNI, remote host, or profile store is needed. See
 [the runtime harness](../android-gpui/vm-tests/README.md).
 
 The JVM tests cover unavailable battery/storage values and hostile/oversized
-hardware strings. The runtime runner covers default-off state, external-UID bind
-denial, binding without enablement, denied notifications, real allowlisted reads,
-uncheck/Stop, concurrent reads, the real deadline, in-flight revocation, HOME,
-and recreation. Build/test compilation is not a runtime pass; physical Titan
+hardware strings. The runtime runner checks that the app declares no service or
+foreground-service permission, that nothing shows before a read, that a read
+shows exactly the allowlisted fields with sane values, and that HOME and
+recreation clear it. Build/test compilation is not a runtime pass; physical Titan
 and ARM64 execution require separate validation.
-
-The complete phase-one suite passed all 14 runtime checks on an Android 15
-(API 35) x86_64 emulator at 432×768 and 320×640. Android View captures were
-visually inspected with `FLAG_SECURE` retained. The host runner restored and
-verified both initially denied and initially granted notification permission.
-Gradle diagnostics JVM tests, debug/release assembly, and debug/release lint also
-passed for x86_64. These results do not establish a clean desktop-workspace gate
-or prove any future remote control capability.
 
 ## Future design, not part of phase 1
 

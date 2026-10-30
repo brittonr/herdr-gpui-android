@@ -3,8 +3,12 @@
 ## Local diagnostics suite
 
 `HERDR_VM_DIAGNOSTICS_ONLY=1` selects `DiagnosticsVmInstrumentation` in the same
-separate test APK. It exercises the app's real local diagnostics Activity,
-foreground service, notification actions, and Binder callbacks. No GPUI/JNI,
+separate test APK. It exercises the app's real screen-only local diagnostics
+Activity. The instrumentation checks that the installed target declares no
+services or foreground-service permissions, verifies the initial empty screen,
+reads and validates the rendered JSON and button state, then checks that pausing
+and recreating the Activity clears the output. It also verifies `FLAG_SECURE`,
+except for the debuggable `Settings.Global herdr_probe=1` exception. No GPUI/JNI,
 remote daemon, network fixture, or stored host profile is used.
 
 For the Gradle-built debug target, compile with its configured development
@@ -26,19 +30,12 @@ modes. Evidence is written to `files/diagnostics-vm-tests/<run_id>` in the targe
 and extracted by `run.sh`. The report identifies `diagnostics-phase-1-runtime`.
 Captures draw the actual Android Views in-process with `FLAG_SECURE` retained.
 
-Coverage includes default-off/no restored result, a distinct test-APK UID denied
-binding, binding alone remaining off, Android 13+ notification denial, explicit
-enable/read, actual Android values and the fixed result allowlist, uncheck,
-notification Stop, HOME/return, and recreation. A temporary test-only worker
-scheduling delay exercises concurrent-request rejection and the real five-second
-deadline; in-flight revocation must complete once without stale data. The
-scheduler's factory/keepalive are restored in `finally`. The suite temporarily
-changes only the selected test app's notification grant. `run.sh` records its
-original value, denies it before instrumentation, and restores and verifies it
-after instrumentation or on runner failure. Revocation cannot happen inside the
-instrumented process because Android terminates that process. Android versions
-before 33 explicitly skip only the runtime notification permission case. This
-does not prove physical Titan/ARM64 behavior, third-party
+Coverage includes absence of declared services and foreground-service
+permissions, no output before a tap, parsed JSON with exactly the six
+allowlisted keys and sane device/battery/storage values, button re-enabling,
+output clearing after HOME pauses the screen and upon return, empty output after
+Activity recreation, and secure-window policy including its explicit debug
+probe exception. This does not prove physical Titan/ARM64 behavior, third-party
 keyboards, the terminal renderer, or any remote control plane.
 
 ## Remote SSH runtime suite

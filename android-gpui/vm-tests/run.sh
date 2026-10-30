@@ -59,29 +59,9 @@ sha256sum "$TARGET_APK" "$TEST_APK" > "$OUT/apk-sha256.txt"
 # Preserve system logs. -T 1 tails from the current point rather than clearing the device buffer.
 "$ADB" -s "$SERIAL" logcat -v threadtime -T 1 > "$OUT/logcat.txt" 2>&1 &
 LOGCAT_PID=$!
-NOTIFICATION_RESTORE=
-notification_permission() {
-  "$ADB" -s "$SERIAL" shell dumpsys package "$TARGET_PACKAGE" > "$1"
-  python3 - "$1" <<'PYPERMISSION'
-import pathlib, re, sys
-grants = re.findall(r'android\.permission\.POST_NOTIFICATIONS: granted=(true|false)\b',
-                    pathlib.Path(sys.argv[1]).read_text())
-if len(grants) != 1: raise SystemExit('Cannot identify a single target notification permission grant')
-print('grant' if grants[0] == 'true' else 'revoke')
-PYPERMISSION
-}
-restore_notification_permission() {
-  [[ -n "$NOTIFICATION_RESTORE" ]] || return 0
-  local expected="$NOTIFICATION_RESTORE" actual
-  NOTIFICATION_RESTORE=
-  "$ADB" -s "$SERIAL" shell pm "$expected" "$TARGET_PACKAGE" android.permission.POST_NOTIFICATIONS || return 1
-  actual="$(notification_permission "$OUT/notification-permission-after.txt")" || return 1
-  [[ "$actual" == "$expected" ]] || { echo "Notification permission was not restored" >&2; return 1; }
-}
 cleanup() {
   local status=$?
   trap - EXIT
-  if ! restore_notification_permission; then status=1; fi
   kill "$LOGCAT_PID" 2>/dev/null || true
   wait "$LOGCAT_PID" 2>/dev/null || true
   exit "$status"
@@ -93,12 +73,6 @@ EVIDENCE_ROOT=vm-tests
 if [[ "${HERDR_VM_DIAGNOSTICS_ONLY:-0}" == 1 ]]; then
   RUNNER=dev.herdr.android.vm.DiagnosticsVmInstrumentation
   EVIDENCE_ROOT=diagnostics-vm-tests
-  API_LEVEL="$("$ADB" -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
-  if [[ "$API_LEVEL" -ge 33 ]]; then
-    NOTIFICATION_RESTORE="$(notification_permission "$OUT/notification-permission-before.txt")"
-    # Revocation kills the target process: normalize before instrumentation and restore after it exits.
-    "$ADB" -s "$SERIAL" shell pm revoke "$TARGET_PACKAGE" android.permission.POST_NOTIFICATIONS
-  fi
 fi
 if [[ "${HERDR_VM_QUICK_COMMANDS_ONLY:-0}" == 1 ]]; then EXTRA_ARGS=(-e quick_commands_only true); fi
 if [[ "${HERDR_VM_LAYOUT_ONLY:-0}" == 1 ]]; then EXTRA_ARGS=(-e layout_only true); fi
@@ -147,7 +121,6 @@ except (tarfile.TarError, OSError, ValueError) as error:
 PYEXTRACT
 "$ADB" -s "$SERIAL" shell dumpsys activity activities > "$OUT/activity-after.txt" || true
 "$ADB" -s "$SERIAL" shell dumpsys SurfaceFlinger > "$OUT/surfaceflinger-after.txt" || true
-restore_notification_permission
 if [[ "$RUN_STATUS" != 0 ]]; then echo "ADB instrumentation transport failed: $RUN_STATUS" >&2; exit "$RUN_STATUS"; fi
 python3 - "$OUT/vm-tests/report.json" "$RUN_ID" <<'PY'
 import json, pathlib, sys

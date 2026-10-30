@@ -4,8 +4,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
     <uses-feature android:name="android.hardware.vulkan.level" android:version="0" android:required="false" />
     <application android:label="Herdr GPUI Remote" android:theme="@style/AppTheme"
@@ -26,11 +24,6 @@
             </intent-filter>
         </activity>
         <activity android:name="dev.herdr.android.DeviceDiagnosticsActivity" android:exported="false" />
-        <service android:name="dev.herdr.android.DeviceDiagnosticsService" android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-enabled, screen-scoped read-only local device diagnostics with an explicit Stop action" />
-        </service>
         <activity android:name="dev.herdr.android.MainActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity android:name="dev.herdr.android.GpuiTerminalActivity" android:exported="false"

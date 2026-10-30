@@ -670,7 +670,7 @@ public final class RemoteHostsActivity extends Activity {
                 () -> startActivity(new android.content.Intent(this, MainActivity.class))));
         card.addView(divider());
         card.addView(linkRow(R.drawable.ic_home_diagnostics, "Local device diagnostics",
-                "Read-only, and off until you enable it",
+                "Model, Android version, battery and storage, read on request",
                 () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
         return card;
     }

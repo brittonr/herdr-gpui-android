@@ -9,7 +9,7 @@ import org.json.JSONObject;
 
 /**
  * Read-only, local device diagnostics. No shell, network listener, root request,
- * identifiers, or remote access. Called only by the diagnostics service worker.
+ * identifiers, or remote access. Called only by the diagnostics screen's worker.
  */
 public final class DeviceDiagnostics {
     private DeviceDiagnostics() {}

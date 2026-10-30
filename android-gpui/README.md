@@ -12,11 +12,11 @@ The Remote preview installs as `dev.herdr.android.gpui.remote`, alongside the
 preserved Compact app. The prior development signing key was lost with the
 temporary build workspace. **Companion hosts** still opens the HTTPS workflow.
 
-**Local device diagnostics** opens a separate, default-off, read-only screen.
-Enabling requires usable notifications; **Read diagnostics** collects one bounded
-device/battery/storage snapshot. Uncheck, notification **Stop diagnostics**, or
-leaving the screen revokes access and clears its result. There is no remote
-endpoint, shell/root access, or background monitoring. See the
+**Local device diagnostics** opens a separate, read-only screen that reads
+nothing until you choose **Read diagnostics**. It then collects one bounded
+device/battery/storage snapshot and shows it only on that screen; leaving the
+screen clears it. There is no service, notification, remote endpoint,
+shell/root access, or background monitoring. See the
 [local diagnostics contract](../docs/android-control-agent.md).
 
 This is the GPUI-backed continuation of the native Android companion preview.
@@ -228,10 +228,9 @@ older previews. Profiles from those separate applications must be entered again.
 The GPUI build requires Android 10+ because this mobile backend links an Android
 API 29 function; the original Java-only preview still supports Android 8+.
 It requires an ARM64 Android device, API 29+ (Android 10+), with the GPU capabilities required
-by GPUI Mobile. Remote sessions use the Internet permission. The optional local
-diagnostics screen additionally declares notification and foreground-service
-permissions; no accessibility, storage, root, or screen-capture permission is
-requested.
+by GPUI Mobile. Remote sessions use the Internet permission, the terminal bell
+vibrates, and agent alerts post notifications; no accessibility, storage, root,
+screen-capture or foreground-service permission is requested.
 
 1. Use an existing SSH account and compatible running Herdr session on the host.
    Iroh additionally needs its SSH receiver. See [remote setup](REMOTE.md).

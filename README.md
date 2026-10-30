@@ -19,8 +19,8 @@ This is a source preview. Full real-daemon input/lifecycle validation and Titan-
 - Raw SSH shell: a trusted host's menu offers **Open shell**, the host's own login shell on a remote PTY, rendered by modified copies of [gpui-rio](https://github.com/cachix/agentaps) and [rio-vt](https://github.com/raphamorim/rio). It is for hosts or moments without Herdr: there are no panes, rail or agent status, and keys, the on-screen keyboard, quick commands, themes and copy work as in a pane
 - Metadata-only background host mirrors keep the sidebar current without continuously processing unseen terminal surfaces
 - Optional HTTPS phone-companion workflow
-- Opt-in, app-local read-only device diagnostics with a visible foreground
-  notification; leaving the screen revokes access
+- App-local, read-only device diagnostics, read only when you ask and shown
+  only on their screen; leaving the screen clears them
 
 ## Current limits
 

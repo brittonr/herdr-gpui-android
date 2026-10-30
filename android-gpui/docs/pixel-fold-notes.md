@@ -44,15 +44,21 @@ explicitly marked unverified. Update it when a behaviour changes.
 
 ## Local diagnostics, verified end to end
 
-Exercised on the device rather than read from code: the screen starts with the
-switch off and "Read diagnostics" disabled; enabling it flips the status to
-"Local diagnostics are enabled for this screen" and enables the action; reading
-prints exactly the allowlisted snapshot — `schema_version`, `device_model`
-("Pixel 9 Pro Fold"), `manufacturer`, `android_sdk` (36), `battery_percent` and
-`app_storage_available_bytes` — and nothing that identifies the device beyond
-its model. Leaving the app and returning shows the switch off again, so access
-is revoked by leaving, and `DeviceDiagnosticsActivity` is not exported, so the
-shell cannot launch it directly.
+Exercised on the device with the signed release bundle rather than read from
+code: the screen opens with "Nothing is read until you choose Read diagnostics."
+and an enabled **Read diagnostics**; reading reports "Read on this device just
+now. Nothing was stored or sent." and fills the output; leaving with Home and
+returning shows the first message again with the output cleared. The window is
+`FLAG_SECURE`, so a screenshot is black, and the installed APK requests only the
+Internet, vibration and notification permissions.
+
+The output's text is not exposed to `uiautomator`, so its contents are checked
+in-process instead, by `HERDR_VM_DIAGNOSTICS_ONLY=1 vm-tests/run.sh` on an
+Android 15 emulator. All seven checks pass: the app declares no service or
+foreground-service permission, nothing is shown before a read, a read shows
+exactly `schema_version`, `device_model`, `manufacturer`, `android_sdk`,
+`battery_percent` and `app_storage_available_bytes`, and pausing or recreating
+the screen clears it.
 
 ## Themes
 
