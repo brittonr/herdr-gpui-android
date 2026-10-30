@@ -23,6 +23,7 @@ The screenshots show the signed release bundle on Android 15 emulators, connecte
 - Turn on dark mode (`cmd uimode night yes`), allow SystemUI demo mode (`settings put global sysui_demo_allowed 1`), then set the clock and battery with `am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941` and the matching `battery` and `notifications` commands.
 - Capture with `adb emu screenrecord screenshot <file>`. The terminal sets `FLAG_SECURE`, so `screencap` returns a black frame.
 - Play rejects transparency, so convert each image with `magick <in> -background black -alpha remove -alpha off PNG24:<out>`. On a tablet, pick a terminal text size that fits Herdr's whole pane grid (14 at 2560×1600).
+- Keep the file names: the repository's README shows `phoneScreenshots/1.png` to `4.png` and `tenInchScreenshots/1.png`.
 
 ## Create the Play app
 

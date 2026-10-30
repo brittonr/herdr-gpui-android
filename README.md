@@ -4,6 +4,20 @@ Experimental Android client for Herdr, with a real Rust GPUI/wgpu terminal surfa
 
 This is a source preview. Full real-daemon input/lifecycle validation and Titan-device verification remain incomplete. Every green `main` build publishes an unsigned preview prerelease, but no validated, stably signed release exists yet.
 
+## Screenshots
+
+<p align="center">
+  <img src="android-gpui/fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="23%" alt="Phone: a workspace's split panes, with git history beside a source file and a shell">
+  <img src="android-gpui/fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="23%" alt="Phone: the drawer listing the host, its workspaces and their panes">
+  <img src="android-gpui/fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="23%" alt="Phone: the quick commands sheet over a terminal pane">
+  <img src="android-gpui/fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="23%" alt="Phone: a pane listing the files changed by the latest commit">
+</p>
+<p align="center">
+  <img src="android-gpui/fastlane/metadata/android/en-US/images/tenInchScreenshots/1.png" width="94%" alt="Tablet: the host and workspace rail beside a workspace's split panes">
+</p>
+
+On a phone: a workspace's split panes, the drawer with the host's workspaces and panes, quick commands, and a pane showing the latest commit. On a tablet the rail sits beside the panes. They were captured from the release build connected to a disposable Herdr session showing this repository, and are also the [Play Store listing's screenshots](android-gpui/fastlane/metadata/android/en-US/images/).
+
 ## Features
 
 - Native Android host management with encrypted profiles and explicit SSH host-key trust
