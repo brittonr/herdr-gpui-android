@@ -118,9 +118,13 @@ validated before it reaches the renderer. Split panes and their borders are
 painted together and the panes' focused border carries the accent ring.
 Every row is painted on one cell grid at the bundled Noto Mono advance, so
 characters the bundled font lacks and Android draws from a proportional system
-font - box drawing, blocks, braille, arrows - stay in their columns, and the
-second cell of a wide character keeps its own column without entering copied
-text. Horizontal pan stops when the pane's last column reaches the screen edge.
+font, such as braille and arrows, stay in their columns, and the second cell of
+a wide character keeps its own column without entering copied text. Box-drawing
+and block characters do not come from a font at all: they are drawn as lines,
+arcs, blocks and shades that fill their whole cell, so borders and scrollbars
+stay joined however far apart rows are spread. Only the three diagonals keep
+their glyphs. Horizontal pan stops when the pane's last column reaches the
+screen edge.
 When at least three quarters of the pane's outer cells are painted in colours
 clearly unlike the palette background - an agent drawing its own background,
 for instance - the commonest of them fills the area around the pane. Once it

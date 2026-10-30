@@ -15,6 +15,8 @@ pub mod shell;
 
 #[cfg(all(feature = "android-ui", target_os = "android"))]
 mod android;
+#[cfg(any(feature = "android-ui", test))]
+mod cell_shapes;
 #[cfg(feature = "android-ui")]
 mod fonts;
 #[cfg(feature = "android-ui")]

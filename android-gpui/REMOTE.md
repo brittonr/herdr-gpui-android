@@ -297,7 +297,9 @@ session. Output printed before a change keeps the colours it was drawn with.
 
 A pane shorter than the body spreads its rows over the body's height, up to
 twice their natural pitch; the type size and columns do not change, and cell
-backgrounds fill each taller row so painted panels stay solid.
+backgrounds fill each taller row so painted panels stay solid. Box-drawing and
+block characters are drawn to fill each taller cell as well, so borders and
+scrollbars stay continuous.
 Around the pane, the body shows the palette background unless at least three
 quarters of the pane's outer ring of cells is painted visibly unlike it (any
 channel more than 32 levels apart), as an agent drawing its own background is.

@@ -1,5 +1,8 @@
 //! GPUI elements rendered by the mobile wgpu/Vulkan backend, with virtual rows.
-use crate::model::{self, DisplayMetrics, ViewState};
+use crate::{
+    cell_shapes,
+    model::{self, DisplayMetrics, ViewState},
+};
 use gpui::{prelude::*, *};
 use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc};
 
@@ -206,11 +209,22 @@ fn button(
         .child(div().min_w_0().truncate().child(label.into()))
 }
 
-/// Text, style runs and tappable byte ranges for one painted row.
+/// Text, style runs, tappable byte ranges and drawn cells for one painted row.
 struct GridRow {
     text: SharedString,
     runs: Vec<TextRun>,
     links: Vec<(Range<usize>, String)>,
+    drawn: Vec<DrawnCell>,
+}
+
+/// A character painted as shapes over its hidden glyph; see [`cell_shapes`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct DrawnCell {
+    /// Byte offset of the character in the row text.
+    byte: usize,
+    ch: char,
+    /// The colour its glyph would have been painted in.
+    color: Hsla,
 }
 
 /// The layout a linked row painted, kept so a tap resolves against it.
@@ -224,13 +238,15 @@ impl GridRow {
         palette: &model::Palette,
         fill: u32,
     ) -> Self {
+        let runs = row
+            .runs
+            .iter()
+            .map(|run| text_run(run, palette, fill))
+            .collect();
+        let (runs, drawn) = hide_drawn_glyphs(&row.text, runs);
         Self {
             text: row.text.clone().into(),
-            runs: row
-                .runs
-                .iter()
-                .map(|run| text_run(run, palette, fill))
-                .collect(),
+            runs,
             links: row
                 .runs
                 .iter()
@@ -239,28 +255,34 @@ impl GridRow {
                     Some((run.start..run.start + run.len, url))
                 })
                 .collect(),
+            drawn,
         }
     }
 
     fn plain(line: &Arc<str>, palette: &model::Palette) -> Self {
+        let run = TextRun {
+            len: line.len(),
+            font: mono_font(),
+            color: rgb(palette.foreground).into(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let (runs, drawn) = hide_drawn_glyphs(line, vec![run]);
         Self {
             text: SharedString::from(line.clone()),
-            runs: vec![TextRun {
-                len: line.len(),
-                font: mono_font(),
-                color: rgb(palette.foreground).into(),
-                background_color: None,
-                underline: None,
-                strikethrough: None,
-            }],
+            runs,
             links: Vec::new(),
+            drawn,
         }
     }
 
     /// Paints the row on the cell grid: every glyph starts at its own column,
     /// including glyphs a proportional system font supplies, so box borders
-    /// and columns line up across rows. Linked rows resolve a tap against the
-    /// same glyph positions they painted.
+    /// and columns line up across rows. Box-drawing and block characters are
+    /// shapes filling their cells, so borders and bars join the rows above and
+    /// below however far apart the rows are spread. Linked rows resolve a tap
+    /// against the same glyph positions they painted.
     fn into_element(
         self,
         generation: i64,
@@ -271,7 +293,12 @@ impl GridRow {
         if self.text.is_empty() {
             return div().into_any_element();
         }
-        let Self { text, runs, links } = self;
+        let Self {
+            text,
+            runs,
+            links,
+            drawn,
+        } = self;
         let painted: PaintedLine = Rc::default();
         let keep = (!links.is_empty()).then(|| painted.clone());
         let line = canvas(
@@ -285,6 +312,7 @@ impl GridRow {
                 let _ =
                     line.paint_background(bounds.origin, height, TextAlign::Left, None, window, cx);
                 let _ = line.paint(bounds.origin, height, TextAlign::Left, None, window, cx);
+                paint_drawn(&drawn, &line, bounds, cell_width, window);
                 if let Some(keep) = keep {
                     *keep.borrow_mut() = Some((bounds.origin, line));
                 }
@@ -331,6 +359,180 @@ fn link_at<'a>(
         .iter()
         .find(|(range, _)| range.contains(&index))
         .map(|(_, url)| url.as_str())
+}
+
+/// Hides the glyph of every character painted as shapes. Its run keeps its
+/// font, background and decorations, so the row's bytes, links and layout are
+/// unchanged, but its text is transparent. Returns the new runs and the cells
+/// to paint, each in the colour its glyph would have had.
+fn hide_drawn_glyphs(text: &str, runs: Vec<TextRun>) -> (Vec<TextRun>, Vec<DrawnCell>) {
+    if !text.chars().any(cell_shapes::drawn) {
+        return (runs, Vec::new());
+    }
+    let mut split = Vec::with_capacity(runs.len() * 2);
+    let mut drawn = Vec::new();
+    let mut start = 0;
+    for run in runs {
+        let end = start + run.len;
+        // Runs tile the text on character boundaries; keep any other run whole.
+        let Some(slice) = text.get(start..end) else {
+            start = end;
+            split.push(run);
+            continue;
+        };
+        let mut next = start;
+        for (offset, ch) in slice.char_indices() {
+            if !cell_shapes::drawn(ch) {
+                continue;
+            }
+            let byte = start + offset;
+            if byte > next {
+                split.push(TextRun {
+                    len: byte - next,
+                    ..run.clone()
+                });
+            }
+            split.push(TextRun {
+                len: ch.len_utf8(),
+                color: transparent_black(),
+                ..run.clone()
+            });
+            drawn.push(DrawnCell {
+                byte,
+                ch,
+                color: run.color,
+            });
+            next = byte + ch.len_utf8();
+        }
+        if end > next {
+            split.push(TextRun {
+                len: end - next,
+                ..run
+            });
+        }
+        start = end;
+    }
+    (split, drawn)
+}
+
+/// Each drawn cell with the grid column of its glyph in `line`. A glyph sits on
+/// its column to within a pixel, and after a combining mark a column is no
+/// longer a character count, so the shaped position decides.
+fn drawn_columns<'a>(
+    line: &'a ShapedLine,
+    cells: &'a [DrawnCell],
+    cell_width: f32,
+) -> impl Iterator<Item = (&'a DrawnCell, f32)> + 'a {
+    line.runs
+        .iter()
+        .flat_map(|run| run.glyphs.iter())
+        .filter_map(move |glyph| {
+            let found = cells
+                .binary_search_by_key(&glyph.index, |cell| cell.byte)
+                .ok()?;
+            let cell = cells.get(found)?;
+            Some((cell, (f32::from(glyph.position.x) / cell_width).round()))
+        })
+}
+
+/// `logical` in whole device pixels, rounded the way GPUI rounds quad edges,
+/// so drawn cells share their edges with the row backgrounds.
+fn device_pixel(logical: f32, scale: f32) -> i32 {
+    let scaled = logical * scale;
+    (scaled.abs() - 0.5).ceil().copysign(scaled) as i32
+}
+
+/// Paints `cells` of the row at `bounds` as shapes filling their whole cells:
+/// the row's full height, so a border meets the rows above and below however
+/// far apart the rows are spread.
+fn paint_drawn(
+    cells: &[DrawnCell],
+    line: &ShapedLine,
+    bounds: Bounds<Pixels>,
+    cell_width: Pixels,
+    window: &mut Window,
+) {
+    let width = f32::from(cell_width);
+    if cells.is_empty() || width <= 0. {
+        return;
+    }
+    let scale = window.scale_factor();
+    let light = cell_shapes::light_stroke(device_pixel(width, scale));
+    let top = device_pixel(f32::from(bounds.top()), scale);
+    let bottom = device_pixel(f32::from(bounds.bottom()), scale);
+    let left = f32::from(bounds.left());
+    let logical = |value: i32| px(value as f32 / scale);
+    let to_bounds = |rect: cell_shapes::Rect| {
+        Bounds::from_corners(
+            point(logical(rect.left), logical(rect.top)),
+            point(logical(rect.right), logical(rect.bottom)),
+        )
+    };
+    for (cell, column) in drawn_columns(line, cells, width) {
+        let rect = cell_shapes::Rect {
+            left: device_pixel(left + column * width, scale),
+            top,
+            right: device_pixel(left + (column + 1.) * width, scale),
+            bottom,
+        };
+        cell_shapes::shapes(cell.ch, rect, light, |shape| match shape {
+            cell_shapes::Shape::Fill(rect) => window.paint_quad(fill(to_bounds(rect), cell.color)),
+            cell_shapes::Shape::Shade(rect, alpha) => {
+                window.paint_quad(fill(to_bounds(rect), cell.color.opacity(alpha)));
+            }
+            cell_shapes::Shape::Arc {
+                outline,
+                corner,
+                radius,
+                width,
+                clip,
+            } => {
+                let (radius, width, none) = (logical(radius), logical(width), px(0.));
+                let (top_left, top_right, bottom_right, bottom_left, sides) = match corner {
+                    cell_shapes::Corner::TopLeft => {
+                        (radius, none, none, none, (width, none, none, width))
+                    }
+                    cell_shapes::Corner::TopRight => {
+                        (none, radius, none, none, (width, width, none, none))
+                    }
+                    cell_shapes::Corner::BottomRight => {
+                        (none, none, radius, none, (none, width, width, none))
+                    }
+                    cell_shapes::Corner::BottomLeft => {
+                        (none, none, none, radius, (none, none, width, width))
+                    }
+                };
+                let corners = Corners {
+                    top_left,
+                    top_right,
+                    bottom_right,
+                    bottom_left,
+                };
+                let (top, right, bottom, left) = sides;
+                let edges = Edges {
+                    top,
+                    right,
+                    bottom,
+                    left,
+                };
+                window.with_content_mask(
+                    Some(ContentMask {
+                        bounds: to_bounds(clip),
+                    }),
+                    |window| {
+                        window.paint_quad(quad(
+                            to_bounds(outline),
+                            corners,
+                            transparent_black(),
+                            edges,
+                            cell.color,
+                            BorderStyle::Solid,
+                        ));
+                    },
+                );
+            }
+        });
+    }
 }
 
 fn mono_font() -> Font {
@@ -793,9 +995,9 @@ impl EntityInputHandler for TerminalView {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use super::{DisplayMetrics, GridRow, link_at, text_run};
+    use super::{DisplayMetrics, DrawnCell, GridRow, drawn_columns, link_at, text_run};
     use crate::model;
-    use gpui::{TextRun, TextSystem, WindowTextSystem, font, px};
+    use gpui::{TextRun, TextSystem, WindowTextSystem, font, px, transparent_black};
     use std::sync::Arc;
 
     #[test]
@@ -882,6 +1084,81 @@ mod tests {
         }
         for column in [0., 3., 9., 12.] {
             assert_eq!(link_at(&line, &row.links, px(column * cell + 1.)), None);
+        }
+    }
+
+    #[test]
+    fn drawn_cells_hide_only_their_own_glyphs() {
+        // A frame border, then text with a block inside one coloured run. Only
+        // `│` and `█` lose their glyphs; each keeps its run's colour for its
+        // shapes, and every byte and other glyph is painted as before.
+        let (rows, _) = model::parse_surface(
+            r#"{"rows":[{"t":"│ab█c","r":[[0,3,0,0,16384,4294967295],[3,6,16777217,0,0,4294967295]]}]}"#,
+        )
+        .unwrap();
+        let palette = model::PALETTES[0];
+        let border = text_run(&rows[0].runs[0], &palette, palette.background).color;
+        let red = text_run(&rows[0].runs[1], &palette, palette.background).color;
+        let row = GridRow::styled(&rows[0], &[], &palette, palette.background);
+        let runs: Vec<_> = row.runs.iter().map(|run| (run.len, run.color)).collect();
+        assert_eq!(
+            runs,
+            [
+                (3, transparent_black()),
+                (2, red),
+                (3, transparent_black()),
+                (1, red)
+            ]
+        );
+        assert_eq!(
+            row.drawn,
+            [
+                DrawnCell {
+                    byte: 0,
+                    ch: '│',
+                    color: border
+                },
+                DrawnCell {
+                    byte: 5,
+                    ch: '█',
+                    color: red
+                },
+            ]
+        );
+        let plain = GridRow::plain(&Arc::from("─x"), &palette);
+        let lengths: Vec<_> = plain.runs.iter().map(|run| run.len).collect();
+        assert_eq!(lengths, [3, 1]);
+        assert_eq!(plain.drawn.len(), 1);
+        // ASCII lookalikes keep their glyphs and their single run.
+        let ascii = GridRow::plain(&Arc::from("| ascii -+"), &palette);
+        assert_eq!(ascii.runs.len(), 1);
+        assert!(ascii.drawn.is_empty());
+    }
+
+    #[test]
+    fn drawn_cells_are_painted_in_the_columns_their_glyphs_occupy() {
+        // After a wide glyph and its placeholder, and after a combining mark
+        // that adds a character but no column, a drawn cell's column comes from
+        // where its glyph was shaped, not from counting characters.
+        let text_system = Arc::new(TextSystem::new(Arc::new(
+            gpui_wgpu::CosmicTextSystem::new_without_system_fonts("Roboto"),
+        )));
+        crate::fonts::install(&text_system).unwrap();
+        let window_text = WindowTextSystem::new(text_system);
+        let (rows, _) = model::parse_surface(
+            r#"{"rows":[{"t":"界 ─e\u0301│","r":[[0,13,0,0,0,4294967295]]}]}"#,
+        )
+        .unwrap();
+        let palette = model::PALETTES[0];
+        let row = GridRow::styled(&rows[0], &[], &palette, palette.background);
+        for font_size in [11., 14., 18., 36.] {
+            let cell = font_size * model::MONO_ADVANCE_EM;
+            let line =
+                window_text.shape_line(row.text.clone(), px(font_size), &row.runs, Some(px(cell)));
+            let columns: Vec<_> = drawn_columns(&line, &row.drawn, cell)
+                .map(|(drawn, column)| (drawn.ch, column))
+                .collect();
+            assert_eq!(columns, [('─', 2.), ('│', 4.)], "{font_size}");
         }
     }
 

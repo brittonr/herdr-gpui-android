@@ -25,6 +25,8 @@ explicitly marked unverified. Update it when a behaviour changes.
   glyphs; gpui-mobile draws those from Android's proportional system fonts. Rows
   are therefore painted with a forced per-cell advance, which is also what lets
   the fit use the font's true advance instead of the old 0.70 em allowance.
+  Box-drawing and block characters no longer use those fonts: the renderer
+  draws them as shapes filling the cell (see Drawn box characters).
 
 ## Verified behaviour
 
@@ -649,10 +651,28 @@ instead of growing the type to fit 80 columns.
 
 Spreading leaves the type size and columns alone, and cell backgrounds fill
 each taller row, so an agent's panels stay solid. Vertical box-drawing lines
-show gaps between rows, and on the cover the 24 rows need nearly the full 2×.
+showed gaps between rows until those characters were drawn as shapes (see
+Drawn box characters), and on the cover the 24 rows need nearly the full 2×.
 Measured on the inner panel and at `wm size 1080x2152` with the same live agent
 pane, viewed only; the text extent is the first and last row with bright pixels
 between the header and the toolbar.
+
+## Drawn box characters
+
+With rows spread, a border drawn from a font's `│` stopped short of the next
+row, so every pane frame and scrollbar showed as dashes. Box-drawing
+characters (U+2500–U+257F, except the diagonals ╱╲╳) and block elements
+(U+2580–U+259F) are now drawn by the renderer: their glyphs are hidden, and
+each cell gets lines, arcs, blocks or shades spanning its full width and
+height in whole device pixels. A light stroke is an eighth of the cell wide,
+a heavy one twice that, and a double line is two light strokes a stroke apart.
+A cell's column comes from where the shaper placed its hidden glyph, so wide
+glyphs and combining marks earlier in the row do not shift it.
+
+Checked on Android 15 emulators (1080 × 1920 phone and 2560 × 1600 tablet)
+with the release bundle and a disposable Herdr 0.9.3 session: pane frames, the
+scrollbar's track and thumb, and a card of light, heavy, double, rounded,
+dashed, half, mixed, block, shade and quadrant characters all join across rows.
 
 ## Host theme verification
 
