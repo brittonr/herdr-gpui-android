@@ -22,4 +22,12 @@
         <item name="android:navigationBarColor">#101216</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
+    <!-- The bundled About pages: light or dark with the system setting, as
+         their stylesheet is, laid out edge to edge under transparent bars. -->
+    <style name="AboutTheme" parent="android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

@@ -138,3 +138,25 @@ not replaced when building x86_64.
 
 References: [Android 16KB pages](https://developer.android.com/guide/practices/page-sizes),
 [Android NDK downloads and license](https://developer.android.com/ndk/downloads).
+
+## In-app About pages
+
+`scripts/about-pages.py` generates the committed offline WebView assets in
+`app/src/main/assets/about/`: `index.html`, `privacy.html`, `licenses.html`,
+and `style.css`. The About page names the app and version, describes it as an
+unofficial third-party Herdr client, and links to the privacy policy, licence
+notices, public policy URL, and `herdr@robitzs.ch`. Privacy HTML is rendered
+from `android-gpui/PRIVACY.md` using only headings, paragraphs, bullet lists,
+bold text, and links; the stylesheet follows the system light/dark preference.
+
+Run the generator after changing the policy, app version, or notices, then use
+`python3 scripts/about-pages.py --check` to fail if the committed pages are
+missing or stale. The licence page consumes the committed
+`android-remote/THIRD-PARTY-NOTICES.txt` and `.inventory.json` rather than
+walking Cargo dependencies again. It deduplicates text and fills packages with
+missing upstream texts from SPDX standard texts under `scripts/licenses/`,
+fetched from `spdx/license-list-data` at pinned revision
+`31846481de7ea17d92f2f46fad76abe58b2e9bb0`. Generation fails if a package has
+no declared non-copyleft option or a required standard text is absent, and
+enforces a 1,500,000-byte maximum for `licenses.html` so the page stays suitable
+for an offline WebView.

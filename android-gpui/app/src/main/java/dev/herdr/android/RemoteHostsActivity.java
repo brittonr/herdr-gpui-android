@@ -676,6 +676,10 @@ public final class RemoteHostsActivity extends Activity {
         card.addView(linkRow(R.drawable.ic_home_diagnostics, "Local device diagnostics",
                 "Model, Android version, battery and storage, read on request",
                 () -> startActivity(new android.content.Intent(this, DeviceDiagnosticsActivity.class))));
+        card.addView(divider());
+        card.addView(linkRow(R.drawable.ic_home_info, "About Remote for Herdr",
+                "Version, licences and privacy policy",
+                () -> startActivity(new android.content.Intent(this, AboutActivity.class))));
         return card;
     }
 
